@@ -23,6 +23,9 @@ jobs:
       - name: Generate Prisma Client
         run: npm run prisma:generate
 
+      - name: Print Deployment Context
+        run: echo "Deploying commit ${{ github.sha }} to VPS"
+
       - name: Build
         run: npm run build
 
