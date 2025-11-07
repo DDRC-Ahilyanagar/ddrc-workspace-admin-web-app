@@ -20,6 +20,9 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
+      - name: Generate Prisma Client
+        run: npm run prisma:generate
+
       - name: Build
         run: npm run build
 
@@ -29,7 +32,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_KEY }}
-          source: ".next/**,package.json,package-lock.json,public/**"
+          source: ".next/**,package.json,package-lock.json,prisma/**,public/**"
           target: "/var/www/surveys"
 
       - name: Restart PM2
@@ -40,6 +43,9 @@ jobs:
           key: ${{ secrets.VPS_KEY }}
           script: |
             cd /var/www/surveys
-            npm install --omit=dev
+            npm install
+            npx prisma generate
+            npx prisma migrate deploy
+            npm run prisma:seed
             pm2 restart surveys
             pm2 save
