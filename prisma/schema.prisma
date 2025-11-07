@@ -1,0 +1,150 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = []
+}
+
+datasource db {
+  provider   = "mysql"
+  url        = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+enum UserType {
+  field_officer
+  admin
+  supervisor
+}
+
+enum UserStatus {
+  active
+  inactive
+}
+
+enum AccessRequestStatus {
+  pending
+  approved
+  declined
+}
+
+enum OtpStatus {
+  sent
+  verified
+  expired
+}
+
+enum SurveyStatus {
+  pending
+  completed
+  in_progress
+}
+
+model UserTypeLookup {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  userType   String?  @map("user_type") @db.VarChar(191)
+  createdAt  DateTime? @map("created_at") @default(now())
+  updatedAt  DateTime? @map("updated_at") @default(now()) @updatedAt
+  users      User[]   @relation("UserTypeRelation")
+
+  @@map("user_types")
+}
+
+model User {
+  id             BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
+  name           String      @db.VarChar(255)
+  email          String?     @db.VarChar(255)
+  contactNumber  String?     @map("contact_number") @db.VarChar(20)
+  passkey        Int?        @db.UnsignedSmallInt
+  userType       UserType    @map("user_type") @default(field_officer)
+  isActive       Boolean     @map("is_active") @default(true)
+  emailVerifiedAt DateTime?  @map("email_verified_at")
+  otpVerifiedAt  DateTime?   @map("otp_verified_at")
+  lastLogin      DateTime?   @map("last_login")
+  password       String?     @db.VarChar(255)
+  rememberToken  String?     @map("remember_token") @db.VarChar(100)
+  createdAt      DateTime?   @map("created_at") @default(now())
+  updatedAt      DateTime?   @map("updated_at") @default(now()) @updatedAt
+  userTypeId     BigInt?     @map("user_type_id") @db.UnsignedBigInt
+  profilePhoto   String?     @map("profile_photo") @db.Text
+  createdBy      BigInt?     @map("created_by") @db.UnsignedBigInt
+  updatedBy      BigInt?     @map("updated_by") @db.UnsignedBigInt
+  status         UserStatus? @default(active)
+
+  typeLookup     UserTypeLookup? @relation("UserTypeRelation", fields: [userTypeId], references: [id])
+  surveys        Survey[]
+  surveyAadhar   SurveyAadhar[]
+
+  @@unique([email])
+  @@unique([contactNumber])
+  @@map("users")
+}
+
+model OtpVerification {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  phone      String    @db.VarChar(20)
+  otp        String    @db.VarChar(10)
+  status     OtpStatus @default(sent)
+  expiresAt  DateTime? @map("expires_at")
+  verifiedAt DateTime? @map("verified_at")
+  createdAt  DateTime? @map("created_at") @default(now())
+  updatedAt  DateTime? @map("updated_at") @default(now()) @updatedAt
+
+  @@index([phone], map: "idx_phone")
+  @@index([status], map: "idx_status")
+  @@map("otp_verifications")
+}
+
+model AccessRequest {
+  id        Int                 @id @default(autoincrement()) @db.UnsignedInt
+  name      String              @db.VarChar(150)
+  phone     String              @db.VarChar(20)
+  selfieUrl String              @map("selfie_url") @db.VarChar(255)
+  status    AccessRequestStatus @default(pending)
+  adminNote String?             @map("admin_note") @db.Text
+  createdAt DateTime            @map("created_at") @default(now())
+  updatedAt DateTime            @map("updated_at") @default(now()) @updatedAt
+
+  @@index([phone], map: "idx_phone")
+  @@index([status], map: "idx_status")
+  @@map("access_requests")
+}
+
+model AppSetting {
+  id           Int      @id @default(autoincrement()) @db.UnsignedInt
+  settingKey   String   @map("setting_key") @db.VarChar(191)
+  settingValue String?  @map("setting_value") @db.Text
+  createdAt    DateTime? @map("created_at") @default(now())
+  updatedAt    DateTime? @map("updated_at") @default(now()) @updatedAt
+
+  @@unique([settingKey])
+  @@map("app_settings")
+}
+
+model SurveyAadhar {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  aadharNo   String?  @map("aadhar_no") @db.VarChar(50)
+  userId     BigInt   @map("user_id") @db.UnsignedBigInt
+  frontImage String?  @map("front_image") @db.VarChar(255)
+  backImage  String?  @map("back_image") @db.VarChar(255)
+  createdAt  DateTime? @map("created_at") @default(now())
+  updatedAt  DateTime? @map("updated_at") @default(now()) @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("survey_aadhar")
+}
+
+model Survey {
+  id        BigInt       @id @default(autoincrement()) @db.UnsignedBigInt
+  userId    BigInt       @map("user_id") @db.UnsignedBigInt
+  status    SurveyStatus @default(pending)
+  createdAt DateTime?    @map("created_at") @default(now())
+  updatedAt DateTime?    @map("updated_at") @default(now()) @updatedAt
+
+  user      User         @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@map("surveys")
+}
+
