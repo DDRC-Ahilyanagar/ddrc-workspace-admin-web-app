@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // External packages for server components
+  serverExternalPackages: ['tesseract.js'],
+  // Turbopack configuration
+  turbopack: {
+    // Allow external packages
+  },
 };
 
 export default nextConfig;
