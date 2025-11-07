@@ -113,6 +113,19 @@ export async function GET(_req: NextRequest) {
       const pSections = conn.query(`SELECT name FROM sections ORDER BY name ASC`);
       const pActive1 = safeQuery(`SELECT COUNT(*) AS c FROM questions WHERE is_active = 1`);
       const pActive2 = safeQuery(`SELECT COUNT(*) AS c FROM questions WHERE status = 'Active'`);
+      const pRoleCounts = safeQuery(`
+        SELECT 
+          LOWER(
+            TRIM(
+              COALESCE(NULLIF(u.user_type, ''), ut.user_type, '')
+            )
+          ) AS role_key,
+          COUNT(*) AS cnt
+        FROM users u
+        LEFT JOIN user_types ut ON ut.id = u.user_type_id
+        WHERE (u.status = 'active' OR u.is_active = 1 OR u.status IS NULL)
+        GROUP BY role_key
+      `);
 
       const [
         [totalAadharRows],
@@ -123,7 +136,8 @@ export async function GET(_req: NextRequest) {
         [sectionsRows],
         [active1Rows],
         [active2Rows],
-      ] = await Promise.all([pTotalAadhar, pTodayAadhar, pAnswers, pPending, pOtpToday, pSections, pActive1, pActive2]);
+        [roleCountRows],
+      ] = await Promise.all([pTotalAadhar, pTodayAadhar, pAnswers, pPending, pOtpToday, pSections, pActive1, pActive2, pRoleCounts]);
 
       const activeQuestions = ((active1Rows as any[])[0]?.c || 0) || ((active2Rows as any[])[0]?.c || 0) || 0;
 
@@ -229,6 +243,20 @@ export async function GET(_req: NextRequest) {
         return { label, male: Number(male)||0, female: Number(female)||0, other: Number(other)||0, total: Number(male||0)+Number(female||0)+Number(other||0) };
       });
 
+      const roleMap: Record<string, number> = {};
+      if (Array.isArray(roleCountRows)) {
+        for (const row of roleCountRows as any[]) {
+          const key = (row.role_key || '').toString().toLowerCase();
+          const count = Number(row.cnt) || 0;
+          if (!key) continue;
+          roleMap[key] = (roleMap[key] || 0) + count;
+        }
+      }
+      const fieldOfficerRoles = (roleMap['field_officer'] || 0) + (roleMap['field officer'] || 0) + (roleMap['officer'] || 0);
+      const therapyRoles = (roleMap['therapy_specialist'] || 0) + (roleMap['therapy specialist'] || 0) + (roleMap['practitioner'] || 0) + (roleMap['therapist'] || 0);
+      const supervisorRoles = roleMap['supervisor'] || roleMap['supervisor '] || 0;
+      const adminRoles = roleMap['admin'] || roleMap['administrator'] || 0;
+
       return NextResponse.json({
         ok: true,
         data: {
@@ -250,6 +278,12 @@ export async function GET(_req: NextRequest) {
           activeQuestions,
           sections: Array.isArray(sectionsRows) ? (sectionsRows as any[]).map((r:any) => r.name).filter((n:any) => typeof n === 'string' && n.length > 0) : [],
           breakdowns: { taluka, gender, disability, ageRanges, pendingOverall: pendingSurveys },
+          roles: {
+            field_officer: fieldOfficerRoles,
+            therapy_specialist: therapyRoles,
+            supervisor: supervisorRoles,
+            admin: adminRoles,
+          },
         },
       });
     } finally {

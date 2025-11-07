@@ -6,8 +6,27 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
+    const headerSource = req.headers.get('x-source')?.toString().toLowerCase() ?? '';
+    const headerRole = req.headers.get('x-role')?.toString().toLowerCase() ?? '';
+
+    const source = (body.source || headerSource || '').toString().toLowerCase();
+    const role = (body.role || headerRole || '').toString().toLowerCase();
     const phone = (body.phone || '').replace(/\D/g, '');
     const userId = parseInt(body.user_id || '0');
+
+    if (source === 'web' && role !== 'admin') {
+      return NextResponse.json(
+        { ok: false, error: 'forbidden_role' },
+        { status: 403 }
+      );
+    }
+
+    if (source && source !== 'web' && role && !['field_officer', 'supervisor'].includes(role)) {
+      return NextResponse.json(
+        { ok: false, error: 'forbidden_role' },
+        { status: 403 }
+      );
+    }
 
     const pool = getDbPool();
 

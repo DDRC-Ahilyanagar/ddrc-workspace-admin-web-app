@@ -3,6 +3,7 @@ import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Logger } from '@/lib/logger';
+import { UPLOAD_BASE as DEFAULT_UPLOAD_BASE } from '../config';
 
 /**
  * @swagger
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
     
     // For now, we'll return a URL structure (you can implement actual file storage)
     // In production, you might want to use cloud storage (S3, Cloudinary, etc.)
-    const uploadBase = process.env.UPLOAD_BASE || 'https://bitnix.store/ddrc-app';
+    const uploadBase = process.env.UPLOAD_BASE || DEFAULT_UPLOAD_BASE;
     const url = `${uploadBase}/uploads/${fileName}`;
 
     // Optionally save file locally (uncomment if you want local storage)

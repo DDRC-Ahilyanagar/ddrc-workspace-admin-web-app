@@ -44,22 +44,34 @@ import { validatePhone, validateOTP, validateRequest } from '@/lib/validation';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const headerSource = request.headers.get('x-source')?.toString().toLowerCase() ?? '';
+    const headerRole = request.headers.get('x-role')?.toString().toLowerCase() ?? '';
+
+    const source = (body.source || headerSource || '').toString().toLowerCase();
+    const role = (body.role || headerRole || '').toString().toLowerCase();
     const phone = (body.phone || '').replace(/\D/g, '');
     const otp = (body.otp || '').replace(/\D/g, '');
     const name = (body.name || '').trim();
-    const source = (body.source || '').toString().toLowerCase();
 
     Logger.info('hit_verify_otp', { raw: JSON.stringify(body), req: body });
 
-    const validation = validateRequest(body, {
-      phone: (p) => validatePhone(p || ''),
-      otp: (o) => validateOTP(o || ''),
-      source: (s) => {
-        const v = (s || '').toString().toLowerCase();
-        if (!v) return true;
-        return ['web', 'mobile'].includes(v);
-      },
-    });
+    const validation = validateRequest(
+      { ...body, source, role },
+      {
+        phone: (p) => validatePhone(p || ''),
+        otp: (o) => validateOTP(o || ''),
+        source: (s) => {
+          const v = (s || '').toString().toLowerCase();
+          if (!v) return true;
+          return ['web', 'mobile'].includes(v);
+        },
+        role: (r) => {
+          const v = (r || '').toString().toLowerCase();
+          if (!v) return true;
+          return ['admin', 'supervisor', 'field_officer'].includes(v);
+        },
+      }
+    );
 
     if (!validation.valid) {
       return NextResponse.json(
@@ -134,6 +146,20 @@ export async function POST(request: NextRequest) {
 
       // Require existing user with active status and role based on source
       const isWebRequest = source === 'web';
+
+      if (isWebRequest && role !== 'admin') {
+        return NextResponse.json(
+          { ok: false, error: 'forbidden_role' },
+          { status: 403 }
+        );
+      }
+
+      if (!isWebRequest && role && !['field_officer', 'supervisor'].includes(role)) {
+        return NextResponse.json(
+          { ok: false, error: 'forbidden_role' },
+          { status: 403 }
+        );
+      }
       const [users] = await connection.execute(
         `SELECT u.id, u.name, u.contact_number, u.passkey
          FROM users u
