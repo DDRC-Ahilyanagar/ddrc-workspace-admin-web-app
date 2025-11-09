@@ -80,57 +80,62 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Determine allowed user types based on source
-    const isWebRequest = source === 'web';
-
-    if (isWebRequest && role !== 'admin') {
-      return NextResponse.json(
-        { ok: false, error: 'forbidden_role' },
-        { status: 403 }
-      );
-    }
-
-    if (!isWebRequest && role && !['field_officer', 'supervisor'].includes(role)) {
-      return NextResponse.json(
-        { ok: false, error: 'forbidden_role' },
-        { status: 403 }
-      );
-    }
-
-    // Check if user exists by contact_number; block if not
+    // Check if user exists by contact_number first to determine their role
     const pool = await import('@/lib/db').then(m => m.getDbPool());
     const existConn = await pool.getConnection();
+    let userData: any = null;
     try {
       const [users] = await existConn.execute(
-        `SELECT u.id, u.user_type, ut.user_type AS related_type
+        `SELECT u.id, u.user_type, u.status, u.is_active, ut.user_type AS related_type
          FROM users u
          LEFT JOIN user_types ut ON ut.id = u.user_type_id
          WHERE u.contact_number = ?
            AND (u.status = 'active' OR u.is_active = 1)
-           AND (
-             CASE
-               WHEN ? = 1 THEN (
-                 u.user_type IN ('admin', 'supervisor')
-                 OR ut.user_type IN ('Admin', 'Supervisor')
-               )
-               ELSE (
-                 u.user_type = 'field_officer'
-                 OR ut.user_type = 'Field officer'
-               )
-             END
-           )
          LIMIT 1`,
-        [phone, isWebRequest ? 1 : 0]
+        [phone]
       );
-      const userExists = Array.isArray(users) && (users as any[]).length > 0;
-      if (!userExists) {
-        return NextResponse.json(
-          { ok: false, error: 'user_not_found' },
-          { status: 404 }
-        );
+      if (Array.isArray(users) && (users as any[]).length > 0) {
+        userData = (users as any[])[0];
       }
     } finally {
       existConn.release();
+    }
+
+    // If user not found, return error
+    if (!userData) {
+      return NextResponse.json(
+        { ok: false, error: 'user_not_found' },
+        { status: 404 }
+      );
+    }
+
+    // Determine allowed user types based on source
+    const isWebRequest = source === 'web';
+    const userType = (userData.user_type || '').toLowerCase();
+    const relatedType = (userData.related_type || '').toLowerCase();
+
+    // For web requests, only allow admin/supervisor users
+    if (isWebRequest) {
+      const isAdmin = userType === 'admin' || relatedType === 'admin';
+      const isSupervisor = userType === 'supervisor' || relatedType === 'supervisor';
+      if (!isAdmin && !isSupervisor) {
+        return NextResponse.json(
+          { ok: false, error: 'forbidden_role' },
+          { status: 403 }
+        );
+      }
+    }
+
+    // For mobile requests, only allow field_officer/supervisor users
+    if (!isWebRequest) {
+      const isFieldOfficer = userType === 'field_officer' || relatedType === 'field officer' || relatedType === 'field_officer';
+      const isSupervisor = userType === 'supervisor' || relatedType === 'supervisor';
+      if (role && !isFieldOfficer && !isSupervisor) {
+        return NextResponse.json(
+          { ok: false, error: 'forbidden_role' },
+          { status: 403 }
+        );
+      }
     }
 
     // Generate OTP: 6-digit number (100000 to 999999)
