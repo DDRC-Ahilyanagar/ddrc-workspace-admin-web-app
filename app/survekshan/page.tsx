@@ -1,25 +1,26 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import AdminLayout from '@/components/AdminLayout';
 import $ from 'jquery';
 
 export const dynamic = 'force-dynamic';
 
 export default function SurvekshanPage() {
+  const router = useRouter();
   const tableRef = useRef<HTMLTableElement>(null);
   const dtInstanceRef = useRef<any>(null);
 
   // Setup global handler for DataTable view action
   useEffect(() => {
     (window as any).handleViewSurvey = (id: number) => {
-      // Navigate to view survey details - can be implemented later
-      alert(`View survey ${id} - Details page to be implemented`);
+      router.push(`/surveys/${id}`);
     };
     return () => {
       delete (window as any).handleViewSurvey;
     };
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (!tableRef.current) return;
