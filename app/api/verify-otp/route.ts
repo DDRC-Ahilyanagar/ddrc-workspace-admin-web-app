@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if (!isWebRequest && role && !['field_officer', 'supervisor'].includes(role)) {
+      if (!isWebRequest && role && !['field_officer', 'supervisor', 'admin'].includes(role)) {
         return NextResponse.json(
           { ok: false, error: 'forbidden_role' },
           { status: 403 }
@@ -173,8 +173,8 @@ export async function POST(request: NextRequest) {
                 OR ut.user_type IN ('Admin','Supervisor')
               )
               ELSE (
-                u.user_type = 'field_officer'
-                OR ut.user_type = 'Field officer'
+                u.user_type IN ('admin','supervisor','field_officer')
+                OR ut.user_type IN ('Admin','Supervisor','Field officer')
               )
             END
           )
