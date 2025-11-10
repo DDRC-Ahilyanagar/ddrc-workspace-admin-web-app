@@ -126,11 +126,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // For mobile requests, only allow field_officer/supervisor users
+    // For mobile requests, allow field_officer/supervisor/admin users
     if (!isWebRequest) {
       const isFieldOfficer = userType === 'field_officer' || relatedType === 'field officer' || relatedType === 'field_officer';
       const isSupervisor = userType === 'supervisor' || relatedType === 'supervisor';
-      if (role && !isFieldOfficer && !isSupervisor) {
+      const isAdmin = userType === 'admin' || relatedType === 'admin';
+      // Only check role if provided and user doesn't match any allowed role
+      if (role && !isFieldOfficer && !isSupervisor && !isAdmin) {
         return NextResponse.json(
           { ok: false, error: 'forbidden_role' },
           { status: 403 }
