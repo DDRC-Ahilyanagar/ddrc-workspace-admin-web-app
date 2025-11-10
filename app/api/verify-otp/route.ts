@@ -147,56 +147,57 @@ export async function POST(request: NextRequest) {
       // Require existing user with active status and role based on source
       const isWebRequest = source === 'web';
 
-      if (isWebRequest && role !== 'admin') {
-        return NextResponse.json(
-          { ok: false, error: 'forbidden_role' },
-          { status: 403 }
-        );
-      }
-
-      if (!isWebRequest && role && !['field_officer', 'supervisor', 'admin'].includes(role)) {
-        return NextResponse.json(
-          { ok: false, error: 'forbidden_role' },
-          { status: 403 }
-        );
-      }
-      const [users] = await connection.execute(
-        `SELECT u.id, u.name, u.contact_number, u.passkey
+      // First, get the user's actual role from the database
+      const [userCheck] = await connection.execute(
+        `SELECT u.id, u.name, u.contact_number, u.passkey, u.user_type, ut.user_type AS related_type
          FROM users u
          LEFT JOIN user_types ut ON ut.id = u.user_type_id
          WHERE u.contact_number = ?
            AND (u.status = 'active' OR u.is_active = 1)
-          AND (
-            CASE
-              WHEN ? = 1 THEN (
-                u.user_type IN ('admin','supervisor')
-                OR ut.user_type IN ('Admin','Supervisor')
-              )
-              ELSE (
-                u.user_type IN ('admin','supervisor','field_officer')
-                OR ut.user_type IN ('Admin','Supervisor','Field officer')
-              )
-            END
-          )
          LIMIT 1`,
-        [phone, isWebRequest ? 1 : 0]
+        [phone]
       );
-      const user = Array.isArray(users) && (users as any[]).length > 0 ? (users as any[])[0] : null;
-      if (!user) {
+      
+      const userData = Array.isArray(userCheck) && (userCheck as any[]).length > 0 ? (userCheck as any[])[0] : null;
+      
+      if (!userData) {
         return NextResponse.json(
           { ok: false, error: 'user_not_found' },
           { status: 404 }
         );
       }
 
-      Logger.info('verify_otp_ok', { phone, user_id: user.id, has_passkey: !!user.passkey });
+      // Check user's actual role from database
+      const userType = (userData.user_type || '').toLowerCase();
+      const relatedType = (userData.related_type || '').toLowerCase();
+      const isAdmin = userType === 'admin' || relatedType === 'admin';
+      const isSupervisor = userType === 'supervisor' || relatedType === 'supervisor';
+      const isFieldOfficer = userType === 'field_officer' || relatedType === 'field officer' || relatedType === 'field_officer';
+
+      // For web requests, only allow admin/supervisor users
+      if (isWebRequest && !isAdmin && !isSupervisor) {
+        return NextResponse.json(
+          { ok: false, error: 'forbidden_role' },
+          { status: 403 }
+        );
+      }
+
+      // For mobile requests, allow field_officer/supervisor/admin users
+      if (!isWebRequest && role && !isFieldOfficer && !isSupervisor && !isAdmin) {
+        return NextResponse.json(
+          { ok: false, error: 'forbidden_role' },
+          { status: 403 }
+        );
+      }
+
+      Logger.info('verify_otp_ok', { phone, user_id: userData.id, has_passkey: !!userData.passkey });
       const response = NextResponse.json({ 
         ok: true, 
         user: {
-          id: user.id,
-          name: user.name,
-          phone: user.contact_number,
-          passkey: user.passkey ? String(user.passkey) : null,
+          id: userData.id,
+          name: userData.name,
+          phone: userData.contact_number,
+          passkey: userData.passkey ? String(userData.passkey) : null,
         }
       });
 
