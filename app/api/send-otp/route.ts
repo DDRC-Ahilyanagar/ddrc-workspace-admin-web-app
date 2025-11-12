@@ -124,6 +124,7 @@ export async function POST(request: NextRequest) {
           { status: 403 }
         );
       }
+      
     }
 
     // For mobile requests, allow field_officer/supervisor/admin users
