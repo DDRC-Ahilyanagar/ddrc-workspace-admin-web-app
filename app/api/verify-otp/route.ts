@@ -182,8 +182,9 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // For mobile requests, allow field_officer/supervisor/admin users
-      if (!isWebRequest && role && !isFieldOfficer && !isSupervisor && !isAdmin) {
+      // For mobile requests, allow field_officer/supervisor/admin/therapy_specialist users
+      const isTherapySpecialist = userType === 'therapy_specialist' || relatedType === 'practitioner' || relatedType === 'therapy_specialist';
+      if (!isWebRequest && role && !isFieldOfficer && !isSupervisor && !isAdmin && !isTherapySpecialist) {
         return NextResponse.json(
           { ok: false, error: 'forbidden_role' },
           { status: 403 }

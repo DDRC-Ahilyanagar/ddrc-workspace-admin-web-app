@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
         role: (r) => {
           const val = (r || '').toString().toLowerCase();
           if (!val) return true;
-          return ['admin', 'supervisor', 'field_officer'].includes(val);
+          return ['admin', 'supervisor', 'field_officer', 'therapy_specialist'].includes(val);
         },
       }
     );
@@ -127,13 +127,14 @@ export async function POST(request: NextRequest) {
       
     }
 
-    // For mobile requests, allow field_officer/supervisor/admin users
+    // For mobile requests, allow field_officer/supervisor/admin/therapy_specialist users
     if (!isWebRequest) {
       const isFieldOfficer = userType === 'field_officer' || relatedType === 'field officer' || relatedType === 'field_officer';
       const isSupervisor = userType === 'supervisor' || relatedType === 'supervisor';
       const isAdmin = userType === 'admin' || relatedType === 'admin';
+      const isTherapySpecialist = userType === 'therapy_specialist' || relatedType === 'practitioner' || relatedType === 'therapy_specialist';
       // Only check role if provided and user doesn't match any allowed role
-      if (role && !isFieldOfficer && !isSupervisor && !isAdmin) {
+      if (role && !isFieldOfficer && !isSupervisor && !isAdmin && !isTherapySpecialist) {
         return NextResponse.json(
           { ok: false, error: 'forbidden_role' },
           { status: 403 }
