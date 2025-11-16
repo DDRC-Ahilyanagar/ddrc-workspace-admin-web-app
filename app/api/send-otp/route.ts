@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
           const val = (r || '').toString().toLowerCase();
           if (!val) return true;
           return ['admin', 'supervisor', 'field_officer', 'therapy_specialist'].includes(val);
-        },
+        }, // Allow therapy_specialist role for mobile app access
       }
     );
 
@@ -132,7 +132,11 @@ export async function POST(request: NextRequest) {
       const isFieldOfficer = userType === 'field_officer' || relatedType === 'field officer' || relatedType === 'field_officer';
       const isSupervisor = userType === 'supervisor' || relatedType === 'supervisor';
       const isAdmin = userType === 'admin' || relatedType === 'admin';
-      const isTherapySpecialist = userType === 'therapy_specialist' || relatedType === 'practitioner' || relatedType === 'therapy_specialist';
+      const isTherapySpecialist = 
+        userType === 'therapy_specialist' || 
+        relatedType === 'practitioner' || 
+        relatedType === 'therapy_specialist';
+      
       // Only check role if provided and user doesn't match any allowed role
       if (role && !isFieldOfficer && !isSupervisor && !isAdmin && !isTherapySpecialist) {
         return NextResponse.json(
