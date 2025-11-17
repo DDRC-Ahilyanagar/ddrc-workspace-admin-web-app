@@ -17,8 +17,11 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Dependencies
-        run: npm install
+      - name: Clean install workspace dependencies
+        run: |
+          npm cache clean --force
+          rm -rf node_modules package-lock.json
+          npm install
 
       - name: Build
         run: npm run build
@@ -40,6 +43,8 @@ jobs:
           key: ${{ secrets.VPS_KEY }}
           script: |
             cd /var/www/surveys
-            npm install --omit=dev
+            npm cache clean --force
+            rm -rf node_modules package-lock.json
+            npm install --production
             pm2 restart surveys
             pm2 save
