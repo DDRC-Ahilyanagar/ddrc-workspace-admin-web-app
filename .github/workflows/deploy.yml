@@ -2,7 +2,7 @@ name: Deploy to VPS
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
 
 jobs:
   deploy:
@@ -17,14 +17,10 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Dependencies
-        run: npm install --force
-
-      - name: Generate Prisma Client
-        run: npm run prisma:generate
-
-      - name: Print Deployment Context
-        run: echo "Deploying commit ${{ github.sha }} to VPS"
+      - name: Clean install workspace dependencies
+        run: |
+          rm -rf node_modules package-lock.json ~/.npm
+          npm install
 
       - name: Build
         run: npm run build
@@ -35,7 +31,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_KEY }}
-          source: ".next/**,package.json,package-lock.json,prisma/**,public/**"
+          source: ".next/**,package.json,package-lock.json,public/**"
           target: "/var/www/surveys"
 
       - name: Restart PM2
@@ -46,9 +42,7 @@ jobs:
           key: ${{ secrets.VPS_KEY }}
           script: |
             cd /var/www/surveys
-            npm install --force
-            npx prisma generate
-            npx prisma migrate deploy
-            npm run prisma:seed
+            rm -rf node_modules package-lock.json ~/.npm
+            npm install --production
             pm2 restart surveys
             pm2 save
