@@ -21,7 +21,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (source && source !== 'web' && role && !['field_officer', 'supervisor'].includes(role)) {
+    const allowedMobileRoles = ['field_officer', 'supervisor', 'therapy_specialist', 'admin'];
+    if (source && source !== 'web' && role && !allowedMobileRoles.includes(role)) {
       return NextResponse.json(
         { ok: false, error: 'forbidden_role' },
         { status: 403 }

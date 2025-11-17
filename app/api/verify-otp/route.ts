@@ -3,6 +3,9 @@ import { dbQuery, dbQueryOne, getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';
 import { validatePhone, validateOTP, validateRequest } from '@/lib/validation';
 
+const normalizeRole = (value?: string | null) =>
+  (value || '').toString().trim().toLowerCase().replace(/\s+/g, '_');
+
 /**
  * @swagger
  * /api/verify-otp:
@@ -48,7 +51,7 @@ export async function POST(request: NextRequest) {
     const headerRole = request.headers.get('x-role')?.toString().toLowerCase() ?? '';
 
     const source = (body.source || headerSource || '').toString().toLowerCase();
-    const role = (body.role || headerRole || '').toString().toLowerCase();
+    const role = normalizeRole(body.role || headerRole);
     const phone = (body.phone || '').replace(/\D/g, '');
     const otp = (body.otp || '').replace(/\D/g, '');
     const name = (body.name || '').trim();
@@ -66,9 +69,9 @@ export async function POST(request: NextRequest) {
           return ['web', 'mobile'].includes(v);
         },
         role: (r) => {
-          const v = (r || '').toString().toLowerCase();
+          const v = normalizeRole(r);
           if (!v) return true;
-          return ['admin', 'supervisor', 'field_officer'].includes(v);
+          return ['admin', 'supervisor', 'field_officer', 'therapy_specialist'].includes(v);
         },
       }
     );
@@ -113,7 +116,11 @@ export async function POST(request: NextRequest) {
 
       if (!row) {
         return NextResponse.json(
-          { ok: false, error: 'OTP not found' },
+          {
+            ok: false,
+            error: 'otp_not_found',
+            message: 'ओटीपी सापडला नाही. कृपया पुन्हा विनंती करा.',
+          },
           { status: 404 }
         );
       }
@@ -124,14 +131,22 @@ export async function POST(request: NextRequest) {
           [row.id]
         );
         return NextResponse.json(
-          { ok: false, error: 'OTP expired' },
+          {
+            ok: false,
+            error: 'otp_expired',
+            message: 'ओटीपीची वेळ संपली. कृपया नव्याने ओटीपी मागवा.',
+          },
           { status: 410 }
         );
       }
 
       if (row.otp !== otp) {
         return NextResponse.json(
-          { ok: false, error: 'Invalid OTP' },
+          {
+            ok: false,
+            error: 'otp_invalid',
+            message: 'ओटीपी अयोग्य आहे. पुन्हा प्रयत्न करा.',
+          },
           { status: 401 }
         );
       }
@@ -162,35 +177,79 @@ export async function POST(request: NextRequest) {
       
       if (!userData) {
         return NextResponse.json(
-          { ok: false, error: 'user_not_found' },
+          {
+            ok: false,
+            error: 'user_not_found',
+            message: 'वापरकर्ता नोंदणीकृत नाही. कृपया प्रवेश विनंती पाठवा.',
+          },
           { status: 404 }
         );
       }
 
+      const status = (userData.status || '').toLowerCase();
+      const isActive =
+        status === 'active' || status === 'approved' || Boolean(userData.is_active);
+      if (!isActive) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'user_not_active',
+            message: 'आपले खाते अजून मंजूर झालेले नाही. कृपया प्रशासकाशी संपर्क साधा.',
+          },
+          { status: 403 }
+        );
+      }
+
       // Check user's actual role from database
-      const userType = (userData.user_type || '').toLowerCase();
-      const relatedType = (userData.related_type || '').toLowerCase();
-      const isAdmin = userType === 'admin' || relatedType === 'admin';
-      const isSupervisor = userType === 'supervisor' || relatedType === 'supervisor';
-      const isFieldOfficer = userType === 'field_officer' || relatedType === 'field officer' || relatedType === 'field_officer';
+      const userType = normalizeRole(userData.user_type);
+      const relatedType = normalizeRole(userData.related_type);
+      const effectiveRole = userType || relatedType;
+      const isAdmin = effectiveRole === 'admin';
+      const isSupervisor = effectiveRole === 'supervisor';
+      const isFieldOfficer = effectiveRole === 'field_officer';
 
       // For web requests, only allow admin/supervisor users
       if (isWebRequest && !isAdmin && !isSupervisor) {
         return NextResponse.json(
-          { ok: false, error: 'forbidden_role' },
+          {
+            ok: false,
+            error: 'forbidden_role',
+            message: 'या भूमिकेला वेब प्रवेश नाही.',
+          },
           { status: 403 }
         );
       }
 
       // For mobile requests, allow field_officer/supervisor/admin/therapy_specialist users
-      const isTherapySpecialist = 
-        userType === 'therapy_specialist' || 
-        relatedType === 'practitioner' || 
-        relatedType === 'therapy_specialist';
-      
-      if (!isWebRequest && role && !isFieldOfficer && !isSupervisor && !isAdmin && !isTherapySpecialist) {
+      const isTherapySpecialist =
+        effectiveRole === 'therapy_specialist' ||
+        effectiveRole === 'practitioner';
+
+      if (
+        !isWebRequest &&
+        role &&
+        !isFieldOfficer &&
+        !isSupervisor &&
+        !isAdmin &&
+        !isTherapySpecialist
+      ) {
         return NextResponse.json(
-          { ok: false, error: 'forbidden_role' },
+          {
+            ok: false,
+            error: 'forbidden_role',
+            message: 'या भूमिकेला मोबाइल प्रवेश नाही.',
+          },
+          { status: 403 }
+        );
+      }
+
+      if (!isWebRequest && role && effectiveRole && role !== effectiveRole) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'forbidden_role',
+            message: 'निवडलेली भूमिका आणि वापरकर्त्याची वास्तविक भूमिका जुळत नाही.',
+          },
           { status: 403 }
         );
       }

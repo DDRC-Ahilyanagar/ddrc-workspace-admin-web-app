@@ -43,6 +43,9 @@ import { validatePhone, validateRequest } from '@/lib/validation';
  *       500:
  *         description: Server error
  */
+const normalizeRole = (value?: string | null) =>
+  (value || '').toString().trim().toLowerCase().replace(/\s+/g, '_');
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -50,7 +53,7 @@ export async function POST(request: NextRequest) {
     const headerRole = request.headers.get('x-role')?.toString().toLowerCase() ?? '';
 
     const source = (body.source || headerSource || '').toString().toLowerCase();
-    const role = (body.role || headerRole || '').toString().toLowerCase();
+    const role = normalizeRole(body.role || headerRole);
     const phone = (body.phone || '').replace(/\D/g, '');
 
     Logger.info('hit_send_otp', { raw: JSON.stringify(body), req: body });
@@ -65,7 +68,7 @@ export async function POST(request: NextRequest) {
           return ['web', 'mobile'].includes(val);
         },
         role: (r) => {
-          const val = (r || '').toString().toLowerCase();
+          const val = normalizeRole(r);
           if (!val) return true;
           return ['admin', 'supervisor', 'field_officer', 'therapy_specialist'].includes(val);
         }, // Allow therapy_specialist role for mobile app access
@@ -90,7 +93,6 @@ export async function POST(request: NextRequest) {
          FROM users u
          LEFT JOIN user_types ut ON ut.id = u.user_type_id
          WHERE u.contact_number = ?
-           AND (u.status = 'active' OR u.is_active = 1)
          LIMIT 1`,
         [phone]
       );
@@ -104,15 +106,34 @@ export async function POST(request: NextRequest) {
     // If user not found, return error
     if (!userData) {
       return NextResponse.json(
-        { ok: false, error: 'user_not_found' },
+        {
+          ok: false,
+          error: 'user_not_found',
+          message: 'वापरकर्ता नोंदणीकृत नाही. कृपया प्रवेश विनंती पाठवा.',
+        },
         { status: 404 }
+      );
+    }
+
+    const status = (userData.status || '').toLowerCase();
+    const isActive =
+      status === 'active' || status === 'approved' || Boolean(userData.is_active);
+    if (!isActive) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'user_not_active',
+          message: 'आपले खाते अजून मंजूर झालेले नाही. कृपया प्रशासकाशी संपर्क साधा.',
+        },
+        { status: 403 }
       );
     }
 
     // Determine allowed user types based on source
     const isWebRequest = source === 'web';
-    const userType = (userData.user_type || '').toLowerCase();
-    const relatedType = (userData.related_type || '').toLowerCase();
+    const userType = normalizeRole(userData.user_type);
+    const relatedType = normalizeRole(userData.related_type);
+    const effectiveRole = userType || relatedType;
 
     // For web requests, only allow admin/supervisor users
     if (isWebRequest) {
@@ -120,7 +141,11 @@ export async function POST(request: NextRequest) {
       const isSupervisor = userType === 'supervisor' || relatedType === 'supervisor';
       if (!isAdmin && !isSupervisor) {
         return NextResponse.json(
-          { ok: false, error: 'forbidden_role' },
+          {
+            ok: false,
+            error: 'forbidden_role',
+            message: 'या भूमिकेला वेब प्रवेश नाही.',
+          },
           { status: 403 }
         );
       }
@@ -129,18 +154,31 @@ export async function POST(request: NextRequest) {
 
     // For mobile requests, allow field_officer/supervisor/admin/therapy_specialist users
     if (!isWebRequest) {
-      const isFieldOfficer = userType === 'field_officer' || relatedType === 'field officer' || relatedType === 'field_officer';
-      const isSupervisor = userType === 'supervisor' || relatedType === 'supervisor';
-      const isAdmin = userType === 'admin' || relatedType === 'admin';
-      const isTherapySpecialist = 
-        userType === 'therapy_specialist' || 
-        relatedType === 'practitioner' || 
-        relatedType === 'therapy_specialist';
-      
+      const isFieldOfficer = effectiveRole === 'field_officer';
+      const isSupervisor = effectiveRole === 'supervisor';
+      const isAdmin = effectiveRole === 'admin';
+      const isTherapySpecialist = effectiveRole === 'therapy_specialist' || effectiveRole === 'practitioner';
+
       // Only check role if provided and user doesn't match any allowed role
       if (role && !isFieldOfficer && !isSupervisor && !isAdmin && !isTherapySpecialist) {
         return NextResponse.json(
-          { ok: false, error: 'forbidden_role' },
+          {
+            ok: false,
+            error: 'forbidden_role',
+            message: 'या भूमिकेला मोबाइल प्रवेश नाही.',
+          },
+          { status: 403 }
+        );
+      }
+
+      // Enforce requested role to match actual role when provided
+      if (role && effectiveRole && role !== effectiveRole) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'forbidden_role',
+            message: 'निवडलेली भूमिका आणि वापरकर्त्याची वास्तविक भूमिका जुळत नाही.',
+          },
           { status: 403 }
         );
       }
