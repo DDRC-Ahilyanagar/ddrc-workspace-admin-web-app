@@ -115,6 +115,7 @@ export async function POST(request: NextRequest) {
       const row = Array.isArray(rows) && rows.length > 0 ? rows[0] as any : null;
 
       if (!row) {
+        // No matching OTP in the DB – treat it as a stale request
         return NextResponse.json(
           {
             ok: false,
