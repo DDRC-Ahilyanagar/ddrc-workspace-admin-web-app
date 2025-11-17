@@ -162,7 +162,8 @@ export async function POST(request: NextRequest) {
       // Require existing user with active status and role based on source
       const isWebRequest = source === 'web';
 
-      // First, get the user's actual role from the database
+      // First, get the user's actual role from the database so that mobile/web
+      // clients cannot spoof their role via request payloads.
       const [userCheck] = await connection.execute(
         `SELECT u.id, u.name, u.contact_number, u.passkey, u.user_type, ut.user_type AS related_type
          FROM users u
