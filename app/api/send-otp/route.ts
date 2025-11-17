@@ -51,6 +51,8 @@ const normalizeRole = (value?: string | null) =>
 //       from the client matches the server-side records and keeps RBAC strict.
 export async function POST(request: NextRequest) {
   try {
+    // Parse the body first; mobile clients send extra metadata (role/source)
+    // that we use later in the RBAC checks.
     const body = await request.json();
     const headerSource = request.headers.get('x-source')?.toString().toLowerCase() ?? '';
     const headerRole = request.headers.get('x-role')?.toString().toLowerCase() ?? '';
