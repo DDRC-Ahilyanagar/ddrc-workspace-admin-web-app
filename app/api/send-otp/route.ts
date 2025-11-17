@@ -46,6 +46,9 @@ import { validatePhone, validateRequest } from '@/lib/validation';
 const normalizeRole = (value?: string | null) =>
   (value || '').toString().trim().toLowerCase().replace(/\s+/g, '_');
 
+// NOTE: This handler is intentionally verbose because mobile and web apps share
+//       the same endpoint. The additional guards make sure the selected role
+//       from the client matches the server-side records and keeps RBAC strict.
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
