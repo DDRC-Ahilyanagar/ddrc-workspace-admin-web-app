@@ -88,22 +88,52 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user exists by contact_number and verify approval status BEFORE sending OTP
-    // This prevents sending OTP to unapproved users
+    // ============================================================================
+    // CRITICAL: Approval check MUST happen BEFORE any OTP generation or SMS sending
+    // This prevents wasting OTPs and SMS costs on unapproved users
+    // ============================================================================
     const pool = await import('@/lib/db').then(m => m.getDbPool());
     const existConn = await pool.getConnection();
     let userData: any = null;
     try {
-      // Use the same strict query as verify-otp to ensure consistency
+      // First, check if user exists (without status filter) to get accurate error message
+      const [userCheck] = await existConn.execute(
+        `SELECT u.id, u.user_type, u.status, u.is_active, ut.user_type AS related_type
+         FROM users u
+         LEFT JOIN user_types ut ON ut.id = u.user_type_id
+         WHERE u.contact_number = ?
+         LIMIT 1`,
+        [phone]
+      );
+      
+      const userExists = Array.isArray(userCheck) && (userCheck as any[]).length > 0;
+      
+      if (!userExists) {
+        // User doesn't exist at all
+        Logger.info('send_otp_rejected_user_not_found', { phone });
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'user_not_found',
+            message: 'वापरकर्ता नोंदणीकृत नाही. कृपया प्रवेश विनंती पाठवा.',
+          },
+          { status: 404 }
+        );
+      }
+      
+      // User exists, now check if they are approved/active
+      // Use STRICT check: status must be 'active' AND is_active must be 1
       const [users] = await existConn.execute(
         `SELECT u.id, u.user_type, u.status, u.is_active, ut.user_type AS related_type
          FROM users u
          LEFT JOIN user_types ut ON ut.id = u.user_type_id
          WHERE u.contact_number = ?
-           AND (u.status = 'active' OR u.is_active = 1)
+           AND u.status = 'active'
+           AND u.is_active = 1
          LIMIT 1`,
         [phone]
       );
+      
       if (Array.isArray(users) && (users as any[]).length > 0) {
         userData = (users as any[])[0];
       }
@@ -111,23 +141,10 @@ export async function POST(request: NextRequest) {
       existConn.release();
     }
 
-    // If user not found or not active, return error BEFORE sending OTP
+    // If user exists but is not approved/active, return error IMMEDIATELY
+    // NO OTP will be generated, NO SMS will be sent
     if (!userData) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: 'user_not_found',
-          message: 'वापरकर्ता नोंदणीकृत नाही. कृपया प्रवेश विनंती पाठवा.',
-        },
-        { status: 404 }
-      );
-    }
-
-    // Double-check approval status (same logic as verify-otp)
-    const status = (userData.status || '').toLowerCase();
-    const isActive =
-      status === 'active' || status === 'approved' || Boolean(userData.is_active);
-    if (!isActive) {
+      Logger.info('send_otp_rejected_user_not_approved', { phone });
       return NextResponse.json(
         {
           ok: false,
@@ -137,6 +154,11 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       );
     }
+    
+    // ============================================================================
+    // Only proceed to OTP generation if user is approved and active
+    // At this point, userData is guaranteed to have status='active' AND is_active=1
+    // ============================================================================
 
     // Determine allowed user types based on source
     const isWebRequest = source === 'web';
