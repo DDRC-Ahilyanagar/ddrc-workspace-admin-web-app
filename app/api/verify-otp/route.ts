@@ -188,20 +188,6 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const status = (userData.status || '').toLowerCase();
-      const isActive =
-        status === 'active' || status === 'approved' || Boolean(userData.is_active);
-      if (!isActive) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: 'user_not_active',
-            message: 'आपले खाते अजून मंजूर झालेले नाही. कृपया प्रशासकाशी संपर्क साधा.',
-          },
-          { status: 403 }
-        );
-      }
-
       // Check user's actual role from database
       const userType = normalizeRole(userData.user_type);
       const relatedType = normalizeRole(userData.related_type);
