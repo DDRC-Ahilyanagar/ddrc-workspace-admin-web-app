@@ -88,16 +88,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user exists by contact_number first to determine their role
+    // Check if user exists by contact_number and verify approval status BEFORE sending OTP
+    // This prevents sending OTP to unapproved users
     const pool = await import('@/lib/db').then(m => m.getDbPool());
     const existConn = await pool.getConnection();
     let userData: any = null;
     try {
+      // Use the same strict query as verify-otp to ensure consistency
       const [users] = await existConn.execute(
         `SELECT u.id, u.user_type, u.status, u.is_active, ut.user_type AS related_type
          FROM users u
          LEFT JOIN user_types ut ON ut.id = u.user_type_id
          WHERE u.contact_number = ?
+           AND (u.status = 'active' OR u.is_active = 1)
          LIMIT 1`,
         [phone]
       );
@@ -108,7 +111,7 @@ export async function POST(request: NextRequest) {
       existConn.release();
     }
 
-    // If user not found, return error
+    // If user not found or not active, return error BEFORE sending OTP
     if (!userData) {
       return NextResponse.json(
         {
@@ -120,6 +123,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Double-check approval status (same logic as verify-otp)
     const status = (userData.status || '').toLowerCase();
     const isActive =
       status === 'active' || status === 'approved' || Boolean(userData.is_active);
@@ -247,25 +251,57 @@ export async function POST(request: NextRequest) {
         );
       }
       
-      // Get message with OTP replaced
-      let message: string;
-      try {
-        message = getOTPMessage(cleanOtp);
-        Logger.info('send_otp_message_generated', { phone, otp: cleanOtp, messageLength: message.length });
-      } catch (msgError: any) {
-        Logger.error('send_otp_message_failed', { error: msgError.message, otp: cleanOtp, phone });
-        return NextResponse.json(
-          { ok: false, error: `Failed to generate SMS message: ${msgError.message}` },
-          { status: 500 }
-        );
-      }
+      // Check if we're in local development mode (only skip SMS if explicitly enabled)
+      // SMS will work by default unless LOCAL_DEV_SKIP_SMS is explicitly set to 'true'
+      const isLocalDev = process.env.LOCAL_DEV_SKIP_SMS === 'true';
       
-      // Send SMS
-      const sms = await sendSMS(phone, message);
+      let sms: any = { ok: true, local_dev: true };
       
-      Logger.info('send_otp', { phone, otp_id: otpId, otp: cleanOtp, messageLength: message.length, resp: sms });
+      if (isLocalDev) {
+        // Local development: Skip SMS sending, log OTP instead
+        Logger.info('send_otp_local_dev', { 
+          phone, 
+          otp_id: otpId, 
+          otp: cleanOtp,
+          message: 'OTP sent in local development mode - SMS skipped'
+        });
+        console.log('\n========================================');
+        console.log('🔐 LOCAL DEV MODE - OTP FOR TESTING');
+        console.log('========================================');
+        console.log(`Phone: ${phone}`);
+        console.log(`OTP: ${cleanOtp}`);
+        console.log(`OTP ID: ${otpId}`);
+        console.log('========================================\n');
+        
+        // Return OTP in response for local development
+        return NextResponse.json({ 
+          ok: true, 
+          otp_id: otpId, 
+          otp: cleanOtp, // Include OTP in response for local dev
+          sms: { ok: true, local_dev: true, message: 'SMS skipped in local development' },
+          message: `Local dev mode: OTP is ${cleanOtp}`
+        });
+      } else {
+        // Production: Send actual SMS
+        let message: string;
+        try {
+          message = getOTPMessage(cleanOtp);
+          Logger.info('send_otp_message_generated', { phone, otp: cleanOtp, messageLength: message.length });
+        } catch (msgError: any) {
+          Logger.error('send_otp_message_failed', { error: msgError.message, otp: cleanOtp, phone });
+          return NextResponse.json(
+            { ok: false, error: `Failed to generate SMS message: ${msgError.message}` },
+            { status: 500 }
+          );
+        }
+        
+        // Send SMS
+        sms = await sendSMS(phone, message);
+        
+        Logger.info('send_otp', { phone, otp_id: otpId, otp: cleanOtp, messageLength: message.length, resp: sms });
 
-      return NextResponse.json({ ok: true, otp_id: otpId, sms });
+        return NextResponse.json({ ok: true, otp_id: otpId, sms });
+      }
     } finally {
       connection.release();
     }
