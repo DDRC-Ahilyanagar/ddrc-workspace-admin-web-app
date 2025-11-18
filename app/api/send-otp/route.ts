@@ -96,20 +96,22 @@ export async function POST(request: NextRequest) {
     const existConn = await pool.getConnection();
     let userData: any = null;
     try {
-      // First, check if user exists (without status filter) to get accurate error message
+      // Fetch user once so we can show precise error messages
       const [userCheck] = await existConn.execute(
-        `SELECT u.id, u.user_type, u.status, u.is_active, ut.user_type AS related_type
+        `SELECT 
+           u.id, 
+           u.user_type, 
+           u.status, 
+           u.is_active, 
+           ut.user_type AS related_type
          FROM users u
          LEFT JOIN user_types ut ON ut.id = u.user_type_id
          WHERE u.contact_number = ?
          LIMIT 1`,
         [phone]
       );
-      
-      const userExists = Array.isArray(userCheck) && (userCheck as any[]).length > 0;
-      
-      if (!userExists) {
-        // User doesn't exist at all
+
+      if (!Array.isArray(userCheck) || (userCheck as any[]).length === 0) {
         Logger.info('send_otp_rejected_user_not_found', { phone });
         return NextResponse.json(
           {
@@ -120,31 +122,24 @@ export async function POST(request: NextRequest) {
           { status: 404 }
         );
       }
-      
-      // User exists, now check if they are approved/active
-      // Use STRICT check: status must be 'active' AND is_active must be 1
-      const [users] = await existConn.execute(
-        `SELECT u.id, u.user_type, u.status, u.is_active, ut.user_type AS related_type
-         FROM users u
-         LEFT JOIN user_types ut ON ut.id = u.user_type_id
-         WHERE u.contact_number = ?
-           AND u.status = 'active'
-           AND u.is_active = 1
-         LIMIT 1`,
-        [phone]
-      );
-      
-      if (Array.isArray(users) && (users as any[]).length > 0) {
-        userData = (users as any[])[0];
-      }
+
+      userData = (userCheck as any[])[0];
     } finally {
       existConn.release();
     }
 
+    const status = (userData.status || '').toLowerCase().trim();
+    const statusAllowsOtp = status === 'active' || status === 'approved';
+    const hasActiveFlag = Number(userData.is_active) === 1;
+
     // If user exists but is not approved/active, return error IMMEDIATELY
     // NO OTP will be generated, NO SMS will be sent
-    if (!userData) {
-      Logger.info('send_otp_rejected_user_not_approved', { phone });
+    if (!statusAllowsOtp || !hasActiveFlag) {
+      Logger.info('send_otp_rejected_user_not_approved', { 
+        phone, 
+        status: userData.status, 
+        is_active: userData.is_active 
+      });
       return NextResponse.json(
         {
           ok: false,
