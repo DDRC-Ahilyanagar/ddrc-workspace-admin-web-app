@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { dbQuery, getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * @swagger
  * /api/get-questions:
