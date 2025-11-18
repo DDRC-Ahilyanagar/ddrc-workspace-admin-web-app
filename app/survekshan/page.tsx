@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Script from 'next/script';
 import AdminLayout from '@/components/AdminLayout';
-import $ from 'jquery';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +11,8 @@ export default function SurvekshanPage() {
   const router = useRouter();
   const tableRef = useRef<HTMLTableElement>(null);
   const dtInstanceRef = useRef<any>(null);
+  const [dataTablesLoaded, setDataTablesLoaded] = useState(false);
+  const initAttemptedRef = useRef(false);
 
   // Setup global handler for DataTable view action
   useEffect(() => {
@@ -22,33 +24,39 @@ export default function SurvekshanPage() {
     };
   }, [router]);
 
-  useEffect(() => {
-    if (!tableRef.current) return;
+  // Initialize DataTable function
+  const initializeDataTable = () => {
+    console.log('Initializing DataTable...');
+    
+    if (!tableRef.current) {
+      console.error('Table ref is null');
+      return;
+    }
 
     // Destroy existing instance if any
     if (dtInstanceRef.current) {
-      dtInstanceRef.current.destroy();
+      try {
+        dtInstanceRef.current.destroy();
+      } catch (e) {
+        console.warn('Error destroying existing DataTable:', e);
+      }
       dtInstanceRef.current = null;
     }
 
-    // Ensure jQuery globals for plugin
-    (window as any).$ = $;
-    (window as any).jQuery = $;
+    const $ = (window as any).jQuery || (window as any).$;
+    if (!$ || typeof $.fn.DataTable !== 'function') {
+      console.error('jQuery or DataTable function not available');
+      return;
+    }
 
-    // Dynamically import DataTables (Bootstrap 5)
-    (async () => {
-      try {
-        const mod: any = await import('datatables.net-bs5');
-        if (typeof mod === 'function') {
-          try { mod(window, $); } catch {}
-        } else if (mod?.default) {
-          try { mod.default(window, $); } catch {}
-        }
-      } catch (e) {
-        console.error('Failed to load DataTables plugin', e);
-      }
+    const table = $(tableRef.current as HTMLTableElement);
+    if (!table.length) {
+      console.error('Table element not found in jQuery');
+      return;
+    }
 
-      const table = $(tableRef.current as HTMLTableElement);
+    try {
+      console.log('Creating DataTable instance...');
       dtInstanceRef.current = table.DataTable({
       serverSide: true,
       processing: true,
@@ -57,6 +65,12 @@ export default function SurvekshanPage() {
         type: 'GET',
         error: (xhr: any, error: string, thrown: string) => {
           console.error('Surveys API request failed:', error, thrown);
+          console.error('Response:', xhr.responseText);
+          console.error('Status:', xhr.status);
+        },
+        dataSrc: (json: any) => {
+          console.log('API response received:', json);
+          return json.data || [];
         }
       },
       columns: [
@@ -132,11 +146,61 @@ export default function SurvekshanPage() {
            "rt" +
            "<'row g-2 mt-3'<'col-12 col-md-5'i><'col-12 col-md-7'p>>",
       });
-    })();
+      console.log('DataTable initialized successfully');
+    } catch (e) {
+      console.error('Error initializing DataTable:', e);
+      initAttemptedRef.current = false; // Allow retry
+    }
+  };
 
+  // Check if DataTables is loaded and initialize
+  useEffect(() => {
+    console.log('Effect running - dataTablesLoaded:', dataTablesLoaded, 'tableRef:', !!tableRef.current);
+    
+    if (!tableRef.current) {
+      console.log('Table ref not available yet');
+      return;
+    }
+
+    // Check if DataTables script is loaded
+    const checkAndInit = (retries = 10) => {
+      const $ = (window as any).jQuery || (window as any).$;
+      const hasDataTable = $ && typeof $.fn.DataTable === 'function';
+      
+      console.log('Checking DataTables (attempt ' + (11 - retries) + '):', {
+        hasJQuery: !!$,
+        hasDataTable,
+        dataTablesLoaded,
+        retriesLeft: retries
+      });
+
+      if (hasDataTable && !initAttemptedRef.current) {
+        initAttemptedRef.current = true;
+        initializeDataTable();
+      } else if (!hasDataTable && retries > 0) {
+        // Retry after a delay
+        setTimeout(() => checkAndInit(retries - 1), 300);
+      } else if (retries === 0) {
+        console.error('DataTables not available after all retries');
+      }
+    };
+
+    // Start checking after a short delay
+    const timer = setTimeout(() => checkAndInit(), 500);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [dataTablesLoaded]);
+
+  // Cleanup on unmount
+  useEffect(() => {
     return () => {
       if (dtInstanceRef.current) {
-        dtInstanceRef.current.destroy();
+        try {
+          dtInstanceRef.current.destroy();
+        } catch (e) {
+          console.warn('Error destroying DataTable on unmount:', e);
+        }
         dtInstanceRef.current = null;
       }
     };
@@ -144,12 +208,26 @@ export default function SurvekshanPage() {
 
   return (
     <>
+      <Script
+        src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"
+        strategy="afterInteractive"
+        onLoad={() => {
+          console.log('DataTables JS script loaded via Script component');
+          setDataTablesLoaded(true);
+        }}
+        onError={(e) => {
+          console.error('Failed to load DataTables JS:', e);
+        }}
+        onReady={() => {
+          console.log('DataTables JS ready');
+        }}
+      />
       <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css" />
       <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" />
       <AdminLayout>
         <div className="container-fluid p-4">
           <div className="d-flex justify-content-between align-items-center mb-4">
-            <h2 className="mb-0">सर्वेक्षण सूची</h2>
+            <h2 className="mb-0">सर्वेक्षण यादी</h2>
           </div>
 
           <div className="card shadow-sm">
