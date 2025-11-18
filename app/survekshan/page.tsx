@@ -1,5 +1,16 @@
 'use client';
 
+/**
+ * Survekshan Page Component
+ * 
+ * Displays a list of surveys (सर्वेक्षण यादी) using DataTables with server-side processing.
+ * Features:
+ * - Server-side pagination, sorting, and searching
+ * - Real-time data loading from /api/admin/surveys
+ * - Marathi language support for UI elements
+ * - View survey details functionality
+ */
+
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Script from 'next/script';
@@ -9,12 +20,21 @@ export const dynamic = 'force-dynamic';
 
 export default function SurvekshanPage() {
   const router = useRouter();
+  
+  // Refs for table element and DataTable instance
   const tableRef = useRef<HTMLTableElement>(null);
   const dtInstanceRef = useRef<any>(null);
+  
+  // State to track DataTables script loading
   const [dataTablesLoaded, setDataTablesLoaded] = useState(false);
+  
+  // Prevent multiple initialization attempts
   const initAttemptedRef = useRef(false);
 
-  // Setup global handler for DataTable view action
+  /**
+   * Setup global handler for DataTable view action button
+   * This allows the dynamically rendered buttons in DataTable to navigate to survey details
+   */
   useEffect(() => {
     (window as any).handleViewSurvey = (id: number) => {
       router.push(`/surveys/${id}`);
@@ -24,7 +44,10 @@ export default function SurvekshanPage() {
     };
   }, [router]);
 
-  // Initialize DataTable function
+  /**
+   * Initialize DataTable with server-side processing configuration
+   * Sets up columns, pagination, sorting, and AJAX data loading
+   */
   const initializeDataTable = () => {
     console.log('Initializing DataTable...');
     
@@ -58,8 +81,11 @@ export default function SurvekshanPage() {
     try {
       console.log('Creating DataTable instance...');
       dtInstanceRef.current = table.DataTable({
+      // Enable server-side processing for better performance with large datasets
       serverSide: true,
       processing: true,
+      
+      // AJAX configuration for fetching survey data
       ajax: {
         url: '/api/admin/surveys',
         type: 'GET',
@@ -73,27 +99,30 @@ export default function SurvekshanPage() {
           return json.data || [];
         }
       },
+      
+      // Column definitions with Marathi titles
       columns: [
         { data: 'id', title: 'ID', width: '80px' },
         { 
           data: 'aadhar_no', 
-          title: 'आधार क्रमांक',
+          title: 'आधार क्रमांक', // Aadhar Number
           render: (data: string) => data || '-'
         },
         { 
           data: 'user_id', 
-          title: 'वापरकर्ता ID',
+          title: 'वापरकर्ता ID', // User ID
           render: (data: number) => data || '-'
         },
         { 
           data: 'answer_count', 
-          title: 'उत्तरांची संख्या',
+          title: 'उत्तरांची संख्या', // Number of Answers
           render: (data: number) => data || 0
         },
         { 
           data: 'status', 
-          title: 'स्थिती',
+          title: 'स्थिती', // Status
           render: (data: string) => {
+            // Display status badge: पूर्ण (Completed) or प्रलंबित (Pending)
             const badge = data === 'Completed' ? 'bg-success' : 'bg-warning';
             const text = data === 'Completed' ? 'पूर्ण' : 'प्रलंबित';
             return `<span class="badge ${badge}">${text}</span>`;
@@ -101,19 +130,20 @@ export default function SurvekshanPage() {
         },
         { 
           data: 'created_at', 
-          title: 'तयार केले',
+          title: 'तयार केले', // Created At
           render: (data: string) => data || '-'
         },
         { 
           data: 'updated_at', 
-          title: 'अपडेट केले',
+          title: 'अपडेट केले', // Updated At
           render: (data: string) => data || '-'
         },
         {
           data: null,
-          title: 'क्रिया',
+          title: 'क्रिया', // Actions
           orderable: false,
           render: (data: any, type: any, row: any) => {
+            // View button that calls global handler
             return `
               <button class="btn btn-sm btn-outline-primary" onclick="window.handleViewSurvey(${row.id})" title="पहा">
                 <i class="bi bi-eye"></i>
@@ -122,26 +152,33 @@ export default function SurvekshanPage() {
           }
         }
       ],
+      
+      // Pagination settings
       pageLength: 25,
       lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
-      order: [[0, 'desc']], // Sort by ID descending
+      
+      // Default sorting: newest surveys first (ID descending)
+      order: [[0, 'desc']],
+      // Marathi language translations for DataTables UI
       language: {
-        search: 'शोधा:',
-        lengthMenu: '_MENU_ नोंदी दाखवा',
-        info: '_START_ ते _END_ पैकी _TOTAL_ नोंदी दाखवत आहे',
-        infoEmpty: 'दाखवण्यासाठी नोंदी नाहीत',
-        infoFiltered: '(_MAX_ एकूण नोंदींपैकी फिल्टर केलेले)',
-        processing: 'प्रक्रिया करत आहे...',
-        loadingRecords: 'लोड होत आहे...',
-        zeroRecords: 'कोणतीही नोंदी आढळली नाहीत',
-        emptyTable: 'टेबलमध्ये डेटा नाही',
+        search: 'शोधा:', // Search
+        lengthMenu: '_MENU_ नोंदी दाखवा', // Show _MENU_ entries
+        info: '_START_ ते _END_ पैकी _TOTAL_ नोंदी दाखवत आहे', // Showing _START_ to _END_ of _TOTAL_ entries
+        infoEmpty: 'दाखवण्यासाठी नोंदी नाहीत', // No entries to show
+        infoFiltered: '(_MAX_ एकूण नोंदींपैकी फिल्टर केलेले)', // (filtered from _MAX_ total entries)
+        processing: 'प्रक्रिया करत आहे...', // Processing...
+        loadingRecords: 'लोड होत आहे...', // Loading...
+        zeroRecords: 'कोणतीही नोंदी आढळली नाहीत', // No records found
+        emptyTable: 'टेबलमध्ये डेटा नाही', // No data in table
         paginate: {
-          first: 'पहिले',
-          last: 'शेवटचे',
-          next: 'पुढे',
-          previous: 'मागे'
+          first: 'पहिले', // First
+          last: 'शेवटचे', // Last
+          next: 'पुढे', // Next
+          previous: 'मागे' // Previous
         }
       },
+      
+      // DOM layout: length menu, filter, table, info, pagination
       dom: "<'row g-2 mb-3'<'col-12 col-md-8'l><'col-12 col-md-4'f>>" +
            "rt" +
            "<'row g-2 mt-3'<'col-12 col-md-5'i><'col-12 col-md-7'p>>",
@@ -153,7 +190,11 @@ export default function SurvekshanPage() {
     }
   };
 
-  // Check if DataTables is loaded and initialize
+  /**
+   * Effect to check if DataTables is loaded and initialize the table
+   * Retries up to 10 times with 300ms delay between attempts
+   * Runs when dataTablesLoaded state changes or component mounts
+   */
   useEffect(() => {
     console.log('Effect running - dataTablesLoaded:', dataTablesLoaded, 'tableRef:', !!tableRef.current);
     
@@ -162,7 +203,10 @@ export default function SurvekshanPage() {
       return;
     }
 
-    // Check if DataTables script is loaded
+    /**
+     * Check if DataTables library is available and initialize
+     * @param retries - Number of retry attempts remaining
+     */
     const checkAndInit = (retries = 10) => {
       const $ = (window as any).jQuery || (window as any).$;
       const hasDataTable = $ && typeof $.fn.DataTable === 'function';
@@ -192,7 +236,10 @@ export default function SurvekshanPage() {
     };
   }, [dataTablesLoaded]);
 
-  // Cleanup on unmount
+  /**
+   * Cleanup effect: Destroy DataTable instance on component unmount
+   * Prevents memory leaks and ensures proper cleanup
+   */
   useEffect(() => {
     return () => {
       if (dtInstanceRef.current) {
@@ -208,6 +255,7 @@ export default function SurvekshanPage() {
 
   return (
     <>
+      {/* Load DataTables JavaScript library from CDN */}
       <Script
         src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"
         strategy="afterInteractive"
@@ -222,17 +270,27 @@ export default function SurvekshanPage() {
           console.log('DataTables JS ready');
         }}
       />
+      
+      {/* DataTables CSS stylesheets */}
       <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css" />
       <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" />
       <AdminLayout>
         <div className="container-fluid p-4">
+          {/* Page Header */}
           <div className="d-flex justify-content-between align-items-center mb-4">
             <h2 className="mb-0">सर्वेक्षण यादी</h2>
           </div>
 
+          {/* Survey List Table Card */}
           <div className="card shadow-sm">
             <div className="card-body">
               <div className="table-responsive">
+                {/* 
+                  DataTables will automatically:
+                  - Add search, pagination, and sorting controls
+                  - Populate tbody via server-side AJAX
+                  - Apply Bootstrap 5 styling
+                */}
                 <table ref={tableRef} className="table table-striped align-middle" style={{ width: '100%' }}>
                   <thead>
                     <tr>
