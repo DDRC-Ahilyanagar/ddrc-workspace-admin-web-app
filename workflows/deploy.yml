@@ -2,7 +2,7 @@ name: Deploy to VPS
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
 
 jobs:
   deploy:
@@ -31,7 +31,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_KEY }}
-          source: ".next/**,package.json,package-lock.json,public/**"
+          source: ".next/**,package.json,package-lock.json,public/**,lib/**,app/**,middleware.ts,next.config.mjs,tsconfig.json,storage/**,prisma/**"
           target: "/var/www/surveys"
 
       - name: Restart PM2
@@ -44,5 +44,8 @@ jobs:
             cd /var/www/surveys
             rm -rf node_modules package-lock.json ~/.npm
             npm install --production
-            pm2 restart surveys
+            # Ensure storage directory exists
+            mkdir -p storage/logs
+            # Check PM2 status and restart
+            pm2 restart surveys || pm2 start npm --name "surveys" -- start
             pm2 save
