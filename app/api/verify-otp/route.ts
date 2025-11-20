@@ -55,8 +55,10 @@ export async function POST(request: NextRequest) {
     const phone = (body.phone || '').replace(/\D/g, '');
     const otp = (body.otp || '').replace(/\D/g, '');
     const name = (body.name || '').trim();
+    // Check if this is for survey verification (no user authentication required)
+    const isSurveyVerification = body.survey_verification === true || body.survey_verification === 'true';
 
-    Logger.info('hit_verify_otp', { raw: JSON.stringify(body), req: body });
+    Logger.info('hit_verify_otp', { raw: JSON.stringify(body), req: body, isSurveyVerification });
 
     const validation = validateRequest(
       { ...body, source, role },
@@ -159,6 +161,15 @@ export async function POST(request: NextRequest) {
          WHERE id = ?`,
         [row.id]
       );
+
+      // For survey verification: Just return success, no user authentication needed
+      if (isSurveyVerification) {
+        Logger.info('verify_otp_survey_verification_ok', { phone });
+        return NextResponse.json({ 
+          ok: true, 
+          message: 'OTP verified successfully'
+        });
+      }
 
       // Require existing user with active status and role based on source
       const isWebRequest = source === 'web';

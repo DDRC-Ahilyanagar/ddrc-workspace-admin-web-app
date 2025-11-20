@@ -47,18 +47,7 @@ export async function GET(_req: NextRequest) {
       try { await conn.query(`ALTER TABLE answers ADD COLUMN aadhar_no VARCHAR(20) NULL`); } catch (e:any) { /* ignore duplicate */ }
       try { await conn.query(`ALTER TABLE answers ADD COLUMN updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`); } catch (e:any) { /* ignore duplicate */ }
 
-      // Detect answers column name for value storage across legacy schemas
-      let answerCol = 'answer';
-      try {
-        const [cols]: any = await conn.query("SHOW COLUMNS FROM answers LIKE 'answer'");
-        if (!Array.isArray(cols) || cols.length === 0) {
-          const candidates = ['value', 'answer_text', 'resp'];
-          for (const c of candidates) {
-            const [cc]: any = await conn.query(`SHOW COLUMNS FROM answers LIKE '${c}'`);
-            if (Array.isArray(cc) && cc.length > 0) { answerCol = c; break; }
-          }
-        }
-      } catch {}
+      // Note: We no longer use the answers table - all data is in surveys.survey_json
 
       // Create and seed disability_types if needed
       await conn.query(`CREATE TABLE IF NOT EXISTS disability_types (
@@ -102,10 +91,10 @@ export async function GET(_req: NextRequest) {
       };
       const pTotalAadhar = conn.query(`SELECT COUNT(*) AS c FROM survey_aadhar`);
       const pTodayAadhar = conn.query(`SELECT COUNT(*) AS c FROM survey_aadhar WHERE DATE(created_at) = CURDATE()`);
-      const pAnswers = conn.query(`SELECT COUNT(*) AS c FROM answers`);
+      const pCompleted = conn.query(`SELECT COUNT(*) AS c FROM surveys WHERE no_of_questions_answered > 0`);
       const pPending = conn.query(`SELECT COUNT(*) AS c FROM survey_aadhar sa
-         LEFT JOIN (SELECT DISTINCT aadhar_id FROM answers) an ON an.aadhar_id = sa.id
-         WHERE an.aadhar_id IS NULL`);
+         LEFT JOIN surveys s ON s.aadhaar_id = sa.id
+         WHERE s.id IS NULL OR s.no_of_questions_answered = 0`);
       const pOtpToday = conn.query(`SELECT 
            SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS sent,
            SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) AS verified
@@ -130,20 +119,20 @@ export async function GET(_req: NextRequest) {
       const [
         [totalAadharRows],
         [todayAadharRows],
-        [answersRows],
+        [completedRows],
         [pendingRows],
         [otpTodayRows],
         [sectionsRows],
         [active1Rows],
         [active2Rows],
         [roleCountRows],
-      ] = await Promise.all([pTotalAadhar, pTodayAadhar, pAnswers, pPending, pOtpToday, pSections, pActive1, pActive2, pRoleCounts]);
+      ] = await Promise.all([pTotalAadhar, pTodayAadhar, pCompleted, pPending, pOtpToday, pSections, pActive1, pActive2, pRoleCounts]);
 
       const activeQuestions = ((active1Rows as any[])[0]?.c || 0) || ((active2Rows as any[])[0]?.c || 0) || 0;
 
       const totalSurveys = (totalAadharRows as any[])[0]?.c || 0;
       const surveysToday = (todayAadharRows as any[])[0]?.c || 0;
-      const totalAnswers = (answersRows as any[])[0]?.c || 0;
+      const completedSurveys = (completedRows as any[])[0]?.c || 0;
       const pendingSurveys = (pendingRows as any[])[0]?.c || 0;
       // activeQuestions already computed above
       const otpToday = (otpTodayRows as any[])[0] || { sent: 0, verified: 0 };
@@ -172,76 +161,13 @@ export async function GET(_req: NextRequest) {
       }
       const offlineOfficers = Math.max(0, totalOfficers - onlineOfficers);
 
-      // ---- Breakdown stats (taluka, gender, disability) ---- (parallel)
-      const talukaIds = [37, 47];
-      const genderId = 4;
-      const disabilityId = 69;
-      const pTaluka = conn.query(`SELECT COALESCE(${answerCol}, 'Unknown') AS label, COUNT(DISTINCT aadhar_id) AS completed FROM answers WHERE question_id IN (?) GROUP BY COALESCE(${answerCol}, 'Unknown') ORDER BY completed DESC`, [talukaIds]);
-      const pGender = conn.query(
-        `SELECT CASE
-            WHEN LOWER(TRIM(${answerCol})) IN ('m','male','पुरुष') THEN 'पुरुष'
-            WHEN LOWER(TRIM(${answerCol})) IN ('f','female','स्त्री') THEN 'स्त्री'
-            ELSE 'इतर'
-          END AS label,
-          COUNT(DISTINCT aadhar_id) AS completed
-         FROM answers
-         WHERE question_id = ?
-         GROUP BY label
-         ORDER BY completed DESC`,
-        [genderId]
-      );
-      const pDisability = conn.query(
-        `SELECT dt.label_marathi AS label, COUNT(DISTINCT a.aadhar_id) AS completed
-         FROM disability_types dt
-         LEFT JOIN answers a
-           ON a.question_id = ?
-          AND (
-            JSON_SEARCH(dt.aliases, 'one', a.${answerCol}) IS NOT NULL
-            OR (LOWER(COALESCE(a.${answerCol}, '') COLLATE utf8mb4_unicode_ci) LIKE LOWER(CONCAT('%', dt.label_marathi COLLATE utf8mb4_unicode_ci, '%')))
-            OR (LOWER(COALESCE(a.${answerCol}, '') COLLATE utf8mb4_unicode_ci) LIKE LOWER(CONCAT('%', dt.label_english COLLATE utf8mb4_unicode_ci, '%')))
-          )
-         GROUP BY dt.id
-         ORDER BY completed DESC`,
-        [disabilityId]
-      );
-
-      // Age range by gender breakdown
-      const pAgeRanges = conn.query(
-        `SELECT 
-            CASE 
-              WHEN CAST(a.${answerCol} AS UNSIGNED) BETWEEN 0 AND 5 THEN '0–5 वर्ष'
-              WHEN CAST(a.${answerCol} AS UNSIGNED) BETWEEN 6 AND 14 THEN '6–14 वर्ष'
-              WHEN CAST(a.${answerCol} AS UNSIGNED) BETWEEN 15 AND 18 THEN '15–18 वर्ष'
-              WHEN CAST(a.${answerCol} AS UNSIGNED) BETWEEN 19 AND 35 THEN '19–35 वर्ष'
-              WHEN CAST(a.${answerCol} AS UNSIGNED) BETWEEN 36 AND 60 THEN '36–60 वर्ष'
-              WHEN CAST(a.${answerCol} AS UNSIGNED) >= 61 THEN '60+ वर्ष'
-              ELSE 'Unknown'
-            END AS age_range,
-            CASE 
-              WHEN LOWER(TRIM(g.${answerCol})) IN ('m','male','पुरुष') THEN 'पुरुष'
-              WHEN LOWER(TRIM(g.${answerCol})) IN ('f','female','स्त्री') THEN 'स्त्री'
-              ELSE 'इतर'
-            END AS gender_key,
-            COUNT(DISTINCT a.aadhar_id) AS c
-         FROM answers a
-         LEFT JOIN answers g ON g.aadhar_id = a.aadhar_id AND g.question_id = ?
-         WHERE a.question_id = ? AND a.${answerCol} REGEXP '^[0-9]+'
-         GROUP BY age_range, gender_key`,
-        [genderId, 3]
-      );
-      const [[talukaCompletedRows], [genderCompletedRows], [disabilityCompletedRows], [ageRangeRows]] = await Promise.all([pTaluka, pGender, pDisability, pAgeRanges]);
-      const taluka = Array.isArray(talukaCompletedRows) ? (talukaCompletedRows as any[]).map((r:any) => ({ name: r.label, completed: Number(r.completed) || 0 })) : [];
-      const gender = Array.isArray(genderCompletedRows) ? (genderCompletedRows as any[]).map((r:any) => ({ name: r.label, completed: Number(r.completed) || 0 })) : [];
-      const disability = Array.isArray(disabilityCompletedRows) ? (disabilityCompletedRows as any[]).map((r:any) => ({ name: r.label, completed: Number(r.completed) || 0 })) : [];
-
-      // Build age range pivot rows
-      const desiredOrder = ['0–5 वर्ष','6–14 वर्ष','15–18 वर्ष','19–35 वर्ष','36–60 वर्ष','60+ वर्ष'];
-      const ageRanges = desiredOrder.map((label) => {
-        const male = (ageRangeRows as any[]).find(r => r.age_range === label && r.gender_key === 'पुरुष')?.c || 0;
-        const female = (ageRangeRows as any[]).find(r => r.age_range === label && r.gender_key === 'स्त्री')?.c || 0;
-        const other = (ageRangeRows as any[]).find(r => r.age_range === label && r.gender_key === 'इतर')?.c || 0;
-        return { label, male: Number(male)||0, female: Number(female)||0, other: Number(other)||0, total: Number(male||0)+Number(female||0)+Number(other||0) };
-      });
+      // ---- Breakdown stats (simplified - read from surveys JSON if needed in future) ----
+      // Note: Detailed breakdowns (taluka, gender, disability, age) would require parsing survey_json
+      // For now, return empty arrays - can be enhanced later to parse JSON
+      const taluka: any[] = [];
+      const gender: any[] = [];
+      const disability: any[] = [];
+      const ageRanges: any[] = [];
 
       const roleMap: Record<string, number> = {};
       if (Array.isArray(roleCountRows)) {
@@ -262,7 +188,7 @@ export async function GET(_req: NextRequest) {
         data: {
           totalSurveys,
           surveysToday,
-          totalAnswers,
+          completedSurveys,
           pendingSurveys,
           completionRate,
           otpToday: {

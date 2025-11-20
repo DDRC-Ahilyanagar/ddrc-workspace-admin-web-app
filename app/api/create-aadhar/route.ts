@@ -170,16 +170,26 @@ async function handleCreate(request: NextRequest, user?: any) {
         if (frontImage) await downloadTo(frontImage, 'front.jpg');
         if (backImage) await downloadTo(backImage, 'back.jpg');
 
-        // OCR front first
-        const { createWorker } = await import('tesseract.js');
-        const worker = await createWorker();
+        // OCR front first - use lib/ocr.ts which has better error handling
+        let text = '';
         try {
-          // Load both English and Marathi for better accuracy on Aadhaar
-          await (worker as any).loadLanguage('eng+mar');
-          await (worker as any).initialize('eng+mar');
+          const { extractTextFromImage } = await import('@/lib/ocr');
           if (downloads.length > 0) {
-            const result = await (worker as any).recognize(downloads[0].filePath);
-            const text = (result?.data?.text || '').replace(/\s+/g, ' ').trim();
+            const imageBuffer = await fs.readFile(downloads[0].filePath);
+            text = await extractTextFromImage(imageBuffer, 'aadhaar');
+            text = text.replace(/\s+/g, ' ').trim();
+          }
+        } catch (ocrError: any) {
+          Logger.error('create_aadhar_front_ocr_failed', { 
+            error: ocrError.message,
+            stack: ocrError.stack,
+            note: 'OCR failed but continuing without extracted data'
+          });
+          // Continue without OCR data - not critical for Aadhaar creation
+        }
+        
+        if (text) {
+          try {
             // Extract name heuristics: look for lines before Aadhaar or after labels like Name/नाम
             const nameMatch = /Name[:\-]?\s*([A-Za-z ]{3,})/i.exec(text) || /नाम[:\-]?\s*([A-Za-z ]{3,})/i.exec(text);
             if (nameMatch) extractedNameLocal = nameMatch[1].trim();
@@ -191,7 +201,7 @@ async function handleCreate(request: NextRequest, user?: any) {
 
             // Marathi extraction heuristic
             // Split original (not space-collapsed) lines to preserve order
-            const rawLines = (result?.data?.text || '').split(/\n+/).map((l: string) => l.trim()).filter(Boolean as any);
+            const rawLines = text.split(/\n+/).map((l: string) => l.trim()).filter(Boolean as any);
             let marathiName: string | null = null;
             // 1) Look for line after label containing 'नाव' or 'नाम'
             for (let i = 0; i < rawLines.length; i++) {
@@ -238,9 +248,9 @@ async function handleCreate(request: NextRequest, user?: any) {
             extractedName = extractedNameLocal || null;
             extractedGender = gender;
             extractedDob = dob;
+          } catch (parseError: any) {
+            Logger.error('create_aadhar_parse_ocr_failed', { error: parseError.message });
           }
-        } finally {
-          await worker.terminate();
         }
 
         // Fallback name
@@ -267,17 +277,26 @@ async function handleCreate(request: NextRequest, user?: any) {
           await connection.execute(`UPDATE survey_aadhar SET holder_name = ? WHERE id = ?`, [extractedNameLocal, aadharId]);
         }
 
-        // OCR back for address
+        // OCR back for address - use lib/ocr.ts which has better error handling
         try {
           if (backImage) {
-            const { createWorker: createWorker2 } = await import('tesseract.js');
-            const worker2 = await createWorker2();
+            const backPath = path.join(targetDir, 'back.jpg');
+            let raw = '';
             try {
-              await (worker2 as any).loadLanguage('eng+mar');
-              await (worker2 as any).initialize('eng+mar');
-              const backPath = path.join(targetDir, 'back.jpg');
-              const res2 = await (worker2 as any).recognize(backPath);
-              const raw = (res2?.data?.text || '').replace(/\r/g, '').trim();
+              const { extractTextFromImage } = await import('@/lib/ocr');
+              const imageBuffer = await fs.readFile(backPath);
+              raw = await extractTextFromImage(imageBuffer, 'aadhaar');
+              raw = raw.replace(/\r/g, '').trim();
+            } catch (ocrError: any) {
+              Logger.error('create_aadhar_back_ocr_failed', { 
+                error: ocrError.message,
+                note: 'Back image OCR failed but continuing'
+              });
+              // Continue without address extraction
+            }
+            
+            if (raw) {
+              try {
               // Extract pincode (6 digits)
               const pinMatch = raw.match(/\b(\d{6})\b/);
               const pincode = pinMatch ? pinMatch[1] : null;
@@ -309,8 +328,9 @@ async function handleCreate(request: NextRequest, user?: any) {
               extractedPincode = pincode;
               extractedTaluka = taluka;
               extractedDistrict = district;
-            } finally {
-              await worker2.terminate();
+              } catch (parseError: any) {
+                Logger.error('create_aadhar_parse_address_failed', { error: parseError.message });
+              }
             }
           }
         } catch (e: any) {

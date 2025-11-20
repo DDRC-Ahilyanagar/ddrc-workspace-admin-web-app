@@ -57,13 +57,15 @@ export async function GET(req: NextRequest) {
       );
       const filteredRecords = (filteredCountRows as any[])[0]?.total || 0;
       
-      // Get paginated data
-      // Use subquery to handle ordering properly with GROUP BY
+      // Get paginated data - use surveys table for answer count and status (primary source)
       let orderByClause = `sa.${orderByColumn}`;
       if (orderByColumn === 'answer_count') {
-        orderByClause = 'answer_count';
+        orderByClause = 'COALESCE(s.no_of_questions_answered, 0)';
       } else if (orderByColumn === 'status') {
-        orderByClause = 'status';
+        orderByClause = `CASE 
+          WHEN COALESCE(s.no_of_questions_answered, 0) > 0 THEN 'Completed'
+          ELSE 'Pending'
+        END`;
       }
       
       const [rows]: any = await conn.query(
@@ -73,15 +75,14 @@ export async function GET(req: NextRequest) {
           sa.user_id,
           sa.created_at,
           sa.updated_at,
-          COUNT(DISTINCT a.id) AS answer_count,
+          COALESCE(s.no_of_questions_answered, 0) AS answer_count,
           CASE 
-            WHEN COUNT(DISTINCT a.id) > 0 THEN 'Completed'
+            WHEN COALESCE(s.no_of_questions_answered, 0) > 0 THEN 'Completed'
             ELSE 'Pending'
           END AS status
         FROM survey_aadhar sa
-        LEFT JOIN answers a ON a.aadhar_id = sa.id
+        LEFT JOIN surveys s ON s.aadhaar_id = sa.id
         WHERE ${whereClause}
-        GROUP BY sa.id, sa.aadhar_no, sa.user_id, sa.created_at, sa.updated_at
         ORDER BY ${orderByClause} ${orderDir}
         LIMIT ? OFFSET ?`,
         [...searchParams, length, start]

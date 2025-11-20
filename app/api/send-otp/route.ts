@@ -60,8 +60,10 @@ export async function POST(request: NextRequest) {
     const source = (body.source || headerSource || '').toString().toLowerCase();
     const role = normalizeRole(body.role || headerRole);
     const phone = (body.phone || '').replace(/\D/g, '');
+    // Check if this is for survey verification (no user approval required)
+    const isSurveyVerification = body.survey_verification === true || body.survey_verification === 'true';
 
-    Logger.info('hit_send_otp', { raw: JSON.stringify(body), req: body });
+    Logger.info('hit_send_otp', { raw: JSON.stringify(body), req: body, isSurveyVerification });
 
     const validation = validateRequest(
       { ...body, source, role },
@@ -89,125 +91,136 @@ export async function POST(request: NextRequest) {
     }
 
     // ============================================================================
-    // CRITICAL: Approval check MUST happen BEFORE any OTP generation or SMS sending
-    // This prevents wasting OTPs and SMS costs on unapproved users
+    // For survey verification: Skip user approval check, just verify phone number
+    // For login/authentication: Require user to exist and be approved
     // ============================================================================
     const pool = await import('@/lib/db').then(m => m.getDbPool());
-    const existConn = await pool.getConnection();
     let userData: any = null;
-    try {
-      // Fetch user once so we can show precise error messages
-      const [userCheck] = await existConn.execute(
-        `SELECT 
-           u.id, 
-           u.user_type, 
-           u.status, 
-           u.is_active, 
-           ut.user_type AS related_type
-         FROM users u
-         LEFT JOIN user_types ut ON ut.id = u.user_type_id
-         WHERE u.contact_number = ?
-         LIMIT 1`,
-        [phone]
-      );
+    let effectiveRole: string = '';
 
-      if (!Array.isArray(userCheck) || (userCheck as any[]).length === 0) {
-        Logger.info('send_otp_rejected_user_not_found', { phone });
-        return NextResponse.json(
-          {
-            ok: false,
-            error: 'user_not_found',
-            message: 'वापरकर्ता नोंदणीकृत नाही. कृपया प्रवेश विनंती पाठवा.',
-          },
-          { status: 404 }
+    if (!isSurveyVerification) {
+      // ============================================================================
+      // CRITICAL: Approval check MUST happen BEFORE any OTP generation or SMS sending
+      // This prevents wasting OTPs and SMS costs on unapproved users
+      // ============================================================================
+      const existConn = await pool.getConnection();
+      try {
+        // Fetch user once so we can show precise error messages
+        const [userCheck] = await existConn.execute(
+          `SELECT 
+             u.id, 
+             u.user_type, 
+             u.status, 
+             u.is_active, 
+             ut.user_type AS related_type
+           FROM users u
+           LEFT JOIN user_types ut ON ut.id = u.user_type_id
+           WHERE u.contact_number = ?
+           LIMIT 1`,
+          [phone]
         );
+
+        if (!Array.isArray(userCheck) || (userCheck as any[]).length === 0) {
+          Logger.info('send_otp_rejected_user_not_found', { phone });
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'user_not_found',
+              message: 'वापरकर्ता नोंदणीकृत नाही. कृपया प्रवेश विनंती पाठवा.',
+            },
+            { status: 404 }
+          );
+        }
+
+        userData = (userCheck as any[])[0];
+      } finally {
+        existConn.release();
       }
 
-      userData = (userCheck as any[])[0];
-    } finally {
-      existConn.release();
-    }
+      const status = (userData.status || '').toLowerCase().trim();
+      const statusAllowsOtp = status === 'active' || status === 'approved';
+      const hasActiveFlag = Number(userData.is_active) === 1;
 
-    const status = (userData.status || '').toLowerCase().trim();
-    const statusAllowsOtp = status === 'active' || status === 'approved';
-    const hasActiveFlag = Number(userData.is_active) === 1;
-
-    // If user exists but is not approved/active, return error IMMEDIATELY
-    // NO OTP will be generated, NO SMS will be sent
-    if (!statusAllowsOtp || !hasActiveFlag) {
-      Logger.info('send_otp_rejected_user_not_approved', { 
-        phone, 
-        status: userData.status, 
-        is_active: userData.is_active 
-      });
-      return NextResponse.json(
-        {
-          ok: false,
-          error: 'user_not_active',
-          message: 'आपले खाते अजून मंजूर झालेले नाही. कृपया प्रशासकाशी संपर्क साधा.',
-        },
-        { status: 403 }
-      );
-    }
-    
-    // ============================================================================
-    // Only proceed to OTP generation if user is approved and active
-    // At this point, userData is guaranteed to have status='active' AND is_active=1
-    // ============================================================================
-
-    // Determine allowed user types based on source
-    const isWebRequest = source === 'web';
-    const userType = normalizeRole(userData.user_type);
-    const relatedType = normalizeRole(userData.related_type);
-    const effectiveRole = userType || relatedType;
-
-    // For web requests, only allow admin/supervisor users
-    if (isWebRequest) {
-      const isAdmin = userType === 'admin' || relatedType === 'admin';
-      const isSupervisor = userType === 'supervisor' || relatedType === 'supervisor';
-      if (!isAdmin && !isSupervisor) {
+      // If user exists but is not approved/active, return error IMMEDIATELY
+      // NO OTP will be generated, NO SMS will be sent
+      if (!statusAllowsOtp || !hasActiveFlag) {
+        Logger.info('send_otp_rejected_user_not_approved', { 
+          phone, 
+          status: userData.status, 
+          is_active: userData.is_active 
+        });
         return NextResponse.json(
           {
             ok: false,
-            error: 'forbidden_role',
-            message: 'या भूमिकेला वेब प्रवेश नाही.',
+            error: 'user_not_active',
+            message: 'आपले खाते अजून मंजूर झालेले नाही. कृपया प्रशासकाशी संपर्क साधा.',
           },
           { status: 403 }
         );
       }
       
-    }
+      // ============================================================================
+      // Only proceed to OTP generation if user is approved and active
+      // At this point, userData is guaranteed to have status='active' AND is_active=1
+      // ============================================================================
 
-    // For mobile requests, allow field_officer/supervisor/admin/therapy_specialist users
-    if (!isWebRequest) {
-      const isFieldOfficer = effectiveRole === 'field_officer';
-      const isSupervisor = effectiveRole === 'supervisor';
-      const isAdmin = effectiveRole === 'admin';
-      const isTherapySpecialist = effectiveRole === 'therapy_specialist' || effectiveRole === 'practitioner';
+      // Determine allowed user types based on source
+      const isWebRequest = source === 'web';
+      const userType = normalizeRole(userData.user_type);
+      const relatedType = normalizeRole(userData.related_type);
+      effectiveRole = userType || relatedType;
 
-      // Only check role if provided and user doesn't match any allowed role
-      if (role && !isFieldOfficer && !isSupervisor && !isAdmin && !isTherapySpecialist) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: 'forbidden_role',
-            message: 'या भूमिकेला मोबाइल प्रवेश नाही.',
-          },
-          { status: 403 }
-        );
+      // For web requests, only allow admin/supervisor users
+      if (isWebRequest) {
+        const isAdmin = userType === 'admin' || relatedType === 'admin';
+        const isSupervisor = userType === 'supervisor' || relatedType === 'supervisor';
+        if (!isAdmin && !isSupervisor) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'forbidden_role',
+              message: 'या भूमिकेला वेब प्रवेश नाही.',
+            },
+            { status: 403 }
+          );
+        }
+        
       }
 
-      // Enforce requested role to match actual role when provided
-      if (role && effectiveRole && role !== effectiveRole) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: 'forbidden_role',
-            message: 'निवडलेली भूमिका आणि वापरकर्त्याची वास्तविक भूमिका जुळत नाही.',
-          },
-          { status: 403 }
-        );
+      // For mobile requests, allow field_officer/supervisor/admin/therapy_specialist users
+      if (!isWebRequest) {
+        const isFieldOfficer = effectiveRole === 'field_officer';
+        const isSupervisor = effectiveRole === 'supervisor';
+        const isAdmin = effectiveRole === 'admin';
+        const isTherapySpecialist = effectiveRole === 'therapy_specialist' || effectiveRole === 'practitioner';
+
+        // Only check role if provided and user doesn't match any allowed role
+        if (role && !isFieldOfficer && !isSupervisor && !isAdmin && !isTherapySpecialist) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'forbidden_role',
+              message: 'या भूमिकेला मोबाइल प्रवेश नाही.',
+            },
+            { status: 403 }
+          );
+        }
+
+        // Enforce requested role to match actual role when provided
+        if (role && effectiveRole && role !== effectiveRole) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'forbidden_role',
+              message: 'निवडलेली भूमिका आणि वापरकर्त्याची वास्तविक भूमिका जुळत नाही.',
+            },
+            { status: 403 }
+          );
+        }
       }
+    } else {
+      // Survey verification: Just validate phone number, no user approval needed
+      Logger.info('send_otp_survey_verification', { phone });
     }
 
     // Generate OTP: 6-digit number (100000 to 999999)

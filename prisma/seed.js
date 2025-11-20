@@ -1,7 +1,374 @@
 /* eslint-disable no-console */
+// Load environment variables from .env.local
+require('dotenv').config({ path: '.env.local' });
+
 const { PrismaClient, UserType, UserStatus, AccessRequestStatus } = require('@prisma/client');
+const mysql = require('mysql2/promise');
+const fs = require('fs');
+const path = require('path');
 
 const prisma = new PrismaClient();
+
+// Database connection for questions/sections (not in Prisma schema)
+const dbConfig = {
+  host: process.env.DB_HOST || '127.0.0.1',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASS || '',
+  database: process.env.DB_NAME || 'ddrc_surveys',
+  charset: 'utf8mb4',
+};
+
+async function seedSportsData() {
+  console.log('🏃 Seeding sports data...');
+  
+  const connection = await mysql.createConnection(dbConfig);
+
+  try {
+    // Create sports_types table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS sports_types (
+        id bigint unsigned NOT NULL AUTO_INCREMENT,
+        name_marathi varchar(255) NOT NULL,
+        name_english varchar(255) DEFAULT NULL,
+        sort_order int NOT NULL DEFAULT 0,
+        is_active tinyint(1) NOT NULL DEFAULT 1,
+        created_at timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_sort_order (sort_order),
+        KEY idx_is_active (is_active)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Create sport_names table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS sport_names (
+        id bigint unsigned NOT NULL AUTO_INCREMENT,
+        sports_type_id bigint unsigned NOT NULL,
+        name_marathi varchar(255) NOT NULL,
+        name_english varchar(255) DEFAULT NULL,
+        sort_order int NOT NULL DEFAULT 0,
+        is_active tinyint(1) NOT NULL DEFAULT 1,
+        created_at timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_sports_type_id (sports_type_id),
+        KEY idx_sort_order (sort_order),
+        KEY idx_is_active (is_active),
+        CONSTRAINT fk_sport_names_sports_type FOREIGN KEY (sports_type_id) REFERENCES sports_types (id) ON DELETE CASCADE ON UPDATE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Sports data from the educational form
+    const sportsData = [
+      {
+        type_marathi: 'मैदानी खेळ',
+        type_english: 'Field Sports',
+        names: [
+          { marathi: 'धावणे', english: 'Running' },
+          { marathi: 'गोळाफेक', english: 'Shot Put' },
+          { marathi: 'उंच उडी', english: 'High Jump' },
+          { marathi: 'लांब उडी', english: 'Long Jump' },
+          { marathi: 'सायकलींग', english: 'Cycling' },
+          { marathi: 'पोहणे', english: 'Swimming' },
+          { marathi: 'तिकडचं कूद', english: 'Triple Jump' },
+          { marathi: 'स्पॉट कूद', english: 'Pole Vault' },
+          { marathi: 'जॅव्हेलिन फेंक', english: 'Javelin Throw' }
+        ]
+      },
+      {
+        type_marathi: 'सांघिक खेळ',
+        type_english: 'Team Sports',
+        names: [
+          { marathi: 'फुटबाँल', english: 'Football' },
+          { marathi: 'क्रिकेट', english: 'Cricket' },
+          { marathi: 'कबड्डी', english: 'Kabaddi' },
+          { marathi: 'खो-खो', english: 'Kho-Kho' }
+        ]
+      },
+      {
+        type_marathi: 'वैयक्तिक खेळ',
+        type_english: 'Individual Sports',
+        names: [
+          { marathi: 'बुद्धिबळ', english: 'Chess' },
+          { marathi: 'कॅरम', english: 'Carrom' },
+          { marathi: 'बॅडमिंटन', english: 'Badminton' },
+          { marathi: 'बॉक्सिंग', english: 'Boxing' },
+          { marathi: 'कराटे', english: 'Karate' },
+          { marathi: 'सॉफटबॉल', english: 'Softball' },
+          { marathi: 'व्हीलचेअर रेस', english: 'Wheelchair Race' },
+          { marathi: 'पोहणे', english: 'Swimming' }
+        ]
+      }
+    ];
+
+    // Insert sports types and their names
+    for (let i = 0; i < sportsData.length; i++) {
+      const sportType = sportsData[i];
+      
+      // Check if sports type already exists
+      const [existingType] = await connection.execute(
+        'SELECT id FROM sports_types WHERE name_marathi = ?',
+        [sportType.type_marathi]
+      );
+
+      let typeId;
+      if (Array.isArray(existingType) && existingType.length > 0) {
+        typeId = existingType[0].id;
+        // Update existing type
+        await connection.execute(
+          `UPDATE sports_types SET 
+            name_english = ?, 
+            sort_order = ?, 
+            updated_at = NOW() 
+          WHERE id = ?`,
+          [sportType.type_english, i + 1, typeId]
+        );
+        console.log(`   ✓ Sports type "${sportType.type_marathi}" already exists (ID: ${typeId}), updated`);
+      } else {
+        // Insert new type
+        const [result] = await connection.execute(
+          `INSERT INTO sports_types (name_marathi, name_english, sort_order, is_active, created_at, updated_at)
+           VALUES (?, ?, ?, 1, NOW(), NOW())`,
+          [sportType.type_marathi, sportType.type_english, i + 1]
+        );
+        typeId = result.insertId;
+        console.log(`   ✓ Created sports type "${sportType.type_marathi}" (ID: ${typeId})`);
+      }
+
+      // Delete existing sport names for this type (to allow re-seeding)
+      await connection.execute(
+        'DELETE FROM sport_names WHERE sports_type_id = ?',
+        [typeId]
+      );
+
+      // Insert sport names
+      for (let j = 0; j < sportType.names.length; j++) {
+        const sportName = sportType.names[j];
+        await connection.execute(
+          `INSERT INTO sport_names (sports_type_id, name_marathi, name_english, sort_order, is_active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 1, NOW(), NOW())`,
+          [typeId, sportName.marathi, sportName.english, j + 1]
+        );
+      }
+      console.log(`   ✓ Inserted ${sportType.names.length} sport names for "${sportType.type_marathi}"`);
+    }
+
+    console.log('✅ Sports data seeding complete');
+  } catch (error) {
+    console.error('❌ Error seeding sports data:', error);
+    throw error;
+  } finally {
+    await connection.end();
+  }
+}
+
+async function seedQuestionsAndSections() {
+  const questionsPath = path.join(__dirname, 'questions.json');
+  
+  if (!fs.existsSync(questionsPath)) {
+    console.log('⚠️  questions.json not found. Skipping questions seeding.');
+    console.log('   To seed questions, copy sequenced_questions.json to prisma/questions.json');
+    return;
+  }
+
+  console.log('📖 Reading questions from questions.json...');
+  const questionsData = JSON.parse(fs.readFileSync(questionsPath, 'utf8'));
+  
+  if (!Array.isArray(questionsData) || questionsData.length === 0) {
+    console.log('⚠️  No questions found in questions.json');
+    return;
+  }
+
+  console.log(`📋 Found ${questionsData.length} questions`);
+
+  // Create database connection
+  const connection = await mysql.createConnection(dbConfig);
+
+  try {
+    // Ensure tables exist
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS sections (
+        id bigint unsigned NOT NULL AUTO_INCREMENT,
+        title_marathi varchar(255) NOT NULL,
+        title_english varchar(255) DEFAULT NULL,
+        sort_order int NOT NULL,
+        is_active tinyint(1) NOT NULL DEFAULT 1,
+        created_at timestamp NULL DEFAULT NULL,
+        updated_at timestamp NULL DEFAULT NULL,
+        name varchar(255) NOT NULL,
+        PRIMARY KEY (id),
+        KEY sections_sort_order_index (sort_order),
+        KEY sections_is_active_index (is_active)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS questions (
+        id bigint unsigned NOT NULL,
+        section_id bigint unsigned NOT NULL,
+        question text NOT NULL,
+        question_type varchar(50) NOT NULL,
+        multi_select tinyint(1) NOT NULL DEFAULT 0,
+        options text DEFAULT NULL,
+        rendering_condition varchar(10) DEFAULT NULL,
+        rendering_question varchar(255) DEFAULT NULL,
+        rendering_value varchar(255) DEFAULT NULL,
+        regex varchar(255) DEFAULT NULL,
+        valid_input varchar(20) DEFAULT NULL,
+        max_length int DEFAULT NULL,
+        status varchar(20) DEFAULT 'Active',
+        created_by bigint unsigned DEFAULT NULL,
+        created_on timestamp NULL DEFAULT NULL,
+        updated_by bigint unsigned DEFAULT NULL,
+        updated_on timestamp NULL DEFAULT NULL,
+        PRIMARY KEY (id),
+        KEY idx_section_id (section_id),
+        CONSTRAINT fk_questions_section FOREIGN KEY (section_id) REFERENCES sections (id) ON UPDATE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `);
+
+    // Extract unique section titles
+    const sectionTitles = [...new Set(questionsData.map(q => q.title).filter(Boolean))];
+    console.log(`📑 Found ${sectionTitles.length} unique sections`);
+
+    // Create sections and map titles to IDs
+    const sectionMap = new Map();
+    let sortOrder = 1;
+
+    for (const title of sectionTitles) {
+      // Check if section already exists
+      const [existing] = await connection.execute(
+        'SELECT id FROM sections WHERE name = ?',
+        [title]
+      );
+
+      let sectionId;
+      if (Array.isArray(existing) && existing.length > 0) {
+        sectionId = existing[0].id;
+        console.log(`   ✓ Section "${title}" already exists (ID: ${sectionId})`);
+      } else {
+        const [result] = await connection.execute(
+          `INSERT INTO sections (name, title_marathi, sort_order, is_active, created_at, updated_at)
+           VALUES (?, ?, ?, 1, NOW(), NOW())`,
+          [title, title, sortOrder]
+        );
+        sectionId = result.insertId;
+        console.log(`   ✓ Created section "${title}" (ID: ${sectionId})`);
+      }
+      
+      sectionMap.set(title, sectionId);
+      sortOrder++;
+    }
+
+    // Insert questions
+    console.log('📝 Inserting questions...');
+    let inserted = 0;
+    let skipped = 0;
+    let updated = 0;
+
+    for (const q of questionsData) {
+      const sectionId = sectionMap.get(q.title);
+      if (!sectionId) {
+        console.warn(`   ⚠️  Skipping question ${q.id}: section "${q.title}" not found`);
+        skipped++;
+        continue;
+      }
+
+      // Normalize options (handle "NULL" string)
+      let options = q.options;
+      if (options === 'NULL' || options === null || options === '') {
+        options = null;
+      }
+
+      // Normalize multi_select
+      const multiSelect = q.multi_select === 'Yes' || q.multi_select === true || q.multi_select === 1 ? 1 : 0;
+
+      // Normalize rendering_condition
+      const renderingCondition = q.rendering_condition === 'Yes' || q.rendering_condition === true ? 'Yes' : 'No';
+
+      // Check if question already exists
+      const [existing] = await connection.execute(
+        'SELECT id FROM questions WHERE id = ?',
+        [parseInt(q.id)]
+      );
+
+      if (Array.isArray(existing) && existing.length > 0) {
+        // Update existing question
+        await connection.execute(
+          `UPDATE questions SET
+            section_id = ?,
+            question = ?,
+            question_type = ?,
+            multi_select = ?,
+            options = ?,
+            rendering_condition = ?,
+            rendering_question = ?,
+            rendering_value = ?,
+            regex = ?,
+            valid_input = ?,
+            max_length = ?,
+            status = ?,
+            updated_on = NOW()
+          WHERE id = ?`,
+          [
+            sectionId,
+            q.question,
+            q.question_type,
+            multiSelect,
+            options,
+            renderingCondition,
+            q.rendering_question,
+            q.rendering_value,
+            q.regex || null,
+            q.valid_input || null,
+            q.max_length ? parseInt(q.max_length) : null,
+            q.status || 'Active',
+            parseInt(q.id)
+          ]
+        );
+        updated++;
+      } else {
+        // Insert new question
+        await connection.execute(
+          `INSERT INTO questions (
+            id, section_id, question, question_type, multi_select, options,
+            rendering_condition, rendering_question, rendering_value,
+            regex, valid_input, max_length, status, created_by, created_on
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            parseInt(q.id),
+            sectionId,
+            q.question,
+            q.question_type,
+            multiSelect,
+            options,
+            renderingCondition,
+            q.rendering_question,
+            q.rendering_value,
+            q.regex || null,
+            q.valid_input || null,
+            q.max_length ? parseInt(q.max_length) : null,
+            q.status || 'Active',
+            q.created_by ? parseInt(q.created_by) : 1,
+            q.created_on ? new Date(q.created_on) : new Date()
+          ]
+        );
+        inserted++;
+      }
+    }
+
+    console.log(`✅ Questions seeding complete:`);
+    console.log(`   - Inserted: ${inserted}`);
+    console.log(`   - Updated: ${updated}`);
+    console.log(`   - Skipped: ${skipped}`);
+  } catch (error) {
+    console.error('❌ Error seeding questions:', error);
+    throw error;
+  } finally {
+    await connection.end();
+  }
+}
 
 async function main() {
   const adminPhone = process.env.SEED_ADMIN_PHONE || '9999999999';
@@ -29,7 +396,7 @@ async function main() {
     },
   });
 
-  console.log('Seeded admin user with ID:', adminUser.id.toString());
+  console.log('✅ Seeded admin user with ID:', adminUser.id.toString());
 
   if (process.env.SEED_SAMPLE_ACCESS_REQUEST === 'true') {
     const sample = await prisma.accessRequest.upsert({
@@ -42,7 +409,21 @@ async function main() {
         status: AccessRequestStatus.pending,
       },
     });
-    console.log('Seeded sample access request:', sample.id);
+    console.log('✅ Seeded sample access request:', sample.id);
+  }
+
+  // Seed sports data if enabled
+  if (process.env.SEED_SPORTS !== 'false') {
+    await seedSportsData();
+  } else {
+    console.log('⏭️  Skipping sports data seeding (SEED_SPORTS=false)');
+  }
+
+  // Seed questions and sections if enabled
+  if (process.env.SEED_QUESTIONS !== 'false') {
+    await seedQuestionsAndSections();
+  } else {
+    console.log('⏭️  Skipping questions seeding (SEED_QUESTIONS=false)');
   }
 }
 
