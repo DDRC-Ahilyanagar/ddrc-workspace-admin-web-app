@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import mysql from 'mysql2/promise';
 import { Logger } from '@/lib/logger';
-import { getDbConfig } from '@/lib/db';
+import { getDbPool } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   let connection: mysql.PoolConnection | null = null;
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const pool = mysql.createPool(getDbConfig());
+    const pool = getDbPool();
     connection = await pool.getConnection();
 
     // Ensure survey_files table exists
