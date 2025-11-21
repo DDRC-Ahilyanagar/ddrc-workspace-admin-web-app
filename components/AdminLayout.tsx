@@ -13,6 +13,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [userName, setUserName] = useState('');
   const [userPhone, setUserPhone] = useState('');
   const [mounted, setMounted] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -26,6 +27,31 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       setUserPhone(localStorage.getItem('user_phone') || '');
     }
   }, [router]);
+
+  // Fetch pending access requests count
+  useEffect(() => {
+    const fetchPendingCount = async () => {
+      try {
+        const res = await fetch('/api/access-requests?status=pending', {
+          cache: 'no-store',
+          credentials: 'include',
+        });
+        const json = await res.json();
+        if (json.ok && Array.isArray(json.data)) {
+          setPendingCount(json.data.length);
+        }
+      } catch (err) {
+        console.error('Failed to fetch pending count:', err);
+      }
+    };
+
+    if (mounted) {
+      fetchPendingCount();
+      // Refresh count every 30 seconds
+      const interval = setInterval(fetchPendingCount, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [mounted]);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
@@ -73,6 +99,28 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           </div>
           
           <div className="d-flex align-items-center animate__animated animate__fadeInRight">
+            {/* Notification Bell */}
+            <button
+              className="btn btn-link text-white me-3 position-relative"
+              onClick={() => router.push('/access-requests')}
+              style={{ textDecoration: 'none', padding: '0.5rem' }}
+              title="प्रवेश विनंत्या"
+            >
+              <i className="bi bi-bell" style={{ fontSize: '1.5rem' }}></i>
+              {pendingCount > 0 && (
+                <span
+                  className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                  style={{
+                    fontSize: '0.7rem',
+                    padding: '0.25rem 0.5rem',
+                    minWidth: '1.5rem',
+                  }}
+                >
+                  {pendingCount > 99 ? '99+' : pendingCount}
+                </span>
+              )}
+            </button>
+            
             <div className="user-info me-3">
               <span className="text-white">{userName || 'User'}</span>
               <small className="text-white-50 d-block">{userPhone || ''}</small>
