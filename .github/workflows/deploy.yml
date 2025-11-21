@@ -31,16 +31,8 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_KEY }}
-          port: ${{ secrets.VPS_PORT || 22 }}
-          timeout: 120s
-          command_timeout: 600s
-          source: ".next/**,package.json,package-lock.json,public/**,lib/**,app/**,middleware.ts,next.config.mjs,tsconfig.json,storage/**,prisma/**,.env"
+          source: ".next/**,package.json,package-lock.json,public/**,lib/**,app/**,middleware.ts,next.config.mjs,tsconfig.json,storage/**,prisma/**"
           target: "/var/www/surveys"
-          rm: false
-          overwrite: true
-          debug: true
-        continue-on-error: false
-        timeout-minutes: 10
 
       - name: Restart PM2
         uses: appleboy/ssh-action@v1.2.0
@@ -48,17 +40,12 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_KEY }}
-          port: ${{ secrets.VPS_PORT || 22 }}
-          timeout: 120s
-          command_timeout: 600s
           script: |
             cd /var/www/surveys
             rm -rf node_modules package-lock.json ~/.npm
             npm install --production
             # Ensure storage directory exists
             mkdir -p storage/logs
-            # Run Prisma migrations
-            npx prisma migrate deploy || echo "Migration failed or not needed"
             # Check PM2 status and restart
             pm2 restart surveys || pm2 start npm --name "surveys" -- start
             pm2 save
