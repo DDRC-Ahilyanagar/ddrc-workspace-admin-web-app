@@ -32,13 +32,15 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          timeout: 60s
-          command_timeout: 300s
+          timeout: 120s
+          command_timeout: 600s
           source: ".next/**,package.json,package-lock.json,public/**,lib/**,app/**,middleware.ts,next.config.mjs,tsconfig.json,storage/**,prisma/**,.env"
           target: "/var/www/surveys"
           rm: false
           overwrite: true
           debug: true
+        continue-on-error: false
+        timeout-minutes: 10
 
       - name: Restart PM2
         uses: appleboy/ssh-action@v1.2.0
@@ -47,8 +49,8 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          timeout: 60s
-          command_timeout: 300s
+          timeout: 120s
+          command_timeout: 600s
           script: |
             cd /var/www/surveys
             rm -rf node_modules package-lock.json ~/.npm
