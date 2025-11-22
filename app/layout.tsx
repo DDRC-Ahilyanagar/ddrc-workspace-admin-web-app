@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Work_Sans } from "next/font/google";
 import Script from "next/script";
+import "bootstrap-icons/font/bootstrap-icons.css";
 // NOTE: Keep globals.css import LAST to ensure it overrides vendor styles
 import "./globals.css";
 import Preloader from "@/components/Preloader";
