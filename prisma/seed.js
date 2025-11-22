@@ -163,6 +163,97 @@ async function seedSportsData() {
   }
 }
 
+async function seedLookupTables() {
+  console.log('🗺️  Seeding lookup tables (taluka, grams, villages, PHC, talathi)...');
+  
+  const sqlFilePath = path.join(__dirname, '..', 'u686550969_ddrcnagar_new.sql');
+  
+  if (!fs.existsSync(sqlFilePath)) {
+    console.log('⚠️  SQL file not found. Skipping lookup tables seeding.');
+    console.log(`   Expected path: ${sqlFilePath}`);
+    return;
+  }
+
+  const connection = await mysql.createConnection({
+    ...dbConfig,
+    multipleStatements: true, // Allow multiple statements
+  });
+
+  try {
+    // Read SQL file
+    const sqlContent = fs.readFileSync(sqlFilePath, 'utf8');
+    
+    const lookupTables = ['tbl_taluka', 'tbl_all_grams', 'tbl_all_villages', 'tbl_all_phc', 'tbl_all_talathi'];
+    
+    // Extract CREATE TABLE statements for lookup tables
+    const createTableRegex = /CREATE TABLE\s+`?(\w+)`?\s*\([^;]+\)[^;]*;/gi;
+    let createMatch;
+    
+    while ((createMatch = createTableRegex.exec(sqlContent)) !== null) {
+      const tableName = createMatch[1];
+      if (!lookupTables.includes(tableName)) continue;
+      
+      const createStmt = createMatch[0];
+      // Replace CREATE TABLE with CREATE TABLE IF NOT EXISTS
+      const modifiedStmt = createStmt.replace(/CREATE TABLE\s+/i, 'CREATE TABLE IF NOT EXISTS ');
+      try {
+        await connection.execute(modifiedStmt);
+        console.log(`   ✓ Created/verified table: ${tableName}`);
+      } catch (error) {
+        // Table might already exist, that's okay
+        if (error.code !== 'ER_TABLE_EXISTS_ERROR') {
+          console.warn(`   ⚠️  Error creating table ${tableName}:`, error.message);
+        }
+      }
+    }
+
+    // Extract INSERT statements for lookup tables and modify them to use ON DUPLICATE KEY UPDATE
+    // Match: INSERT INTO `table` (...) VALUES (...), (...), ...;
+    const insertRegex = /INSERT INTO\s+`?(\w+)`?\s*\(([^)]+)\)\s*VALUES\s*([^;]+);/gi;
+    let insertMatch;
+    let totalInserted = 0;
+
+    while ((insertMatch = insertRegex.exec(sqlContent)) !== null) {
+      const tableName = insertMatch[1];
+      if (!lookupTables.includes(tableName)) continue;
+
+      const columns = insertMatch[2]
+        .split(',')
+        .map(col => col.trim().replace(/`/g, ''));
+      
+      const valuesPart = insertMatch[3].trim();
+      
+      // Modify INSERT to use ON DUPLICATE KEY UPDATE
+      const updateClause = columns
+        .filter(col => col !== 'id')
+        .map(col => `\`${col}\` = VALUES(\`${col}\`)`)
+        .join(', ');
+
+      const modifiedInsert = `INSERT INTO \`${tableName}\` (\`${columns.join('`, `')}\`) 
+                               VALUES ${valuesPart}
+                               ON DUPLICATE KEY UPDATE ${updateClause}`;
+
+      try {
+        // Execute the modified INSERT statement
+        const [result] = await connection.execute(modifiedInsert);
+        const affectedRows = result.affectedRows || 0;
+        totalInserted += affectedRows;
+        console.log(`   ✓ Inserted/updated ${affectedRows} rows in ${tableName}`);
+      } catch (error) {
+        console.warn(`   ⚠️  Error inserting into ${tableName}:`, error.message);
+        // Continue with next table
+      }
+    }
+
+    console.log(`✅ Lookup tables seeding complete: ${totalInserted} total rows inserted/updated`);
+  } catch (error) {
+    console.error('❌ Error seeding lookup tables:', error);
+    throw error;
+  } finally {
+    await connection.end();
+  }
+}
+
 async function seedQuestionsAndSections() {
   const questionsPath = path.join(__dirname, 'questions.json');
   
@@ -417,6 +508,13 @@ async function main() {
     await seedSportsData();
   } else {
     console.log('⏭️  Skipping sports data seeding (SEED_SPORTS=false)');
+  }
+
+  // Seed lookup tables (taluka, grams, villages, PHC, talathi) if enabled
+  if (process.env.SEED_LOOKUP_TABLES !== 'false') {
+    await seedLookupTables();
+  } else {
+    console.log('⏭️  Skipping lookup tables seeding (SEED_LOOKUP_TABLES=false)');
   }
 
   // Seed questions and sections if enabled
