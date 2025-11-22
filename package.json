@@ -6,13 +6,15 @@
     "dev": "next dev",
     "dev:network": "next dev -H 0.0.0.0",
     "build": "next build",
+    "prestart": "node scripts/auto-seed.js",
     "start": "next start",
     "start:network": "next start -H 0.0.0.0",
     "lint": "eslint",
     "prisma:generate": "prisma generate",
     "prisma:db-push": "prisma db push",
     "prisma:migrate": "prisma migrate deploy",
-    "prisma:seed": "node prisma/seed.js"
+    "prisma:seed": "node prisma/seed.js",
+    "auto-seed": "node scripts/auto-seed.js"
   },
   "dependencies": {
     "@ckeditor/ckeditor5-build-classic": "^41.4.2",

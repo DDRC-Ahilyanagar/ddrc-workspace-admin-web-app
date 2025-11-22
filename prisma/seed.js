@@ -166,7 +166,7 @@ async function seedSportsData() {
 async function seedLookupTables() {
   console.log('🗺️  Seeding lookup tables (taluka, grams, villages, PHC, talathi)...');
   
-  const sqlFilePath = path.join(__dirname, '..', 'u686550969_ddrcnagar_new.sql');
+  const sqlFilePath = path.join(__dirname, '..', 'sql_dumps', 'u686550969_ddrcnagar_new.sql');
   
   if (!fs.existsSync(sqlFilePath)) {
     console.log('⚠️  SQL file not found. Skipping lookup tables seeding.');
