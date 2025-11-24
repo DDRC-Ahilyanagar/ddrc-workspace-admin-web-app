@@ -110,6 +110,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     { path: '/sections', label: 'सेक्शन', icon: 'bi-folder' },
     { path: '/questions', label: 'सर्वेक्षण प्रश्नावली', icon: 'bi-question-circle' },
     { path: '/access-requests', label: 'प्रवेश विनंत्या', icon: 'bi-person-plus' },
+    { path: '/officers', label: 'Field Officers', icon: 'bi-people' },
     { path: '/admin/rate', label: 'दर (Field officer)', icon: 'bi-cash-coin' },
     { path: '/api-docs', label: 'API दस्तऐवज', icon: 'bi-book' },
   ];
