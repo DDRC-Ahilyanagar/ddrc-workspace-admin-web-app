@@ -207,21 +207,49 @@ async function seedLookupTables() {
       }
     }
 
-    // Extract INSERT statements for lookup tables and modify them to use ON DUPLICATE KEY UPDATE
-    // Match: INSERT INTO `table` (...) VALUES (...), (...), ...;
-    const insertRegex = /INSERT INTO\s+`?(\w+)`?\s*\(([^)]+)\)\s*VALUES\s*([^;]+);/gi;
-    let insertMatch;
+    // Extract INSERT statements for lookup tables - handle multi-line statements
+    // Split by INSERT INTO to find all insert statements
+    const insertStatements = sqlContent.split(/INSERT INTO\s+/gi);
     let totalInserted = 0;
 
-    while ((insertMatch = insertRegex.exec(sqlContent)) !== null) {
-      const tableName = insertMatch[1];
+    for (const stmt of insertStatements) {
+      if (!stmt.trim()) continue;
+      
+      // Extract table name (first word after INSERT INTO)
+      const tableMatch = stmt.match(/^`?(\w+)`?\s*\(/i);
+      if (!tableMatch) continue;
+      
+      const tableName = tableMatch[1];
       if (!lookupTables.includes(tableName)) continue;
 
-      const columns = insertMatch[2]
+      // Find column list (between first parentheses)
+      let colStart = tableMatch[0].length;
+      let colEnd = colStart;
+      let depth = 1;
+      for (let i = colStart; i < stmt.length; i++) {
+        if (stmt[i] === '(') depth++;
+        if (stmt[i] === ')') {
+          depth--;
+          if (depth === 0) {
+            colEnd = i;
+            break;
+          }
+        }
+      }
+      
+      const columnsPart = stmt.substring(colStart, colEnd);
+      const columns = columnsPart
         .split(',')
         .map(col => col.trim().replace(/`/g, ''));
       
-      const valuesPart = insertMatch[3].trim();
+      // Find VALUES part - from "VALUES" until semicolon
+      const valuesMatch = stmt.substring(colEnd + 1).match(/VALUES\s*([^;]+);/is);
+      if (!valuesMatch) {
+        console.warn(`   ⚠️  Could not parse VALUES for ${tableName}`);
+        continue;
+      }
+      
+      const valuesPart = valuesMatch[1].trim();
       
       // Modify INSERT to use ON DUPLICATE KEY UPDATE
       const updateClause = columns
