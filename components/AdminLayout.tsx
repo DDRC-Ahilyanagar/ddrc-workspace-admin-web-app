@@ -28,29 +28,68 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     }
   }, [router]);
 
-  // Fetch pending access requests count
+  // Fetch pending access requests count - runs silently in background
   useEffect(() => {
+    if (!mounted) return;
+
+    let isMounted = true;
+    let intervalId: NodeJS.Timeout | null = null;
+    let abortController: AbortController | null = null;
+
     const fetchPendingCount = async () => {
+      // Cancel any previous request
+      if (abortController) {
+        abortController.abort();
+      }
+      
+      abortController = new AbortController();
+      
       try {
         const res = await fetch('/api/access-requests?status=pending', {
           cache: 'no-store',
           credentials: 'include',
+          signal: abortController.signal,
+          // Prevent any navigation or page refresh
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
         });
+        
+        if (!isMounted || abortController.signal.aborted) return;
+        
         const json = await res.json();
-        if (json.ok && Array.isArray(json.data)) {
+        if (json.ok && Array.isArray(json.data) && isMounted) {
           setPendingCount(json.data.length);
         }
-      } catch (err) {
-        console.error('Failed to fetch pending count:', err);
+      } catch (err: any) {
+        // Ignore abort errors and only log real errors
+        if (err.name !== 'AbortError' && isMounted) {
+          console.error('Failed to fetch pending count:', err);
+        }
       }
     };
 
-    if (mounted) {
-      fetchPendingCount();
-      // Refresh count every 30 seconds
-      const interval = setInterval(fetchPendingCount, 30000);
-      return () => clearInterval(interval);
-    }
+    // Initial fetch
+    fetchPendingCount();
+    
+    // Refresh count every 30 seconds
+    intervalId = setInterval(() => {
+      if (isMounted) {
+        fetchPendingCount();
+      }
+    }, 30000);
+
+    // Cleanup
+    return () => {
+      isMounted = false;
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+      if (abortController) {
+        abortController.abort();
+      }
+    };
   }, [mounted]);
 
   const toggleSidebar = () => {
