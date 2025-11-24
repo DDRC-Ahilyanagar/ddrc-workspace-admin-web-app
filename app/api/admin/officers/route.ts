@@ -39,10 +39,11 @@ export async function GET(request: NextRequest) {
 
       // Get rate per survey from app_settings
       const [rateRows] = await conn.query(
-        `SELECT value FROM app_settings WHERE key = 'rate_per_survey_field_officer' LIMIT 1`
+        `SELECT setting_value FROM app_settings WHERE setting_key = ? LIMIT 1`,
+        ['rate_per_survey_field_officer']
       );
       const ratePerSurvey = rateRows && Array.isArray(rateRows) && rateRows.length > 0
-        ? parseFloat((rateRows[0] as any).value || '0')
+        ? parseFloat((rateRows[0] as any).setting_value || '0')
         : 0;
 
       // Get statistics for each officer
