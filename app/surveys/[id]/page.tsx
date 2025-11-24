@@ -49,6 +49,7 @@ function SurveyDetailsContent() {
   const [answersBySection, setAnswersBySection] = useState<Record<string, Answer[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null);
 
   useEffect(() => {
     if (!surveyId || surveyId <= 0) {
@@ -105,6 +106,33 @@ function SurveyDetailsContent() {
     return answer.startsWith('http') || answer.startsWith('/');
   };
 
+  const handleExport = async (format: 'xlsx' | 'pdf') => {
+    if (!surveyId || surveyId <= 0) return;
+    setExporting(format);
+    try {
+      const res = await fetch(`/api/admin/surveys/${surveyId}/export?format=${format}`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `survey_${surveyId}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to export survey', err);
+      alert('फाइल डाउनलोड होत नाही. कृपया पुन्हा प्रयत्न करा.');
+    } finally {
+      setExporting(null);
+    }
+  };
+
   if (loading) {
     return (
       <AdminLayout>
@@ -150,14 +178,50 @@ function SurveyDetailsContent() {
   return (
     <AdminLayout>
       <div className="container-fluid py-4">
-        <div className="d-flex justify-content-between align-items-center mb-4">
+        <div className="d-flex justify-content-between align-items-center mb-4 flex-column flex-md-row gap-3">
           <h1 className="title mb-0">सर्वेक्षण तपशील</h1>
-          <button
-            className="btn btn-secondary"
-            onClick={() => router.push('/survekshan')}
-          >
-            <i className="bi bi-arrow-left me-2"></i>मागे जा
-          </button>
+          <div className="d-flex flex-wrap gap-2">
+            <button
+              className="btn btn-outline-success"
+              disabled={exporting !== null}
+              onClick={() => handleExport('xlsx')}
+            >
+              {exporting === 'xlsx' ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
+                  एक्सेल डाउनलोड…
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-file-earmark-excel me-2"></i>
+                  Excel मध्ये निर्यात करा
+                </>
+              )}
+            </button>
+            <button
+              className="btn btn-outline-danger"
+              disabled={exporting !== null}
+              onClick={() => handleExport('pdf')}
+            >
+              {exporting === 'pdf' ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
+                  PDF डाउनलोड…
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-file-earmark-pdf me-2"></i>
+                  PDF मध्ये निर्यात करा
+                </>
+              )}
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => router.push('/survekshan')}
+            >
+              <i className="bi bi-arrow-left me-2"></i>मागे जा
+            </button>
+          </div>
         </div>
 
         {/* Survey Basic Info */}
