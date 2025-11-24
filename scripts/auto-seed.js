@@ -67,24 +67,29 @@ async function runSeed() {
 }
 
 async function main() {
-  // Check if auto-seed is explicitly enabled
-  const autoSeedEnabled = process.env.AUTO_SEED === 'true';
-  
-  if (autoSeedEnabled) {
-    console.log('🔄 AUTO_SEED=true - Running seed automatically...');
-    await runSeed();
-    return;
-  }
-  
-  // Otherwise, check if seeding is needed
-  console.log('🔍 Checking if database seeding is needed...');
-  const needsSeeding = await checkIfSeedingNeeded();
-  
-  if (needsSeeding) {
-    console.log('📦 Database needs seeding - running seed script...');
-    await runSeed();
-  } else {
-    console.log('✅ Database is already seeded - skipping');
+  try {
+    // Check if auto-seed is explicitly enabled
+    const autoSeedEnabled = process.env.AUTO_SEED === 'true';
+    
+    if (autoSeedEnabled) {
+      console.log('🔄 AUTO_SEED=true - Running seed automatically...');
+      await runSeed();
+      return;
+    }
+    
+    // Otherwise, check if seeding is needed
+    console.log('🔍 Checking if database seeding is needed...');
+    const needsSeeding = await checkIfSeedingNeeded();
+    
+    if (needsSeeding) {
+      console.log('📦 Database needs seeding - running seed script...');
+      await runSeed();
+    } else {
+      console.log('✅ Database is already seeded - skipping');
+    }
+  } catch (error) {
+    // Don't fail the startup if seeding fails
+    console.error('⚠️  Auto-seed check failed (continuing startup):', error.message);
   }
 }
 
@@ -95,8 +100,9 @@ if (require.main === module) {
       process.exit(0);
     })
     .catch((error) => {
-      console.error('Auto-seed script failed:', error);
-      process.exit(1);
+      // Exit with 0 so it doesn't block app startup
+      console.error('Auto-seed script failed (non-blocking):', error.message);
+      process.exit(0);
     });
 }
 
