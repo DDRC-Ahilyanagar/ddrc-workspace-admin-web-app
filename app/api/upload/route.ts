@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
+import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Logger } from '@/lib/logger';
-import { UPLOAD_BASE as DEFAULT_UPLOAD_BASE } from '../config';
 
 /**
  * @swagger
@@ -39,12 +38,22 @@ import { UPLOAD_BASE as DEFAULT_UPLOAD_BASE } from '../config';
  *                 path:
  *                   type: string
  */
+const normalizeBase = (value?: string | null) => {
+  if (!value) return undefined;
+  return value.endsWith('/') ? value.slice(0, -1) : value;
+};
+
+const stripApiSuffix = (value?: string | null) => {
+  if (!value) return value;
+  return value.endsWith('/api') ? value.slice(0, -4) : value;
+};
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
-    const file = formData.get('files') as File;
-    
-    if (!file) {
+    const files = formData.getAll('files').filter((item): item is File => item instanceof File);
+
+    if (files.length === 0) {
       return NextResponse.json(
         { ok: false, error: 'No file provided' },
         { status: 400 }
@@ -55,43 +64,57 @@ export async function POST(request: NextRequest) {
     const userPhone = formData.get('user_phone')?.toString() || '';
 
     Logger.info('UPLOAD START', {
-      filename: file.name,
-      size: file.size,
-      type: file.type,
+      files: files.map((file) => ({
+        filename: file.name,
+        size: file.size,
+        type: file.type,
+      })),
       user_name: userName,
       user_phone: userPhone,
     });
 
-    // Generate unique filename
-    const fileExtension = file.name.split('.').pop() || 'jpg';
-    const uniqueId = randomUUID();
-    const fileName = `${uniqueId}.${fileExtension}`;
-    
-    // For now, we'll return a URL structure (you can implement actual file storage)
-    // In production, you might want to use cloud storage (S3, Cloudinary, etc.)
-    const uploadBase = process.env.UPLOAD_BASE || DEFAULT_UPLOAD_BASE;
-    const url = `${uploadBase}/uploads/${fileName}`;
-
-    // Optionally save file locally (uncomment if you want local storage)
-    /*
     const uploadsDir = join(process.cwd(), 'public', 'uploads');
     await mkdir(uploadsDir, { recursive: true });
-    const filePath = join(uploadsDir, fileName);
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    await writeFile(filePath, buffer);
-    */
+
+    const origin = normalizeBase(`${request.nextUrl.protocol}//${request.nextUrl.host}`);
+    const publicBase =
+      normalizeBase(process.env.UPLOAD_PUBLIC_BASE) ||
+      normalizeBase(process.env.NEXT_PUBLIC_SITE_URL) ||
+      normalizeBase(stripApiSuffix(process.env.UPLOAD_BASE)) ||
+      normalizeBase(stripApiSuffix(process.env.API_BASE)) ||
+      normalizeBase(stripApiSuffix(process.env.NEXT_PUBLIC_API_URL)) ||
+      origin ||
+      '';
+
+    const savedFiles: { url: string; path: string; filename: string; size: number }[] = [];
+
+    for (const file of files) {
+      const fileExtension = file.name.split('.').pop() || 'jpg';
+      const uniqueId = randomUUID();
+      const fileName = `${uniqueId}.${fileExtension}`;
+      const filePath = join(uploadsDir, fileName);
+      const bytes = await file.arrayBuffer();
+      await writeFile(filePath, Buffer.from(bytes));
+      const url = `${publicBase}/uploads/${fileName}`;
+      savedFiles.push({
+        url,
+        path: `/uploads/${fileName}`,
+        filename: fileName,
+        size: file.size,
+      });
+    }
 
     Logger.info('UPLOAD RESP', {
-      url,
-      filename: fileName,
+      count: savedFiles.length,
+      files: savedFiles,
       status: 200,
     });
 
     return NextResponse.json({
       ok: true,
-      url,
-      path: `/uploads/${fileName}`,
+      url: savedFiles[0]?.url,
+      path: savedFiles[0]?.path,
+      files: savedFiles,
     });
   } catch (error: any) {
     Logger.error('UPLOAD ERROR', { error: error.message });
