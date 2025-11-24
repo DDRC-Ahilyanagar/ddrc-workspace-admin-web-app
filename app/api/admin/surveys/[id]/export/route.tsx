@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import ExcelJS from 'exceljs';
-import PDFDocument from 'pdfkit/js/pdfkit.standalone.js';
-import type PDFKit from 'pdfkit';
+import { Document, Font, Page, StyleSheet, Text, View, pdf } from '@react-pdf/renderer';
 import fs from 'fs';
 import path from 'path';
 
@@ -17,52 +16,30 @@ interface ExportAnswer {
 }
 
 const REGULAR_FONT_KEY = 'NotoSansDevanagari';
-const BOLD_FONT_KEY = 'NotoSansDevanagariBold';
-const DEFAULT_REGULAR_FONT = 'Helvetica';
-const DEFAULT_BOLD_FONT = 'Helvetica-Bold';
+const BOLD_FONT_KEY = 'NotoSansDevanagari';
 const REGULAR_FONT_PATH = path.join(process.cwd(), 'public', 'fonts', 'NotoSansDevanagari-Regular.ttf');
 const BOLD_FONT_PATH = path.join(process.cwd(), 'public', 'fonts', 'NotoSansDevanagari-Bold.ttf');
 
-let cachedRegularFont: Buffer | null | undefined;
-let cachedBoldFont: Buffer | null | undefined;
+let fontsRegistered = false;
 
-const loadFontBuffer = (fontPath: string): Buffer | null => {
+const ensurePdfFonts = () => {
+  if (fontsRegistered) return;
   try {
-    return fs.readFileSync(fontPath);
-  } catch (error) {
-    console.warn(`[pdf-export] Could not load font at ${fontPath}: ${(error as Error).message}`);
-    return null;
-  }
-};
-
-const getFontBuffer = (type: 'regular' | 'bold'): Buffer | null => {
-  if (type === 'regular') {
-    if (cachedRegularFont === undefined) {
-      cachedRegularFont = loadFontBuffer(REGULAR_FONT_PATH);
+    if (fs.existsSync(REGULAR_FONT_PATH)) {
+      const fonts: { src: string; fontWeight: 'normal' | 'bold' }[] = [
+        { src: REGULAR_FONT_PATH, fontWeight: 'normal' },
+      ];
+      if (fs.existsSync(BOLD_FONT_PATH)) {
+        fonts.push({ src: BOLD_FONT_PATH, fontWeight: 'bold' });
+      }
+      Font.register({ family: REGULAR_FONT_KEY, fonts });
+      fontsRegistered = true;
+    } else {
+      console.warn(`[pdf-export] Font file not found at ${REGULAR_FONT_PATH}`);
     }
-    return cachedRegularFont ?? null;
+  } catch (error) {
+    console.warn('[pdf-export] Failed to register fonts', error);
   }
-  if (cachedBoldFont === undefined) {
-    cachedBoldFont = loadFontBuffer(BOLD_FONT_PATH);
-  }
-  return cachedBoldFont ?? null;
-};
-
-const registerPdfFonts = (doc: PDFKit.PDFDocument) => {
-  const regularBuffer = getFontBuffer('regular');
-  const boldBuffer = getFontBuffer('bold');
-
-  if (regularBuffer) {
-    doc.registerFont(REGULAR_FONT_KEY, regularBuffer);
-  }
-  if (boldBuffer) {
-    doc.registerFont(BOLD_FONT_KEY, boldBuffer);
-  }
-
-  return {
-    regularFontName: regularBuffer ? REGULAR_FONT_KEY : DEFAULT_REGULAR_FONT,
-    boldFontName: boldBuffer ? BOLD_FONT_KEY : DEFAULT_BOLD_FONT,
-  };
 };
 
 const normalizeAnswer = (value: any): string => {
@@ -238,49 +215,61 @@ const exportExcel = async (surveyId: number, survey: any, answers: ExportAnswer[
   });
 };
 
+const pdfStyles = StyleSheet.create({
+  page: { padding: 32, fontFamily: REGULAR_FONT_KEY, fontSize: 12, lineHeight: 1.4 },
+  heading: { fontSize: 18, fontWeight: 'bold', marginBottom: 8 },
+  infoRow: { marginBottom: 2 },
+  sectionTitle: { fontSize: 14, fontWeight: 'bold', marginTop: 12, marginBottom: 6 },
+  answerBlock: { marginBottom: 8 },
+  answerQuestion: { fontSize: 12, fontWeight: 'bold' },
+  answerText: { marginTop: 2, fontSize: 11 },
+});
+
+const formatDateTime = (value?: string | null) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('mr-IN', { dateStyle: 'medium', timeStyle: 'short' });
+};
+
 const exportPdf = async (surveyId: number, survey: any, answers: ExportAnswer[]) => {
-  const doc = new PDFDocument({ margin: 40, size: 'A4' });
-  const chunks: Buffer[] = [];
-  const { regularFontName, boldFontName } = registerPdfFonts(doc);
+  ensurePdfFonts();
 
-  return await new Promise<NextResponse>((resolve, reject) => {
-    doc.on('data', (chunk) => chunks.push(chunk));
-    doc.on('end', () => {
-      const buffer = Buffer.concat(chunks);
-      resolve(
-        new NextResponse(buffer, {
-          status: 200,
-          headers: {
-            'Content-Type': 'application/pdf',
-            'Content-Disposition': `attachment; filename="survey_${surveyId}.pdf"`,
-          },
-        })
-      );
-    });
-    doc.on('error', (err) => reject(err));
+  const doc = (
+    <Document>
+      <Page size="A4" style={pdfStyles.page}>
+        <Text style={pdfStyles.heading}>सर्वेक्षण क्रमांक: {survey.id}</Text>
+        <Text style={pdfStyles.infoRow}>आधार क्रमांक: {survey.aadhar_no || '-'}</Text>
+        <Text style={pdfStyles.infoRow}>दिव्यांगाचे नाव: {survey.holder_name || '-'}</Text>
+        <Text style={pdfStyles.infoRow}>वापरकर्ता: {survey.user_name || `ID ${survey.user_id}`}</Text>
+        <Text style={pdfStyles.infoRow}>
+          तालुका / जिल्हा: {survey.taluka || '-'} / {survey.district || '-'}
+        </Text>
+        <Text style={pdfStyles.infoRow}>निर्मिती तारीख व वेळ: {formatDateTime(survey.created_at)}</Text>
 
-    doc.font(boldFontName).fontSize(16).text(`Survey ID: ${survey.id}`, { underline: true });
-    doc.moveDown();
-    doc.font(regularFontName).fontSize(12).text(`Aadhaar: ${survey.aadhar_no || '-'}`);
-    doc.text(`Holder Name: ${survey.holder_name || '-'}`);
-    doc.text(`User: ${survey.user_name || `ID ${survey.user_id}`}`);
-    doc.text(`Taluka / District: ${survey.taluka || '-'} / ${survey.district || '-'}`);
-    doc.text(`Created At: ${new Date(survey.created_at).toLocaleString('en-IN')}`);
-    doc.moveDown();
+        <Text style={pdfStyles.sectionTitle}>उत्तर</Text>
+        {answers.map((ans, idx) => (
+          <View key={`${ans.sectionName}-${ans.questionId}-${idx}`} style={pdfStyles.answerBlock}>
+            <Text style={pdfStyles.answerQuestion}>
+              {idx + 1}. [{ans.sectionName}] {ans.questionId ? `${ans.questionId}. ` : ''}
+              {ans.questionText}
+            </Text>
+            <Text style={pdfStyles.answerText}>उत्तर: {ans.answer || '-'}</Text>
+          </View>
+        ))}
+      </Page>
+    </Document>
+  );
 
-    doc.font(boldFontName).fontSize(14).text('Answers', { underline: true });
-    doc.moveDown(0.5);
-    doc.font(regularFontName).fontSize(11);
+  const pdfInstance = pdf(doc);
+  const pdfBuffer = (await pdfInstance.toBuffer()) as unknown as Buffer;
 
-    answers.forEach((ans, idx) => {
-      doc.font(boldFontName).text(`${idx + 1}. [${ans.sectionName}]`);
-      doc.font(regularFontName).text(ans.questionText);
-      doc.moveDown(0.2);
-      doc.font(regularFontName).text(`Answer: ${ans.answer}`);
-      doc.moveDown(0.5);
-    });
-
-    doc.end();
+  return new NextResponse(pdfBuffer as unknown as BodyInit, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="survey_${surveyId}.pdf"`,
+    },
   });
 };
 
