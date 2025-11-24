@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit/js/pdfkit.standalone.js';
+import type PDFKit from 'pdfkit';
+import fs from 'fs';
+import path from 'path';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +15,55 @@ interface ExportAnswer {
   sectionName: string;
   answer: string;
 }
+
+const REGULAR_FONT_KEY = 'NotoSansDevanagari';
+const BOLD_FONT_KEY = 'NotoSansDevanagariBold';
+const DEFAULT_REGULAR_FONT = 'Helvetica';
+const DEFAULT_BOLD_FONT = 'Helvetica-Bold';
+const REGULAR_FONT_PATH = path.join(process.cwd(), 'public', 'fonts', 'NotoSansDevanagari-Regular.ttf');
+const BOLD_FONT_PATH = path.join(process.cwd(), 'public', 'fonts', 'NotoSansDevanagari-Bold.ttf');
+
+let cachedRegularFont: Buffer | null | undefined;
+let cachedBoldFont: Buffer | null | undefined;
+
+const loadFontBuffer = (fontPath: string): Buffer | null => {
+  try {
+    return fs.readFileSync(fontPath);
+  } catch (error) {
+    console.warn(`[pdf-export] Could not load font at ${fontPath}: ${(error as Error).message}`);
+    return null;
+  }
+};
+
+const getFontBuffer = (type: 'regular' | 'bold'): Buffer | null => {
+  if (type === 'regular') {
+    if (cachedRegularFont === undefined) {
+      cachedRegularFont = loadFontBuffer(REGULAR_FONT_PATH);
+    }
+    return cachedRegularFont ?? null;
+  }
+  if (cachedBoldFont === undefined) {
+    cachedBoldFont = loadFontBuffer(BOLD_FONT_PATH);
+  }
+  return cachedBoldFont ?? null;
+};
+
+const registerPdfFonts = (doc: PDFKit.PDFDocument) => {
+  const regularBuffer = getFontBuffer('regular');
+  const boldBuffer = getFontBuffer('bold');
+
+  if (regularBuffer) {
+    doc.registerFont(REGULAR_FONT_KEY, regularBuffer);
+  }
+  if (boldBuffer) {
+    doc.registerFont(BOLD_FONT_KEY, boldBuffer);
+  }
+
+  return {
+    regularFontName: regularBuffer ? REGULAR_FONT_KEY : DEFAULT_REGULAR_FONT,
+    boldFontName: boldBuffer ? BOLD_FONT_KEY : DEFAULT_BOLD_FONT,
+  };
+};
 
 const normalizeAnswer = (value: any): string => {
   if (value === null || value === undefined) return '-';
@@ -189,6 +241,7 @@ const exportExcel = async (surveyId: number, survey: any, answers: ExportAnswer[
 const exportPdf = async (surveyId: number, survey: any, answers: ExportAnswer[]) => {
   const doc = new PDFDocument({ margin: 40, size: 'A4' });
   const chunks: Buffer[] = [];
+  const { regularFontName, boldFontName } = registerPdfFonts(doc);
 
   return await new Promise<NextResponse>((resolve, reject) => {
     doc.on('data', (chunk) => chunks.push(chunk));
@@ -206,24 +259,24 @@ const exportPdf = async (surveyId: number, survey: any, answers: ExportAnswer[])
     });
     doc.on('error', (err) => reject(err));
 
-    doc.fontSize(16).text(`Survey ID: ${survey.id}`, { underline: true });
+    doc.font(boldFontName).fontSize(16).text(`Survey ID: ${survey.id}`, { underline: true });
     doc.moveDown();
-    doc.fontSize(12).text(`Aadhaar: ${survey.aadhar_no || '-'}`);
+    doc.font(regularFontName).fontSize(12).text(`Aadhaar: ${survey.aadhar_no || '-'}`);
     doc.text(`Holder Name: ${survey.holder_name || '-'}`);
     doc.text(`User: ${survey.user_name || `ID ${survey.user_id}`}`);
     doc.text(`Taluka / District: ${survey.taluka || '-'} / ${survey.district || '-'}`);
     doc.text(`Created At: ${new Date(survey.created_at).toLocaleString('en-IN')}`);
     doc.moveDown();
 
-    doc.fontSize(14).text('Answers', { underline: true });
+    doc.font(boldFontName).fontSize(14).text('Answers', { underline: true });
     doc.moveDown(0.5);
-    doc.fontSize(11);
+    doc.font(regularFontName).fontSize(11);
 
     answers.forEach((ans, idx) => {
-      doc.font('Helvetica-Bold').text(`${idx + 1}. [${ans.sectionName}]`);
-      doc.font('Helvetica').text(ans.questionText);
+      doc.font(boldFontName).text(`${idx + 1}. [${ans.sectionName}]`);
+      doc.font(regularFontName).text(ans.questionText);
       doc.moveDown(0.2);
-      doc.font('Helvetica-Oblique').text(`Answer: ${ans.answer}`);
+      doc.font(regularFontName).text(`Answer: ${ans.answer}`);
       doc.moveDown(0.5);
     });
 
