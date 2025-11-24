@@ -161,13 +161,101 @@ export async function GET(_req: NextRequest) {
       }
       const offlineOfficers = Math.max(0, totalOfficers - onlineOfficers);
 
-      // ---- Breakdown stats (simplified - read from surveys JSON if needed in future) ----
-      // Note: Detailed breakdowns (taluka, gender, disability, age) would require parsing survey_json
-      // For now, return empty arrays - can be enhanced later to parse JSON
-      const taluka: any[] = [];
-      const gender: any[] = [];
-      const disability: any[] = [];
-      const ageRanges: any[] = [];
+      // ---- Breakdown stats ----
+      const [completedDetailsRows] = await conn.query(`
+        SELECT sa.taluka, sa.gender, sa.district, sa.dob
+        FROM survey_aadhar sa
+        JOIN surveys s ON s.aadhaar_id = sa.id
+        WHERE s.no_of_questions_unanswered = 0
+      `);
+
+      const talukaMap = new Map<string, number>();
+      const genderMap = new Map<string, number>();
+      const districtMap = new Map<string, number>();
+
+      type AgeBucket = { label: string; male: number; female: number; other: number; total: number };
+      const ageBuckets: AgeBucket[] = [
+        { label: '0-17', male: 0, female: 0, other: 0, total: 0 },
+        { label: '18-30', male: 0, female: 0, other: 0, total: 0 },
+        { label: '31-45', male: 0, female: 0, other: 0, total: 0 },
+        { label: '46-60', male: 0, female: 0, other: 0, total: 0 },
+        { label: '60+', male: 0, female: 0, other: 0, total: 0 },
+      ];
+
+      const normalizeGender = (value: any) => {
+        const raw = (value || '').toString().trim().toLowerCase();
+        if (!raw) return 'इतर';
+        if (['male', 'm', 'पुरुष', 'man'].some(k => raw.includes(k))) return 'पुरुष';
+        if (['female', 'f', 'स्त्री', 'woman'].some(k => raw.includes(k))) return 'स्त्री';
+        return 'इतर';
+      };
+
+      const parseDobToAge = (dob: any) => {
+        if (!dob) return null;
+        const raw = dob.toString().trim();
+        if (!raw) return null;
+        let date: Date | null = null;
+        const direct = new Date(raw);
+        if (!isNaN(direct.getTime())) date = direct;
+        if (!date && raw.includes('/')) {
+          const parts = raw.split(/[\/\-\.]/).filter(Boolean);
+          if (parts.length === 3) {
+            const [p1, p2, p3] = parts;
+            const dayFirst = new Date(`${p3.length === 4 ? p3 : `20${p3}`}-${p2.padStart(2, '0')}-${p1.padStart(2, '0')}`);
+            if (!isNaN(dayFirst.getTime())) date = dayFirst;
+          }
+        }
+        if (!date) return null;
+        const today = new Date();
+        let age = today.getFullYear() - date.getFullYear();
+        const mDiff = today.getMonth() - date.getMonth();
+        if (mDiff < 0 || (mDiff === 0 && today.getDate() < date.getDate())) age--;
+        if (!Number.isFinite(age) || age < 0 || age > 120) return null;
+        return age;
+      };
+
+      if (Array.isArray(completedDetailsRows)) {
+        for (const row of completedDetailsRows as any[]) {
+          const talukaName = (row.taluka || 'इतर').toString().trim() || 'इतर';
+          talukaMap.set(talukaName, (talukaMap.get(talukaName) || 0) + 1);
+
+          const genderLabel = normalizeGender(row.gender);
+          genderMap.set(genderLabel, (genderMap.get(genderLabel) || 0) + 1);
+
+          const districtName = (row.district || 'इतर').toString().trim() || 'इतर';
+          districtMap.set(districtName, (districtMap.get(districtName) || 0) + 1);
+
+          const age = parseDobToAge(row.dob);
+          if (age !== null) {
+            let bucket: AgeBucket;
+            if (age < 18) bucket = ageBuckets[0];
+            else if (age <= 30) bucket = ageBuckets[1];
+            else if (age <= 45) bucket = ageBuckets[2];
+            else if (age <= 60) bucket = ageBuckets[3];
+            else bucket = ageBuckets[4];
+            bucket.total += 1;
+            if (genderLabel === 'पुरुष') bucket.male += 1;
+            else if (genderLabel === 'स्त्री') bucket.female += 1;
+            else bucket.other += 1;
+          }
+        }
+      }
+
+      const taluka = Array.from(talukaMap.entries())
+        .map(([name, completed]) => ({ name, completed }))
+        .sort((a, b) => b.completed - a.completed)
+        .slice(0, 10);
+
+      const gender = Array.from(genderMap.entries())
+        .map(([name, completed]) => ({ name, completed }))
+        .sort((a, b) => b.completed - a.completed);
+
+      const district = Array.from(districtMap.entries())
+        .map(([name, completed]) => ({ name, completed }))
+        .sort((a, b) => b.completed - a.completed)
+        .slice(0, 10);
+
+      const ageRanges = ageBuckets.filter(bucket => bucket.total > 0);
 
       const roleMap: Record<string, number> = {};
       if (Array.isArray(roleCountRows)) {
@@ -203,7 +291,7 @@ export async function GET(_req: NextRequest) {
           },
           activeQuestions,
           sections: Array.isArray(sectionsRows) ? (sectionsRows as any[]).map((r:any) => r.name).filter((n:any) => typeof n === 'string' && n.length > 0) : [],
-          breakdowns: { taluka, gender, disability, ageRanges, pendingOverall: pendingSurveys },
+          breakdowns: { taluka, gender, district, ageRanges, pendingOverall: pendingSurveys },
           roles: {
             field_officer: fieldOfficerRoles,
             therapy_specialist: therapyRoles,

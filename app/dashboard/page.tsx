@@ -36,8 +36,9 @@ type Stats = {
   breakdowns?: {
     taluka: { name: string; completed: number }[];
     gender: { name: string; completed: number }[];
-    disability: { name: string; completed: number }[];
+    district: { name: string; completed: number }[];
     pendingOverall: number;
+    ageRanges?: { label: string; male: number; female: number; other: number; total: number }[];
   };
 };
 
@@ -272,18 +273,18 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Disability Breakdown Chart */}
+          {/* District Breakdown Chart */}
           <div className="col-12 col-lg-6">
             <div className="card h-100 animate__animated animate__fadeInUp" style={{ animationDelay: '0.4s' }}>
               <div className="card-body">
-                <h5 className="card-title mb-3">दिव्यांगता प्रकार निहाय</h5>
-                {stats?.breakdowns?.disability && stats.breakdowns.disability.length > 0 ? (
+                <h5 className="card-title mb-3">जिल्हा निहाय</h5>
+                {stats?.breakdowns?.district && stats.breakdowns.district.length > 0 ? (
                   <Bar
                     data={{
-                      labels: stats.breakdowns.disability.map(d => d.name.length > 20 ? d.name.substring(0, 20) + '...' : d.name),
+                      labels: stats.breakdowns.district.map(d => d.name.length > 20 ? d.name.substring(0, 20) + '...' : d.name),
                       datasets: [{
                         label: 'पूर्ण सर्वेक्षण',
-                        data: stats.breakdowns.disability.map(d => d.completed),
+                        data: stats.breakdowns.district.map(d => d.completed),
                         backgroundColor: 'rgba(25, 118, 210, 0.8)',
                         borderColor: 'rgba(25, 118, 210, 1)',
                         borderWidth: 1,
@@ -300,7 +301,7 @@ export default function DashboardPage() {
                         tooltip: {
                           callbacks: {
                             title: function(context) {
-                              const fullName = stats.breakdowns?.disability?.[context[0].dataIndex]?.name || '';
+                              const fullName = stats.breakdowns?.district?.[context[0].dataIndex]?.name || '';
                               return fullName;
                             },
                             label: function(context) {
@@ -494,13 +495,13 @@ export default function DashboardPage() {
           <div className="col-12 col-xl-4">
             <div className="card h-100 animate__animated animate__fadeInUp" style={{ animationDelay: '0.5s' }}>
               <div className="card-body">
-                <h5 className="card-title">दिव्यांगता प्रकार (Completed)</h5>
-                {!stats?.breakdowns?.disability?.length ? (
+                <h5 className="card-title">जिल्हा (Completed)</h5>
+                {!stats?.breakdowns?.district?.length ? (
                   <p className="text-muted mb-0">डेटा उपलब्ध नाही</p>
                 ) : (
                   <ul className="list-group list-group-flush">
-                    {stats.breakdowns.disability.slice(0, 10).map((d, i) => (
-                      <li key={`dis-${i}`} className="list-group-item d-flex justify-content-between">
+                    {stats.breakdowns.district.slice(0, 10).map((d, i) => (
+                      <li key={`dist-${i}`} className="list-group-item d-flex justify-content-between">
                         <span>{d.name}</span>
                         <span className="badge bg-success">{d.completed}</span>
                       </li>
