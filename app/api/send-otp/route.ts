@@ -325,12 +325,21 @@ export async function POST(request: NextRequest) {
           );
         }
         
-        // Send SMS
-        sms = await sendSMS(phone, message);
+        // Send SMS (non-blocking - don't wait for it to complete)
+        sendSMS(phone, message).then((smsResult) => {
+          Logger.info('send_otp_sms_completed', { phone, otp_id: otpId, resp: smsResult });
+        }).catch((err) => {
+          Logger.error('send_otp_sms_failed', { phone, otp_id: otpId, error: err.message });
+        });
         
-        Logger.info('send_otp', { phone, otp_id: otpId, otp: cleanOtp, messageLength: message.length, resp: sms });
+        // Return immediately - SMS will be sent in background
+        Logger.info('send_otp', { phone, otp_id: otpId, otp: cleanOtp, messageLength: message.length });
 
-        return NextResponse.json({ ok: true, otp_id: otpId, sms });
+        return NextResponse.json({ 
+          ok: true, 
+          otp_id: otpId, 
+          sms: { ok: true, queued: true, message: 'SMS queued for sending' }
+        });
       }
     } finally {
       connection.release();
