@@ -177,11 +177,11 @@ export async function POST(request: NextRequest) {
       // First, get the user's actual role from the database so that mobile/web
       // clients cannot spoof their role via request payloads.
       const [userCheck] = await connection.execute(
-        `SELECT u.id, u.name, u.contact_number, u.passkey, u.user_type, ut.user_type AS related_type
+        `SELECT u.id, u.name, u.contact_number, u.passkey, u.user_type, u.status, u.is_active, ut.user_type AS related_type
          FROM users u
          LEFT JOIN user_types ut ON ut.id = u.user_type_id
          WHERE u.contact_number = ?
-           AND (u.status = 'active' OR u.is_active = 1)
+           AND (COALESCE(u.status, '') = 'active' OR COALESCE(u.is_active, 0) = 1)
          LIMIT 1`,
         [phone]
       );
