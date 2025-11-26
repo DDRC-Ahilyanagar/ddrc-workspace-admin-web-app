@@ -207,11 +207,36 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                     {pendingRequests.length === 0 && (
                       <div className="text-center py-3 text-muted">नवीन विनंत्या नाहीत</div>
                     )}
-                    {pendingRequests.slice(0, 5).map((req, index) => (
-                      <div key={`notif-${index}`} className="list-group-item">
+                    {pendingRequests.slice(0, 5).map((req) => (
+                      <div 
+                        key={`notif-${req?.id || Math.random()}`} 
+                        className="list-group-item"
+                        style={{ 
+                          cursor: 'pointer',
+                          transition: 'background-color 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = '#f8f9fa';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = '';
+                        }}
+                        onClick={() => {
+                          router.push('/access-requests');
+                          setShowNotifications(false);
+                        }}
+                      >
                         <div className="fw-semibold">{req?.name || 'नाव उपलब्ध नाही'}</div>
                         <div className="small text-muted">{req?.phone || ''}</div>
-                        <div className="text-muted small">{req?.created_at ? new Date(req.created_at).toLocaleString('mr-IN') : ''}</div>
+                        <div className="text-muted small">
+                          {req?.created_at ? new Date(req.created_at).toLocaleString('mr-IN', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          }) : ''}
+                        </div>
                       </div>
                     ))}
                   </div>
