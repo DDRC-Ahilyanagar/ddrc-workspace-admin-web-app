@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Image from 'next/image';
 
@@ -14,6 +14,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [userPhone, setUserPhone] = useState('');
   const [mounted, setMounted] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notifRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -61,6 +64,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         const json = await res.json();
         if (json.ok && Array.isArray(json.data) && isMounted) {
           setPendingCount(json.data.length);
+          setPendingRequests(json.data);
         }
       } catch (err: any) {
         // Ignore abort errors and only log real errors
@@ -95,6 +99,28 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
+
+  const toggleNotifications = () => {
+    setShowNotifications((prev) => !prev);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
+      }
+    };
+
+    if (showNotifications) {
+      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showNotifications]);
 
   const handleLogout = () => {
     localStorage.removeItem('logged_in');
@@ -139,26 +165,70 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           
           <div className="d-flex align-items-center animate__animated animate__fadeInRight">
             {/* Notification Bell */}
-            <button
-              className="btn btn-link text-white me-3 position-relative"
-              onClick={() => router.push('/access-requests')}
-              style={{ textDecoration: 'none', padding: '0.5rem' }}
-              title="प्रवेश विनंत्या"
-            >
-              <i className="bi bi-bell" style={{ fontSize: '1.5rem' }}></i>
-              {pendingCount > 0 && (
-                <span
-                  className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+            <div className="notification-wrapper position-relative me-3" ref={notifRef}>
+              <button
+                className="btn btn-link text-white position-relative"
+                onClick={toggleNotifications}
+                style={{ textDecoration: 'none', padding: '0.5rem' }}
+                title="प्रवेश विनंत्या"
+                aria-expanded={showNotifications}
+              >
+                <i className={`bi ${showNotifications ? 'bi-bell-fill' : 'bi-bell'}`} style={{ fontSize: '1.5rem' }}></i>
+                {pendingCount > 0 && (
+                  <span
+                    className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                    style={{
+                      fontSize: '0.7rem',
+                      padding: '0.25rem 0.5rem',
+                      minWidth: '1.5rem',
+                    }}
+                  >
+                    {pendingCount > 99 ? '99+' : pendingCount}
+                  </span>
+                )}
+              </button>
+
+              {showNotifications && (
+                <div
+                  className="card shadow notification-dropdown animate__animated animate__fadeIn"
                   style={{
-                    fontSize: '0.7rem',
-                    padding: '0.25rem 0.5rem',
-                    minWidth: '1.5rem',
+                    minWidth: '320px',
+                    position: 'absolute',
+                    right: 0,
+                    top: '120%',
+                    zIndex: 1050,
                   }}
                 >
-                  {pendingCount > 99 ? '99+' : pendingCount}
-                </span>
+                  <div className="card-header d-flex justify-content-between align-items-center py-2">
+                    <strong>प्रवेश विनंत्या</strong>
+                    <span className="badge bg-primary">{pendingCount}</span>
+                  </div>
+                  <div className="list-group list-group-flush" style={{ maxHeight: '260px', overflowY: 'auto' }}>
+                    {pendingRequests.length === 0 && (
+                      <div className="text-center py-3 text-muted">नवीन विनंत्या नाहीत</div>
+                    )}
+                    {pendingRequests.slice(0, 5).map((req, index) => (
+                      <div key={`notif-${index}`} className="list-group-item">
+                        <div className="fw-semibold">{req?.name || 'नाव उपलब्ध नाही'}</div>
+                        <div className="small text-muted">{req?.phone || ''}</div>
+                        <div className="text-muted small">{req?.created_at ? new Date(req.created_at).toLocaleString('mr-IN') : ''}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="card-footer text-center py-2">
+                    <button
+                      className="btn btn-sm btn-outline-primary"
+                      onClick={() => {
+                        router.push('/access-requests');
+                        setShowNotifications(false);
+                      }}
+                    >
+                      सर्व पहा
+                    </button>
+                  </div>
+                </div>
               )}
-            </button>
+            </div>
             
             <div className="user-info me-3">
               <span className="text-white">{userName || 'User'}</span>
