@@ -418,44 +418,6 @@ function SectionsContent() {
   };
 
   const shouldShowQuestion = (q: Question): boolean => {
-    // Special handling for Shikshan section (section_id === 2)
-    if (q.section_id === 2) {
-      // Find question 14: "शिक्षण" (by ID or by question text)
-      const shikshanQuestion = questions.find(x => 
-        (x.id === 14 || x.id.toString() === '14') && 
-        x.question === 'शिक्षण'
-      ) || questions.find(x => x.question === 'शिक्षण');
-      
-      // Find question 15: "शिक्षित असल्यास / शिक्षण घेत असल्यास" (by ID or by question text)
-      const shikshitQuestion = questions.find(x => 
-        (x.id === 15 || x.id.toString() === '15') && 
-        x.question === 'शिक्षित असल्यास / शिक्षण घेत असल्यास'
-      ) || questions.find(x => x.question === 'शिक्षित असल्यास / शिक्षण घेत असल्यास');
-      
-      // If question 14 is answered as "अशिक्षित", hide all other questions except question 14
-      if (shikshanQuestion) {
-        const shikshanAnswer = answers[shikshanQuestion.id];
-        if (shikshanAnswer === 'अशिक्षित' || shikshanAnswer?.toString().trim() === 'अशिक्षित') {
-          // Only show question 14, hide all others
-          return q.id === shikshanQuestion.id || q.id.toString() === shikshanQuestion.id.toString();
-        }
-      }
-      
-      // If question 15 is answered as "प्राथमिक", hide all other questions except questions 14 and 15
-      if (shikshitQuestion) {
-        const shikshitAnswer = answers[shikshitQuestion.id];
-        if (shikshitAnswer === 'प्राथमिक' || shikshitAnswer?.toString().trim() === 'प्राथमिक') {
-          // Only show questions 14 and 15, hide all others
-          const shikshanId = shikshanQuestion?.id || 14;
-          const shikshitId = shikshitQuestion.id;
-          return q.id === shikshanId || q.id === shikshitId || 
-                 q.id.toString() === shikshanId.toString() || 
-                 q.id.toString() === shikshitId.toString();
-        }
-      }
-    }
-    
-    // Default rendering condition logic
     if (!q.rendering_condition || q.rendering_condition === 'No') return true;
     
     const renderingQuestion = questions.find(x => 
