@@ -38,6 +38,11 @@ enum SurveyStatus {
   in_progress
 }
 
+enum MatadarSanghStatus {
+  Active
+  Inactive
+}
+
 model UserTypeLookup {
   id        BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
   userType  String?   @map("user_type") @db.VarChar(191)
@@ -180,4 +185,18 @@ model SurveyFile {
   @@index([aadhaarId])
   @@index([fileType])
   @@map("survey_files")
+}
+
+model MatadarSanghName {
+  id        Int                 @id @default(autoincrement())
+  sanghId   Int?                 @map("sangh_id")
+  name      String               @db.VarChar(255)
+  status    MatadarSanghStatus?  @default(Active)
+  createdBy Int?                 @map("created_by")
+  createdOn DateTime?             @map("created_on")
+  updatedBy Int?                 @map("updated_by")
+  updatedOn DateTime?             @map("updated_on")
+
+  @@index([sanghId])
+  @@map("tbl_matadar_sangh_names")
 }
