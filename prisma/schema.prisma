@@ -43,6 +43,11 @@ enum MatadarSanghStatus {
   Inactive
 }
 
+enum ActiveInactiveStatus {
+  Active
+  Inactive
+}
+
 model UserTypeLookup {
   id        BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
   userType  String?   @map("user_type") @db.VarChar(191)
@@ -199,4 +204,18 @@ model MatadarSanghName {
 
   @@index([sanghId])
   @@map("tbl_matadar_sangh_names")
+}
+
+model DisabilityDiagnosis {
+  id           Int                  @id @default(autoincrement())
+  disabilityId Int?                 @map("disability_id")
+  diagnosis    String               @db.VarChar(255)
+  status       ActiveInactiveStatus? @default(Active)
+  createdBy    Int?                 @map("created_by")
+  createdOn    DateTime?            @map("created_on")
+  updatedBy    Int?                 @map("updated_by")
+  updatedOn    DateTime?            @map("updated_on")
+
+  @@index([disabilityId])
+  @@map("tbl_disability_diagnoses")
 }
