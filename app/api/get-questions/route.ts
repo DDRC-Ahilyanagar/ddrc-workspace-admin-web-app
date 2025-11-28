@@ -44,11 +44,11 @@ export async function GET(request: NextRequest) {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
         const [types]: any = await conn.query(
-          'SELECT label_marathi FROM disability_types ORDER BY id ASC'
+          'SELECT label_english FROM disability_types ORDER BY id ASC'
         );
         const options = Array.isArray(types)
           ? (types as any[])
-              .map((t: any) => String(t.label_marathi || '').trim())
+              .map((t: any) => String(t.label_english || '').trim())
               .filter((s: string) => s.length > 0)
               .join(',')
           : '';
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
         if (options) {
           for (const r of rows as any[]) {
             if (parseInt(r.id || '0') === 69) {
-              r.options = options; // inject Marathi options list
+              r.options = options; // inject English options list
             }
           }
         }
