@@ -1,51 +1,51 @@
-name: Deploy to VPS
+  name: Deploy to VPS
 
-on:
-  push:
-    branches: [ main, master ]
+  on:
+    push:
+      branches: [ main, master ]
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
+  jobs:
+    deploy:
+      runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      steps:
+        - name: Checkout
+          uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+        - name: Setup Node
+          uses: actions/setup-node@v4
+          with:
+            node-version: '20'
 
-      - name: Clean install workspace dependencies
-        run: |
-          rm -rf node_modules package-lock.json ~/.npm
-          npm install
-
-      - name: Build
-        run: npm run build
-
-      - name: Upload to Server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_KEY }}
-          source: ".next/**,package.json,package-lock.json,public/**,lib/**,app/**,middleware.ts,next.config.mjs,tsconfig.json,storage/**,prisma/**"
-          target: "/var/www/surveys"
-
-      - name: Restart PM2
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_KEY }}
-          script: |
-            cd /var/www/surveys
+        - name: Clean install workspace dependencies
+          run: |
             rm -rf node_modules package-lock.json ~/.npm
-            npm install --production
-            # Ensure storage directory exists
-            mkdir -p storage/logs
-            # Check PM2 status and restart
-            pm2 restart surveys || pm2 start npm --name "surveys" -- start
-            pm2 save
+            npm install
+
+        - name: Build
+          run: npm run build
+
+        - name: Upload to Server
+          uses: appleboy/scp-action@v0.1.7
+          with:
+            host: ${{ secrets.VPS_HOST }}
+            username: ${{ secrets.VPS_USER }}
+            key: ${{ secrets.VPS_KEY }}
+            source: ".next/**,package.json,package-lock.json,public/**,lib/**,app/**,middleware.ts,next.config.mjs,tsconfig.json,storage/**,prisma/**"
+            target: "/var/www/surveys"
+
+        - name: Restart PM2
+          uses: appleboy/ssh-action@v1.2.0
+          with:
+            host: ${{ secrets.VPS_HOST }}
+            username: ${{ secrets.VPS_USER }}
+            key: ${{ secrets.VPS_KEY }}
+            script: |
+              cd /var/www/surveys
+              rm -rf node_modules package-lock.json ~/.npm
+              npm install --production
+              # Ensure storage directory exists
+              mkdir -p storage/logs
+              # Check PM2 status and restart
+              pm2 restart surveys || pm2 start npm --name "surveys" -- start
+              pm2 save
