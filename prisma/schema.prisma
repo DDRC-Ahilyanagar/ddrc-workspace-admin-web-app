@@ -219,3 +219,60 @@ model DisabilityDiagnosis {
   @@index([disabilityId])
   @@map("tbl_disability_diagnoses")
 }
+
+// Early Detection Module - लवकर शोध
+// Parent phone number is unique, can have multiple babies
+model EarlyDetectionBaby {
+  id                      BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  parentPhone             String    @map("parent_phone") @db.VarChar(20)
+  userId                  BigInt?    @map("user_id") @db.UnsignedBigInt
+  
+  // Parents & Personal Information
+  fatherName              String?    @map("father_name") @db.VarChar(255)
+  motherName              String?    @map("mother_name") @db.VarChar(255)
+  babyName                String?    @map("baby_name") @db.VarChar(255)
+  babyBirthDate           DateTime?  @map("baby_birth_date") @db.Date
+  ageMonths               Int?       @map("age_months") @db.UnsignedSmallInt
+  
+  // Health & Siblings Information
+  gender                  String?    @db.VarChar(20)
+  currentWeight           Decimal?   @map("current_weight") @db.Decimal(5, 2)
+  birthWeight             Decimal?   @map("birth_weight") @db.Decimal(5, 2)
+  lengthHeight            Decimal?   @map("length_height") @db.Decimal(5, 2)
+  headCircumferenceAtBirth Decimal?  @map("head_circumference_at_birth") @db.Decimal(5, 2)
+  bloodGroup              String?    @map("blood_group") @db.VarChar(10)
+  noOfSiblings            Int?       @map("no_of_siblings") @db.UnsignedSmallInt
+  
+  // Address & Contact Information
+  address                 String?    @db.Text
+  district                String?    @db.VarChar(255)
+  taluka                  String?    @db.VarChar(255)
+  village                 String?    @db.VarChar(255)
+  talathi                 String?    @db.VarChar(255)
+  grampanchayat           String?    @db.VarChar(255)
+  phc                     String?    @db.VarChar(255)
+  statusUniversalEyeScreening String? @map("status_universal_eye_screening") @db.VarChar(255)
+  statusOaeTest           String?    @map("status_oae_test") @db.VarChar(255)
+  
+  // Delivery & Delivery Complications Information
+  typeOfMarriage          String?    @map("type_of_marriage") @db.VarChar(100)
+  typeOfDelivery          String?    @map("type_of_delivery") @db.VarChar(100)
+  prenatalComplications   String?    @map("prenatal_complications") @db.Text // JSON array
+  perinatalComplications  String?    @map("perinatal_complications") @db.Text // JSON array
+  postnatalComplications  String?    @map("postnatal_complications") @db.Text // JSON array
+  
+  // Ongoing and Past Medications Information
+  previousTreatment       String?    @map("previous_treatment") @db.Text
+  currentTreatment        String?    @map("current_treatment") @db.Text
+  currentMedications      String?    @map("current_medications") @db.Text
+  
+  createdAt               DateTime?  @default(now()) @map("created_at")
+  updatedAt               DateTime?  @default(now()) @updatedAt @map("updated_at")
+  createdBy               BigInt?    @map("created_by") @db.UnsignedBigInt
+  updatedBy               BigInt?    @map("updated_by") @db.UnsignedBigInt
+
+  @@index([parentPhone])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("early_detection_babies")
+}
