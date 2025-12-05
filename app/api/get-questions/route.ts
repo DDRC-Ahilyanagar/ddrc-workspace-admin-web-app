@@ -103,6 +103,50 @@ export async function GET(request: NextRequest) {
             }
           }
         }
+
+        // Inject disability organs for questions 74, 102, 174 (दिव्यांगता अवयव)
+        await conn.query(`CREATE TABLE IF NOT EXISTS disability_organs (
+          id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          label_marathi VARCHAR(255) NOT NULL,
+          sort_order INT NOT NULL DEFAULT 0,
+          is_active TINYINT(1) NOT NULL DEFAULT 1,
+          created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uniq_label (label_marathi),
+          KEY idx_sort_order (sort_order),
+          KEY idx_is_active (is_active)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+
+        const [organs]: any = await conn.query(
+          `SELECT label_marathi FROM disability_organs 
+           WHERE is_active = 1 
+           ORDER BY sort_order ASC, id ASC`
+        );
+
+        const organOptions = Array.isArray(organs)
+          ? (organs as any[])
+              .map((o: any) => String(o.label_marathi || '').trim())
+              .filter((s: string) => s.length > 0)
+              .join(',')
+          : '';
+
+        if (organOptions) {
+          // Inject for question 74: दिव्यांगता अवयव
+          // Question 102: पत्नी किंवा पती दिव्यांगता अवयव
+          // Question 174: अपत्य दिव्यांगता अवयव (if exists)
+          for (const r of rows as any[]) {
+            const qid = parseInt(r.id || '0');
+            const questionText = String(r.question || '').trim();
+            if (
+              qid === 74 || 
+              qid === 102 || 
+              qid === 174 ||
+              questionText.includes('दिव्यांगता अवयव')
+            ) {
+              r.options = organOptions;
+            }
+          }
+        }
       } finally {
         // always release
         // @ts-ignore
