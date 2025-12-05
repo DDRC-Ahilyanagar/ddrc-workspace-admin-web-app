@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
 
           // Get completed forms list
           const [completedFormsList] = await conn.query(
-            `SELECT s.id, s.aadhaar_id, sa.aadhar_no, sa.holder_name, 
+            `SELECT s.id, s.aadhaar_id, sa.aadhar_no, 
                     s.no_of_questions_answered, s.created_at, s.updated_at
              FROM surveys s
              JOIN survey_aadhar sa ON s.aadhaar_id = sa.id
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
 
           // Get pending/incomplete forms list
           const [incompleteFormsList] = await conn.query(
-            `SELECT s.id, s.aadhaar_id, sa.aadhar_no, sa.holder_name,
+            `SELECT s.id, s.aadhaar_id, sa.aadhar_no,
                     s.no_of_questions_answered, s.no_of_questions_unanswered, s.created_at, s.updated_at
              FROM surveys s
              JOIN survey_aadhar sa ON s.aadhaar_id = sa.id
@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
               id: f.id.toString(),
               aadhaarId: f.aadhaar_id.toString(),
               aadharNo: f.aadhar_no,
-              holderName: f.holder_name || '-',
+              holderName: (f as any).holder_name || '-',
               questionsAnswered: f.no_of_questions_answered,
               createdAt: f.created_at ? new Date(f.created_at).toISOString() : null,
               updatedAt: f.updated_at ? new Date(f.updated_at).toISOString() : null,
@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
               id: f.id.toString(),
               aadhaarId: f.aadhaar_id.toString(),
               aadharNo: f.aadhar_no,
-              holderName: f.holder_name || '-',
+              holderName: (f as any).holder_name || '-',
               questionsAnswered: f.no_of_questions_answered,
               questionsUnanswered: f.no_of_questions_unanswered,
               createdAt: f.created_at ? new Date(f.created_at).toISOString() : null,

@@ -133,14 +133,13 @@ export async function GET(request: NextRequest) {
         if (organOptions) {
           // Inject for question 74: दिव्यांगता अवयव
           // Question 102: पत्नी किंवा पती दिव्यांगता अवयव
-          // Question 174: अपत्य दिव्यांगता अवयव (if exists)
+          // Older datasets may have had a third organ question; now rely on text match instead of hardcoding ID 174.
           for (const r of rows as any[]) {
             const qid = parseInt(r.id || '0');
             const questionText = String(r.question || '').trim();
             if (
-              qid === 74 || 
-              qid === 102 || 
-              qid === 174 ||
+              qid === 74 ||
+              qid === 102 ||
               questionText.includes('दिव्यांगता अवयव')
             ) {
               r.options = organOptions;
