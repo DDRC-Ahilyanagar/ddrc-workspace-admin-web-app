@@ -131,16 +131,22 @@ export async function GET(request: NextRequest) {
           : '';
 
         if (organOptions) {
-          // Inject for question 74: दिव्यांगता अवयव
-          // Question 102: पत्नी किंवा पती दिव्यांगता अवयव
-          // Older datasets may have had a third organ question; now rely on text match instead of hardcoding ID 174.
+          // Inject for question 73: दिव्यांगता अवयव (self)
+          // Question 101: पत्नी किंवा पती दिव्यांगता अवयव
+          // Question 174: अपत्य दिव्यांगता अवयव (if exists)
+          // Also match any question text containing "दिव्यांगता अवयव" exactly
           for (const r of rows as any[]) {
             const qid = parseInt(r.id || '0');
             const questionText = String(r.question || '').trim();
+            // Only inject if question text EXACTLY contains "दिव्यांगता अवयव" (not just "दिव्यांगता")
+            const isOrganQuestion = questionText.includes('दिव्यांगता अवयव') && 
+                                    !questionText.includes('उपचार') && 
+                                    !questionText.includes('बरे होण्यासाठी');
             if (
-              qid === 74 ||
-              qid === 102 ||
-              questionText.includes('दिव्यांगता अवयव')
+              qid === 73 ||
+              qid === 101 ||
+              qid === 174 ||
+              isOrganQuestion
             ) {
               r.options = organOptions;
             }
