@@ -94,7 +94,18 @@ export async function POST(request: NextRequest) {
     // For survey verification: Skip user approval check, just verify phone number
     // For login/authentication: Require user to exist and be approved
     // ============================================================================
-    const pool = await import('@/lib/db').then(m => m.getDbPool());
+    let pool;
+    try {
+      const dbModule = await import('@/lib/db');
+      pool = dbModule.getDbPool();
+    } catch (dbError: any) {
+      Logger.error('send_otp_db_import_failed', { error: dbError.message, stack: dbError.stack });
+      return NextResponse.json(
+        { ok: false, error: 'Database connection failed' },
+        { status: 500 }
+      );
+    }
+    
     let userData: any = null;
     let effectiveRole: string = '';
 
@@ -103,7 +114,17 @@ export async function POST(request: NextRequest) {
       // CRITICAL: Approval check MUST happen BEFORE any OTP generation or SMS sending
       // This prevents wasting OTPs and SMS costs on unapproved users
       // ============================================================================
-      const existConn = await pool.getConnection();
+      let existConn;
+      try {
+        existConn = await pool.getConnection();
+      } catch (connError: any) {
+        Logger.error('send_otp_db_connection_failed', { error: connError.message, phone });
+        return NextResponse.json(
+          { ok: false, error: 'Database connection failed. Please try again.' },
+          { status: 500 }
+        );
+      }
+      
       try {
         // Fetch user once so we can show precise error messages
         const [userCheck] = await existConn.execute(
@@ -240,7 +261,16 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + CONFIG.OTP_EXPIRY_MINUTES);
 
-    const connection = await pool.getConnection();
+    let connection;
+    try {
+      connection = await pool.getConnection();
+    } catch (connError: any) {
+      Logger.error('send_otp_db_connection_failed_otp', { error: connError.message, phone });
+      return NextResponse.json(
+        { ok: false, error: 'Database connection failed. Please try again.' },
+        { status: 500 }
+      );
+    }
     
     try {
       await connection.beginTransaction();
@@ -341,13 +371,43 @@ export async function POST(request: NextRequest) {
           sms: { ok: true, queued: true, message: 'SMS queued for sending' }
         });
       }
+    } catch (dbError: any) {
+      // Rollback transaction if it was started
+      if (connection) {
+        try {
+          await connection.rollback();
+        } catch (rollbackError) {
+          Logger.error('send_otp_rollback_failed', { error: (rollbackError as any).message });
+        }
+      }
+      Logger.error('send_otp_db_error', { 
+        error: dbError.message, 
+        stack: dbError.stack,
+        phone 
+      });
+      throw dbError; // Re-throw to be caught by outer catch
     } finally {
-      connection.release();
+      if (connection) {
+        connection.release();
+      }
     }
   } catch (error: any) {
-    Logger.error('send_otp_failed', { error: error.message });
+    Logger.error('send_otp_failed', { 
+      error: error.message, 
+      stack: error.stack,
+      name: error.name,
+      phone: (error as any).phone || 'unknown'
+    });
+    
+    // Return a user-friendly error message
+    const errorMessage = error.message || 'An unexpected error occurred';
     return NextResponse.json(
-      { ok: false, error: error.message },
+      { 
+        ok: false, 
+        error: errorMessage.includes('timeout') || errorMessage.includes('ECONNREFUSED') 
+          ? 'Database connection timeout. Please try again.' 
+          : errorMessage
+      },
       { status: 500 }
     );
   }
