@@ -66,25 +66,40 @@ export async function POST(req: NextRequest) {
       .then(([r]) => (Array.isArray(r) ? (r as any[]) : []))
       .catch(() => [] as any[]);
 
+    // Debug: Check total surveys count
+    const debugCountPromise = pool
+      .query(`SELECT COUNT(*) as total FROM surveys WHERE user_id = ?`, [user.id])
+      .then(([rows]) => {
+        const total = Array.isArray(rows) && (rows as any[]).length > 0 ? Number((rows as any[])[0]?.total) : 0;
+        console.log(`Total surveys for user ${user.id}: ${total}`);
+        return total;
+      })
+      .catch(() => 0);
+
     const countsPromise = pool
       .query(
         `SELECT 
-           SUM(CASE WHEN no_of_questions_unanswered = 0 THEN 1 ELSE 0 END) AS completed,
-           SUM(CASE WHEN no_of_questions_unanswered > 0 OR no_of_questions_unanswered IS NULL THEN 1 ELSE 0 END) AS pending
+           COALESCE(SUM(CASE WHEN no_of_questions_unanswered = 0 THEN 1 ELSE 0 END), 0) AS completed,
+           COALESCE(SUM(CASE WHEN no_of_questions_unanswered > 0 THEN 1 ELSE 0 END), 0) AS pending
          FROM surveys WHERE user_id = ?`,
         [user.id]
       )
-      .then(([rows]) => {
+      .then(async ([rows]) => {
+        const totalSurveys = await debugCountPromise;
         if (Array.isArray(rows) && (rows as any[]).length > 0) {
           const r = (rows as any[])[0];
-          return {
-            completed: parseInt(r?.completed || 0),
-            pending: parseInt(r?.pending || 0),
-          };
+          const completed = Number(r?.completed) || 0;
+          const pending = Number(r?.pending) || 0;
+          console.log(`Dashboard counts for user ${user.id}: total=${totalSurveys}, completed=${completed}, pending=${pending}, raw:`, r);
+          return { completed, pending };
         }
+        console.log(`Dashboard counts for user ${user.id}: No rows returned, total surveys: ${totalSurveys}`);
         return { completed: 0, pending: 0 };
       })
-      .catch(() => ({ completed: 0, pending: 0 }));
+      .catch((err) => {
+        console.error('Dashboard counts query error for user', user.id, ':', err);
+        return { completed: 0, pending: 0 };
+      });
 
     // Fetch rate in parallel too
     const ratePromise = pool
