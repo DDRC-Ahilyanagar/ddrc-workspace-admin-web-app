@@ -172,6 +172,8 @@ async function handleSubmit(request: NextRequest, user: any) {
       );
     }
 
+    let earlyReturnResponse: NextResponse | null = null;
+    
     try {
       // Validate that survey_aadhar entry exists
       try {
@@ -180,53 +182,76 @@ async function handleSubmit(request: NextRequest, user: any) {
           [aadhaarId]
         );
         if (!Array.isArray(aadhaarRows) || (aadhaarRows as any[]).length === 0) {
-          return NextResponse.json(
+          Logger.error('submit_answers_aadhaar_not_found', { aadhaar_id: aadhaarId });
+          earlyReturnResponse = NextResponse.json(
             { ok: false, error: 'Aadhaar entry not found in survey_aadhar. Create Aadhaar first.' },
             { status: 422 }
           );
+          return;
         }
       } catch (e: any) {
-        Logger.error('aadhaar_lookup_failed', { error: e?.message || String(e) });
-        return NextResponse.json(
+        Logger.error('aadhaar_lookup_failed', { 
+          error: e?.message || String(e),
+          stack: e?.stack,
+          aadhaar_id: aadhaarId
+        });
+        earlyReturnResponse = NextResponse.json(
           { ok: false, error: 'Aadhaar lookup failed' },
           { status: 500 }
         );
+        return;
       }
 
       // Ensure surveys and survey_files tables exist with correct structure
-      await connection.execute(`
-        CREATE TABLE IF NOT EXISTS surveys (
-          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-          user_id BIGINT UNSIGNED NOT NULL,
-          aadhaar_id BIGINT UNSIGNED NOT NULL,
-          no_of_questions_answered INT NOT NULL DEFAULT 0,
-          no_of_questions_unanswered INT NOT NULL DEFAULT 0,
-          survey_json LONGTEXT NULL,
-          json_path VARCHAR(255) NULL,
-          created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (id),
-          UNIQUE KEY unique_aadhaar_id (aadhaar_id),
-          KEY idx_user_id (user_id),
-          KEY idx_aadhaar_id (aadhaar_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-      `);
+      try {
+        await connection.execute(`
+          CREATE TABLE IF NOT EXISTS surveys (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            user_id BIGINT UNSIGNED NOT NULL,
+            aadhaar_id BIGINT UNSIGNED NOT NULL,
+            no_of_questions_answered INT NOT NULL DEFAULT 0,
+            no_of_questions_unanswered INT NOT NULL DEFAULT 0,
+            survey_json LONGTEXT NULL,
+            json_path VARCHAR(255) NULL,
+            created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY unique_aadhaar_id (aadhaar_id),
+            KEY idx_user_id (user_id),
+            KEY idx_aadhaar_id (aadhaar_id)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+      } catch (createError: any) {
+        Logger.error('submit_answers_create_surveys_table_failed', { 
+          error: createError.message,
+          note: 'Table might already exist'
+        });
+        // Continue - table might already exist
+      }
 
-      await connection.execute(`
-        CREATE TABLE IF NOT EXISTS survey_files (
-          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-          user_id BIGINT UNSIGNED NOT NULL,
-          aadhaar_id BIGINT UNSIGNED NOT NULL,
-          file_type ENUM('aadhaar_front','aadhaar_back','udid','certificate','other') NOT NULL,
-          file_path VARCHAR(500) NOT NULL,
-          created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (id),
-          KEY idx_user_id (user_id),
-          KEY idx_aadhaar_id (aadhaar_id),
-          KEY idx_file_type (file_type)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-      `);
+      try {
+        await connection.execute(`
+          CREATE TABLE IF NOT EXISTS survey_files (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            user_id BIGINT UNSIGNED NOT NULL,
+            aadhaar_id BIGINT UNSIGNED NOT NULL,
+            file_type ENUM('aadhaar_front','aadhaar_back','udid','certificate','other') NOT NULL,
+            file_path VARCHAR(500) NOT NULL,
+            created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_user_id (user_id),
+            KEY idx_aadhaar_id (aadhaar_id),
+            KEY idx_file_type (file_type)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+      } catch (createError: any) {
+        Logger.error('submit_answers_create_survey_files_table_failed', { 
+          error: createError.message,
+          note: 'Table might already exist'
+        });
+        // Continue - table might already exist
+      }
 
       // Fetch Aadhaar metadata for naming / surveys table
       let aadhaarNumber: string | null = null;
@@ -268,90 +293,101 @@ async function handleSubmit(request: NextRequest, user: any) {
         answers: normalizedItems,
       };
       // Write JSON file to disk
-      let relativePath: string;
+      let relativePath: string = '';
       try {
         const surveysDir = path.join(process.cwd(), 'surveys');
-        await fs.mkdir(surveysDir, { recursive: true });
+        try {
+          await fs.mkdir(surveysDir, { recursive: true });
+        } catch (mkdirError: any) {
+          Logger.error('submit_answers_mkdir_failed', { 
+            error: mkdirError.message,
+            surveysDir 
+          });
+          // Continue - directory might already exist
+        }
         const fileName = `${safeName}_${digits}.json`;
         const filePath = path.join(surveysDir, fileName);
-        await fs.writeFile(filePath, JSON.stringify(responsePayload, null, 2), 'utf8');
-        relativePath = path.join('surveys', fileName);
+        try {
+          await fs.writeFile(filePath, JSON.stringify(responsePayload, null, 2), 'utf8');
+          relativePath = path.join('surveys', fileName);
+        } catch (writeError: any) {
+          Logger.error('submit_answers_file_write_failed', { 
+            error: writeError.message, 
+            stack: writeError.stack,
+            filePath,
+            aadhaar_id: aadhaarId 
+          });
+          // Continue without file path if file write fails
+          relativePath = '';
+        }
       } catch (fileError: any) {
-        Logger.error('submit_answers_file_write_failed', { 
+        Logger.error('submit_answers_file_operation_failed', { 
           error: fileError.message, 
           stack: fileError.stack,
           aadhaar_id: aadhaarId 
         });
-        // Continue without file path if file write fails
+        // Continue without file path if file operation fails
         relativePath = '';
       }
       
-      const responseJson = JSON.stringify(responsePayload);
-
-      // Ensure surveys table has the new structure
-      await connection.execute(`
-        CREATE TABLE IF NOT EXISTS surveys (
-          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-          user_id BIGINT UNSIGNED NOT NULL,
-          aadhaar_id BIGINT UNSIGNED NOT NULL,
-          no_of_questions_answered INT NOT NULL DEFAULT 0,
-          no_of_questions_unanswered INT NOT NULL DEFAULT 0,
-          survey_json LONGTEXT NULL,
-          json_path VARCHAR(255) NULL,
-          created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (id),
-          UNIQUE KEY unique_aadhaar_id (aadhaar_id),
-          KEY idx_user_id (user_id),
-          KEY idx_aadhaar_id (aadhaar_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-      `);
-      
-      // Ensure required columns exist (migration support)
-      const [surveyCols] = await connection.query(
-        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
-         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'surveys'`
-      );
-      const surveyColumnNames = Array.isArray(surveyCols)
-        ? (surveyCols as any[]).map(c => c.COLUMN_NAME.toLowerCase())
-        : [];
-      const ensureColumn = async (col: string, definition: string) => {
-        if (!surveyColumnNames.includes(col.toLowerCase())) {
-          await connection.execute(`ALTER TABLE surveys ADD COLUMN ${definition}`);
-          surveyColumnNames.push(col.toLowerCase());
-        }
-      };
-      await ensureColumn('aadhaar_id', 'aadhaar_id BIGINT UNSIGNED NOT NULL');
-      await ensureColumn('no_of_questions_answered', 'no_of_questions_answered INT NOT NULL DEFAULT 0');
-      await ensureColumn('no_of_questions_unanswered', 'no_of_questions_unanswered INT NOT NULL DEFAULT 0');
-      await ensureColumn('survey_json', 'survey_json LONGTEXT NULL');
-      await ensureColumn('json_path', 'json_path VARCHAR(255) NULL');
-      
-      // Add unique constraint if it doesn't exist
+      let responseJson: string;
       try {
-        await connection.execute(`
-          ALTER TABLE surveys 
-          ADD UNIQUE KEY unique_aadhaar_id (aadhaar_id)
-        `);
-      } catch (e: any) {
-        // Ignore if constraint already exists
-        if (!e.message?.includes('Duplicate key name')) {
-          Logger.info('submit_answers_unique_constraint_failed', { error: e.message });
-        }
+        responseJson = JSON.stringify(responsePayload);
+      } catch (jsonError: any) {
+        Logger.error('submit_answers_json_stringify_failed', { 
+          error: jsonError.message,
+          aadhaar_id: aadhaarId
+        });
+        throw new Error('Failed to serialize survey data. Please try again.');
       }
 
-      // Check if aadhar_id exists in survey_aadhar table
-      const [aadharCheck] = await connection.query(
-        'SELECT id FROM survey_aadhar WHERE id = ? LIMIT 1',
-        [aadhaarId]
-      );
-      
-      if (!Array.isArray(aadharCheck) || (aadharCheck as any[]).length === 0) {
-        Logger.error('submit_answers_aadhar_not_found', { aadhaar_id: aadhaarId });
-        return NextResponse.json(
-          { ok: false, error: 'Aadhaar ID not found in survey_aadhar table' },
-          { status: 404 }
+      // Ensure required columns exist (migration support)
+      try {
+        const [surveyCols] = await connection.query(
+          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'surveys'`
         );
+        const surveyColumnNames = Array.isArray(surveyCols)
+          ? (surveyCols as any[]).map(c => c.COLUMN_NAME.toLowerCase())
+          : [];
+        const ensureColumn = async (col: string, definition: string) => {
+          if (!surveyColumnNames.includes(col.toLowerCase())) {
+            try {
+              await connection.execute(`ALTER TABLE surveys ADD COLUMN ${definition}`);
+              surveyColumnNames.push(col.toLowerCase());
+            } catch (alterError: any) {
+              Logger.info('submit_answers_column_add_failed', { 
+                column: col,
+                error: alterError.message,
+                note: 'Column might already exist'
+              });
+            }
+          }
+        };
+        await ensureColumn('aadhaar_id', 'aadhaar_id BIGINT UNSIGNED NOT NULL');
+        await ensureColumn('no_of_questions_answered', 'no_of_questions_answered INT NOT NULL DEFAULT 0');
+        await ensureColumn('no_of_questions_unanswered', 'no_of_questions_unanswered INT NOT NULL DEFAULT 0');
+        await ensureColumn('survey_json', 'survey_json LONGTEXT NULL');
+        await ensureColumn('json_path', 'json_path VARCHAR(255) NULL');
+        
+        // Add unique constraint if it doesn't exist
+        try {
+          await connection.execute(`
+            ALTER TABLE surveys 
+            ADD UNIQUE KEY unique_aadhaar_id (aadhaar_id)
+          `);
+        } catch (e: any) {
+          // Ignore if constraint already exists
+          if (!e.message?.includes('Duplicate key name') && !e.message?.includes('Duplicate entry')) {
+            Logger.info('submit_answers_unique_constraint_failed', { error: e.message });
+          }
+        }
+      } catch (migrationError: any) {
+        Logger.error('submit_answers_migration_failed', { 
+          error: migrationError.message,
+          note: 'Continuing with existing table structure'
+        });
+        // Continue - table might already have correct structure
       }
 
       // Count answered vs unanswered from the current submission
@@ -418,6 +454,17 @@ async function handleSubmit(request: NextRequest, user: any) {
             return ans === '' || ans === '--';
           }).length;
           
+          let mergedJsonString: string;
+          try {
+            mergedJsonString = JSON.stringify(mergedJson);
+          } catch (stringifyError: any) {
+            Logger.error('submit_answers_merged_json_stringify_failed', { 
+              error: stringifyError.message,
+              aadhaar_id: aadhaarId
+            });
+            throw new Error('Failed to serialize merged survey data. Please try again.');
+          }
+          
           await connection.execute(
             `UPDATE surveys 
              SET no_of_questions_answered = ?,
@@ -426,7 +473,7 @@ async function handleSubmit(request: NextRequest, user: any) {
                  json_path = ?,
                  updated_at = NOW()
              WHERE aadhaar_id = ?`,
-            [totalAnswered, totalUnanswered, JSON.stringify(mergedJson), relativePath, aadhaarId]
+            [totalAnswered, totalUnanswered, mergedJsonString, relativePath, aadhaarId]
           );
           
           Logger.info('submit_answers_survey_updated', {
@@ -473,7 +520,8 @@ async function handleSubmit(request: NextRequest, user: any) {
         unanswered: unansweredCount,
         json_path: relativePath
       });
-      return NextResponse.json({ 
+      // Store success response to return after connection release
+      earlyReturnResponse = NextResponse.json({ 
         ok: true, 
         saved: normalizedItems.length, 
         survey_id: surveyId, 
@@ -488,7 +536,14 @@ async function handleSubmit(request: NextRequest, user: any) {
         aadhaar_id: aadhaarId,
         user_id: userId
       });
-      throw dbError; // Re-throw to be caught by outer catch
+      // Store error response to return after connection release
+      earlyReturnResponse = NextResponse.json(
+        { 
+          ok: false, 
+          error: dbError.message || 'Database operation failed. Please try again.' 
+        },
+        { status: 500 }
+      );
     } finally {
       if (connection) {
         try {
@@ -497,6 +552,11 @@ async function handleSubmit(request: NextRequest, user: any) {
           Logger.error('submit_answers_connection_release_failed', { error: releaseError.message });
         }
       }
+    }
+    
+    // Return the response after connection is released
+    if (earlyReturnResponse) {
+      return earlyReturnResponse;
     }
   } catch (error: any) {
     Logger.error('submit_answers_failed', { 
@@ -526,15 +586,32 @@ async function handleSubmit(request: NextRequest, user: any) {
 // or fallback to explicit identifiers in the JSON body (user_id or user_phone).
 export const POST = async (request: NextRequest) => {
   try {
-    const { user } = await verifyAuth(request);
-    return handleSubmit(request, user as any);
-  } catch (authError: any) {
-    Logger.error('submit_answers_auth_failed', { 
-      error: authError.message,
-      stack: authError.stack
+    let user: any = null;
+    try {
+      const authResult = await verifyAuth(request);
+      user = authResult.user;
+    } catch (authError: any) {
+      Logger.info('submit_answers_auth_optional', { 
+        error: authError.message,
+        note: 'Continuing without auth - will use user_id from body'
+      });
+      // Allow unauthenticated requests if user_id is provided in body
+      user = null;
+    }
+    return await handleSubmit(request, user);
+  } catch (error: any) {
+    Logger.error('submit_answers_post_handler_failed', { 
+      error: error.message,
+      stack: error.stack,
+      name: error.name
     });
-    // Allow unauthenticated requests if user_id is provided in body
-    return handleSubmit(request, null);
+    return NextResponse.json(
+      { 
+        ok: false, 
+        error: error.message || 'An unexpected error occurred. Please try again.' 
+      },
+      { status: 500 }
+    );
   }
 };
 
