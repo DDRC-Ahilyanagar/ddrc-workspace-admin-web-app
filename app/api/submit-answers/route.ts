@@ -149,8 +149,28 @@ async function handleSubmit(request: NextRequest, user: any) {
       );
     }
 
-    const pool = getDbPool();
-    const connection = await pool.getConnection();
+    let pool;
+    let connection;
+    
+    try {
+      pool = getDbPool();
+    } catch (poolError: any) {
+      Logger.error('submit_answers_pool_failed', { error: poolError.message, stack: poolError.stack });
+      return NextResponse.json(
+        { ok: false, error: 'Database connection failed. Please try again.' },
+        { status: 500 }
+      );
+    }
+
+    try {
+      connection = await pool.getConnection();
+    } catch (connError: any) {
+      Logger.error('submit_answers_connection_failed', { error: connError.message, stack: connError.stack });
+      return NextResponse.json(
+        { ok: false, error: 'Database connection failed. Please try again.' },
+        { status: 500 }
+      );
+    }
 
     try {
       // Validate that survey_aadhar entry exists
@@ -248,14 +268,25 @@ async function handleSubmit(request: NextRequest, user: any) {
         answers: normalizedItems,
       };
       // Write JSON file to disk
-      const surveysDir = path.join(process.cwd(), 'surveys');
-      await fs.mkdir(surveysDir, { recursive: true });
-      const fileName = `${safeName}_${digits}.json`;
-      const filePath = path.join(surveysDir, fileName);
-      await fs.writeFile(filePath, JSON.stringify(responsePayload, null, 2), 'utf8');
+      let relativePath: string;
+      try {
+        const surveysDir = path.join(process.cwd(), 'surveys');
+        await fs.mkdir(surveysDir, { recursive: true });
+        const fileName = `${safeName}_${digits}.json`;
+        const filePath = path.join(surveysDir, fileName);
+        await fs.writeFile(filePath, JSON.stringify(responsePayload, null, 2), 'utf8');
+        relativePath = path.join('surveys', fileName);
+      } catch (fileError: any) {
+        Logger.error('submit_answers_file_write_failed', { 
+          error: fileError.message, 
+          stack: fileError.stack,
+          aadhaar_id: aadhaarId 
+        });
+        // Continue without file path if file write fails
+        relativePath = '';
+      }
       
       const responseJson = JSON.stringify(responsePayload);
-      const relativePath = path.join('surveys', fileName);
 
       // Ensure surveys table has the new structure
       await connection.execute(`
@@ -423,8 +454,15 @@ async function handleSubmit(request: NextRequest, user: any) {
             unanswered: unansweredCount,
           });
         }
-      } catch (surveyError) {
-        Logger.error('submit_answers_survey_record_failed', { error: (surveyError as any)?.message });
+      } catch (surveyError: any) {
+        Logger.error('submit_answers_survey_record_failed', { 
+          error: surveyError?.message,
+          stack: surveyError?.stack,
+          aadhaar_id: aadhaarId,
+          user_id: userId
+        });
+        // Don't fail the entire request if survey record update fails
+        // The JSON file is already saved
       }
 
       Logger.info('submit_answers', { 
@@ -443,13 +481,42 @@ async function handleSubmit(request: NextRequest, user: any) {
         answered: answeredCount,
         unanswered: unansweredCount
       });
+    } catch (dbError: any) {
+      Logger.error('submit_answers_db_error', { 
+        error: dbError.message,
+        stack: dbError.stack,
+        aadhaar_id: aadhaarId,
+        user_id: userId
+      });
+      throw dbError; // Re-throw to be caught by outer catch
     } finally {
-      connection.release();
+      if (connection) {
+        try {
+          connection.release();
+        } catch (releaseError: any) {
+          Logger.error('submit_answers_connection_release_failed', { error: releaseError.message });
+        }
+      }
     }
   } catch (error: any) {
-    Logger.error('submit_answers_failed', { error: error.message });
+    Logger.error('submit_answers_failed', { 
+      error: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
+    // Return user-friendly error messages
+    const errorMessage = error.message || 'An unexpected error occurred';
+    const isTimeout = errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT');
+    const isConnectionError = errorMessage.includes('ECONNREFUSED') || errorMessage.includes('ENOTFOUND');
+    
     return NextResponse.json(
-      { ok: false, error: error.message },
+      { 
+        ok: false, 
+        error: isTimeout || isConnectionError
+          ? 'Database connection failed. Please try again.'
+          : errorMessage
+      },
       { status: 500 }
     );
   }
@@ -458,7 +525,16 @@ async function handleSubmit(request: NextRequest, user: any) {
 // Accept either authenticated requests (Authorization header / session cookie)
 // or fallback to explicit identifiers in the JSON body (user_id or user_phone).
 export const POST = async (request: NextRequest) => {
-  const { user } = await verifyAuth(request);
-  return handleSubmit(request, user as any);
+  try {
+    const { user } = await verifyAuth(request);
+    return handleSubmit(request, user as any);
+  } catch (authError: any) {
+    Logger.error('submit_answers_auth_failed', { 
+      error: authError.message,
+      stack: authError.stack
+    });
+    // Allow unauthenticated requests if user_id is provided in body
+    return handleSubmit(request, null);
+  }
 };
 
