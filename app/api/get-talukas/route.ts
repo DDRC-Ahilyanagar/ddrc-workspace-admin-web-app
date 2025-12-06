@@ -36,7 +36,7 @@ export const GET = async (request: NextRequest) => {
     );
   } catch (error: any) {
     const TALUKAS = [
-      'Ahilyanagar',
+      'Nagar',
       'Akole',
       'Jamkhed',
       'Karjat',
