@@ -79,8 +79,24 @@ export async function POST(req: NextRequest) {
     const countsPromise = pool
       .query(
         `SELECT 
-           COALESCE(SUM(CASE WHEN no_of_questions_unanswered = 0 THEN 1 ELSE 0 END), 0) AS completed,
-           COALESCE(SUM(CASE WHEN no_of_questions_unanswered > 0 THEN 1 ELSE 0 END), 0) AS pending
+           COALESCE(SUM(CASE 
+             WHEN no_of_questions_answered > 0 
+               AND survey_json IS NOT NULL 
+               AND (
+                 no_of_questions_unanswered = 0 
+                 OR (no_of_questions_answered + no_of_questions_unanswered > 0 
+                     AND (no_of_questions_answered * 100.0 / (no_of_questions_answered + no_of_questions_unanswered)) >= 70.0)
+               )
+             THEN 1 ELSE 0 END), 0) AS completed,
+           COALESCE(SUM(CASE 
+             WHEN NOT (no_of_questions_answered > 0 
+               AND survey_json IS NOT NULL 
+               AND (
+                 no_of_questions_unanswered = 0 
+                 OR (no_of_questions_answered + no_of_questions_unanswered > 0 
+                     AND (no_of_questions_answered * 100.0 / (no_of_questions_answered + no_of_questions_unanswered)) >= 70.0)
+               ))
+             THEN 1 ELSE 0 END), 0) AS pending
          FROM surveys WHERE user_id = ?`,
         [user.id]
       )
