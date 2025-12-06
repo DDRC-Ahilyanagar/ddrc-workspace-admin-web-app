@@ -69,8 +69,8 @@ export async function POST(req: NextRequest) {
     const countsPromise = pool
       .query(
         `SELECT 
-           SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
-           SUM(CASE WHEN status IS NULL OR status = 'pending' THEN 1 ELSE 0 END) AS pending
+           SUM(CASE WHEN no_of_questions_unanswered = 0 THEN 1 ELSE 0 END) AS completed,
+           SUM(CASE WHEN no_of_questions_unanswered > 0 OR no_of_questions_unanswered IS NULL THEN 1 ELSE 0 END) AS pending
          FROM surveys WHERE user_id = ?`,
         [user.id]
       )
