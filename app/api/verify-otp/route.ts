@@ -106,61 +106,77 @@ export async function POST(request: NextRequest) {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `);
 
-      // Find latest unexpired sent OTP
-      const [rows] = await connection.execute(
-        `SELECT * FROM otp_verifications 
-         WHERE phone = ? AND status IN ('sent') 
-         ORDER BY id DESC LIMIT 1`,
-        [phone]
-      );
+      // Test mode for Google Play review: Allow test phone + OTP combination
+      const TEST_PHONE = '1234567890';
+      const TEST_OTP = '123456';
+      const isTestMode = phone === TEST_PHONE && otp === TEST_OTP;
 
-      const row = Array.isArray(rows) && rows.length > 0 ? rows[0] as any : null;
-
-      if (!row) {
-        // No matching OTP in the DB – treat it as a stale request
-        return NextResponse.json(
-          {
-            ok: false,
-            error: 'otp_not_found',
-            message: 'ओटीपी सापडला नाही. कृपया पुन्हा विनंती करा.',
-          },
-          { status: 404 }
+      // Find latest unexpired sent OTP (skip for test mode)
+      let row: any = null;
+      if (!isTestMode) {
+        const [rows] = await connection.execute(
+          `SELECT * FROM otp_verifications 
+           WHERE phone = ? AND status IN ('sent') 
+           ORDER BY id DESC LIMIT 1`,
+          [phone]
         );
+
+        row = Array.isArray(rows) && rows.length > 0 ? rows[0] as any : null;
+
+        if (!row) {
+          // No matching OTP in the DB – treat it as a stale request
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'otp_not_found',
+              message: 'ओटीपी सापडला नाही. कृपया पुन्हा विनंती करा.',
+            },
+            { status: 404 }
+          );
+        }
       }
 
-      if (new Date(row.expires_at) < new Date()) {
+      if (isTestMode) {
+        // For test mode, skip OTP validation and expiration checks
+        Logger.info('verify_otp_test_mode', { phone, otp });
+      } else {
+        // Normal OTP validation flow
+        if (new Date(row.expires_at) < new Date()) {
+          await connection.execute(
+            `UPDATE otp_verifications SET status = 'expired', updated_at = NOW() WHERE id = ?`,
+            [row.id]
+          );
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'otp_expired',
+              message: 'ओटीपीची वेळ संपली. कृपया नव्याने ओटीपी मागवा.',
+            },
+            { status: 410 }
+          );
+        }
+
+        if (row.otp !== otp) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'otp_invalid',
+              message: 'ओटीपी अयोग्य आहे. पुन्हा प्रयत्न करा.',
+            },
+            { status: 401 }
+          );
+        }
+      }
+
+      // Mark verified (skip for test mode if no row exists)
+      if (!isTestMode || row) {
         await connection.execute(
-          `UPDATE otp_verifications SET status = 'expired', updated_at = NOW() WHERE id = ?`,
+          `UPDATE otp_verifications 
+           SET status = 'verified', verified_at = NOW(), updated_at = NOW() 
+           WHERE id = ?`,
           [row.id]
         );
-        return NextResponse.json(
-          {
-            ok: false,
-            error: 'otp_expired',
-            message: 'ओटीपीची वेळ संपली. कृपया नव्याने ओटीपी मागवा.',
-          },
-          { status: 410 }
-        );
       }
-
-      if (row.otp !== otp) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: 'otp_invalid',
-            message: 'ओटीपी अयोग्य आहे. पुन्हा प्रयत्न करा.',
-          },
-          { status: 401 }
-        );
-      }
-
-      // Mark verified
-      await connection.execute(
-        `UPDATE otp_verifications 
-         SET status = 'verified', verified_at = NOW(), updated_at = NOW() 
-         WHERE id = ?`,
-        [row.id]
-      );
 
       // For survey verification: Just return success, no user authentication needed
       if (isSurveyVerification) {
@@ -188,7 +204,22 @@ export async function POST(request: NextRequest) {
       
       const userData = Array.isArray(userCheck) && (userCheck as any[]).length > 0 ? (userCheck as any[])[0] : null;
       
-      if (!userData) {
+      // For test mode, create a dummy user data if not found
+      let finalUserData = userData;
+      if (!userData && isTestMode) {
+        Logger.info('verify_otp_test_mode_user_not_found', { phone });
+        // Create a test user object for test mode
+        finalUserData = {
+          id: 999999,
+          name: 'Test User',
+          contact_number: TEST_PHONE,
+          passkey: null,
+          user_type: 'field_officer',
+          status: 'active',
+          is_active: 1,
+          related_type: 'field_officer'
+        };
+      } else if (!userData) {
         return NextResponse.json(
           {
             ok: false,
@@ -200,8 +231,8 @@ export async function POST(request: NextRequest) {
       }
 
       // Check user's actual role from database
-      const userType = normalizeRole(userData.user_type);
-      const relatedType = normalizeRole(userData.related_type);
+      const userType = normalizeRole(finalUserData.user_type);
+      const relatedType = normalizeRole(finalUserData.related_type);
       const effectiveRole = userType || relatedType;
       const isAdmin = effectiveRole === 'admin';
       const isSupervisor = effectiveRole === 'supervisor';
@@ -253,14 +284,14 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      Logger.info('verify_otp_ok', { phone, user_id: userData.id, has_passkey: !!userData.passkey });
+      Logger.info('verify_otp_ok', { phone, user_id: finalUserData.id, has_passkey: !!finalUserData.passkey, isTestMode });
       const response = NextResponse.json({ 
         ok: true, 
         user: {
-          id: userData.id,
-          name: userData.name,
-          phone: userData.contact_number,
-          passkey: userData.passkey ? String(userData.passkey) : null,
+          id: finalUserData.id,
+          name: finalUserData.name,
+          phone: finalUserData.contact_number,
+          passkey: finalUserData.passkey ? String(finalUserData.passkey) : null,
         }
       });
 
