@@ -19,9 +19,11 @@ export function getDbPool(): mysql.Pool {
       queueLimit: 0,
       // Add timeout configurations to prevent hanging connections
       acquireTimeout: 60000, // 60 seconds to acquire connection from pool
-      timeout: 60000, // 60 seconds query timeout
+      timeout: 30000, // 30 seconds query timeout
       enableKeepAlive: true,
       keepAliveInitialDelay: 0,
+      // Add connection timeout to fail fast on initial connection
+      connectTimeout: 10000, // 10 seconds to establish initial connection
     });
   }
   return pool;

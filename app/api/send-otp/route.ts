@@ -43,8 +43,8 @@ import { validatePhone, validateRequest } from '@/lib/validation';
  *       500:
  *         description: Server error
  */
-// Set route timeout to 30 seconds to handle slow database connections
-export const maxDuration = 30;
+// Set route timeout to 60 seconds to match database acquireTimeout
+export const maxDuration = 60;
 
 const normalizeRole = (value?: string | null) =>
   (value || '').toString().trim().toLowerCase().replace(/\s+/g, '_');
@@ -119,11 +119,19 @@ export async function POST(request: NextRequest) {
       // ============================================================================
       let existConn;
       try {
-        existConn = await pool.getConnection();
+        // Add timeout wrapper to fail fast if connection takes too long
+        existConn = await Promise.race([
+          pool.getConnection(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Database connection timeout')), 25000)
+          )
+        ]) as any;
       } catch (connError: any) {
         Logger.error('send_otp_db_connection_failed', { error: connError.message, phone });
         return NextResponse.json(
-          { ok: false, error: 'Database connection failed. Please try again.' },
+          { ok: false, error: connError.message?.includes('timeout') 
+            ? 'Database connection timeout. Please try again.' 
+            : 'Database connection failed. Please try again.' },
           { status: 500 }
         );
       }
@@ -266,11 +274,19 @@ export async function POST(request: NextRequest) {
 
     let connection;
     try {
-      connection = await pool.getConnection();
+      // Add timeout wrapper to fail fast if connection takes too long
+      connection = await Promise.race([
+        pool.getConnection(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Database connection timeout')), 25000)
+        )
+      ]) as any;
     } catch (connError: any) {
       Logger.error('send_otp_db_connection_failed_otp', { error: connError.message, phone });
       return NextResponse.json(
-        { ok: false, error: 'Database connection failed. Please try again.' },
+        { ok: false, error: connError.message?.includes('timeout')
+          ? 'Database connection timeout. Please try again.'
+          : 'Database connection failed. Please try again.' },
         { status: 500 }
       );
     }
