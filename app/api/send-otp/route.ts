@@ -43,6 +43,9 @@ import { validatePhone, validateRequest } from '@/lib/validation';
  *       500:
  *         description: Server error
  */
+// Set route timeout to 30 seconds to handle slow database connections
+export const maxDuration = 30;
+
 const normalizeRole = (value?: string | null) =>
   (value || '').toString().trim().toLowerCase().replace(/\s+/g, '_');
 
