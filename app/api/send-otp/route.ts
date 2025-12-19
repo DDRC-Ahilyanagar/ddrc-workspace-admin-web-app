@@ -294,23 +294,6 @@ export async function POST(request: NextRequest) {
     try {
       await connection.beginTransaction();
       
-      // Ensure otp_verifications table exists
-      await connection.execute(`
-        CREATE TABLE IF NOT EXISTS otp_verifications (
-          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-          phone VARCHAR(20) NOT NULL,
-          otp VARCHAR(10) NOT NULL,
-          status ENUM('sent','verified','expired') DEFAULT 'sent',
-          expires_at TIMESTAMP NULL,
-          verified_at TIMESTAMP NULL,
-          created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (id),
-          KEY idx_phone (phone),
-          KEY idx_status (status)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-      `);
-
       const [result] = await connection.execute(
         `INSERT INTO otp_verifications (phone, otp, expires_at, status, created_at, updated_at) 
          VALUES (?, ?, ?, 'sent', NOW(), NOW())`,
