@@ -4,11 +4,21 @@
 -- 3. Question 134 (महामंडळाचे कर्ज व्यवसायासाठी): Should accept text, NOT numbers
 
 -- Fix question 134: Change valid_input from "numeric" to "text" for business type question
+-- This question should accept text (letters) instead of numbers
 UPDATE questions 
 SET valid_input = 'text',
     max_length = 100
 WHERE id = 134 
   AND question = 'महामंडळाचे कर्ज कोणत्या व्यवसायासाठी घेतले आहे?';
+
+-- Verify question 134 fix
+SELECT 
+  id, 
+  question, 
+  valid_input, 
+  max_length
+FROM questions 
+WHERE id = 134;
 
 -- Ensure question 79 has correct treatment options (should already be correct in DB)
 -- Verify question 79 options are treatment-related, not body parts
