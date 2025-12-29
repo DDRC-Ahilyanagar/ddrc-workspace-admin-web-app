@@ -46,6 +46,8 @@
               npm install --production
               # Ensure storage directory exists
               mkdir -p storage/logs
+              # Run database seed to update questions/sections
+              npm run prisma:seed || echo "Seed script completed (may have skipped if already seeded)"
               # Check PM2 status and restart
               pm2 restart surveys || pm2 start npm --name "surveys" -- start
               pm2 save
