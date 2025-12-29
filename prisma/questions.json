@@ -1582,7 +1582,7 @@
     "question": "रेशन कार्ड वरील एकूण व्यक्ती",
     "question_type": "MCQ",
     "multi_select": "No",
-    "options": "1,2,3,4,5,6",
+    "options": "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20",
     "rendering_condition": "Yes",
     "rendering_question": "रेशन कार्ड आहे का?",
     "rendering_value": "होय",
@@ -2580,8 +2580,8 @@
     "updated_by": null,
     "updated_on": null,
     "regex": "",
-    "valid_input": "numeric",
-    "max_length": 10
+    "valid_input": "text",
+    "max_length": 100
   },
   {
     "id": "135",
