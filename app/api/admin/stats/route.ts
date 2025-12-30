@@ -47,18 +47,7 @@ export async function GET(_req: NextRequest) {
       try { await conn.query(`ALTER TABLE answers ADD COLUMN aadhar_no VARCHAR(20) NULL`); } catch (e:any) { /* ignore duplicate */ }
       try { await conn.query(`ALTER TABLE answers ADD COLUMN updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`); } catch (e:any) { /* ignore duplicate */ }
 
-      // Detect answers column name for value storage across legacy schemas
-      let answerCol = 'answer';
-      try {
-        const [cols]: any = await conn.query("SHOW COLUMNS FROM answers LIKE 'answer'");
-        if (!Array.isArray(cols) || cols.length === 0) {
-          const candidates = ['value', 'answer_text', 'resp'];
-          for (const c of candidates) {
-            const [cc]: any = await conn.query(`SHOW COLUMNS FROM answers LIKE '${c}'`);
-            if (Array.isArray(cc) && cc.length > 0) { answerCol = c; break; }
-          }
-        }
-      } catch {}
+      // Note: We no longer use the answers table - all data is in surveys.survey_json
 
       // Create and seed disability_types if needed
       await conn.query(`CREATE TABLE IF NOT EXISTS disability_types (
@@ -102,10 +91,10 @@ export async function GET(_req: NextRequest) {
       };
       const pTotalAadhar = conn.query(`SELECT COUNT(*) AS c FROM survey_aadhar`);
       const pTodayAadhar = conn.query(`SELECT COUNT(*) AS c FROM survey_aadhar WHERE DATE(created_at) = CURDATE()`);
-      const pAnswers = conn.query(`SELECT COUNT(*) AS c FROM answers`);
+      const pCompleted = conn.query(`SELECT COUNT(*) AS c FROM surveys WHERE no_of_questions_answered > 0`);
       const pPending = conn.query(`SELECT COUNT(*) AS c FROM survey_aadhar sa
-         LEFT JOIN (SELECT DISTINCT aadhar_id FROM answers) an ON an.aadhar_id = sa.id
-         WHERE an.aadhar_id IS NULL`);
+         LEFT JOIN surveys s ON s.aadhaar_id = sa.id
+         WHERE s.id IS NULL OR s.no_of_questions_answered = 0`);
       const pOtpToday = conn.query(`SELECT 
            SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS sent,
            SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) AS verified
@@ -130,20 +119,20 @@ export async function GET(_req: NextRequest) {
       const [
         [totalAadharRows],
         [todayAadharRows],
-        [answersRows],
+        [completedRows],
         [pendingRows],
         [otpTodayRows],
         [sectionsRows],
         [active1Rows],
         [active2Rows],
         [roleCountRows],
-      ] = await Promise.all([pTotalAadhar, pTodayAadhar, pAnswers, pPending, pOtpToday, pSections, pActive1, pActive2, pRoleCounts]);
+      ] = await Promise.all([pTotalAadhar, pTodayAadhar, pCompleted, pPending, pOtpToday, pSections, pActive1, pActive2, pRoleCounts]);
 
       const activeQuestions = ((active1Rows as any[])[0]?.c || 0) || ((active2Rows as any[])[0]?.c || 0) || 0;
 
       const totalSurveys = (totalAadharRows as any[])[0]?.c || 0;
       const surveysToday = (todayAadharRows as any[])[0]?.c || 0;
-      const totalAnswers = (answersRows as any[])[0]?.c || 0;
+      const completedSurveys = (completedRows as any[])[0]?.c || 0;
       const pendingSurveys = (pendingRows as any[])[0]?.c || 0;
       // activeQuestions already computed above
       const otpToday = (otpTodayRows as any[])[0] || { sent: 0, verified: 0 };
@@ -172,76 +161,101 @@ export async function GET(_req: NextRequest) {
       }
       const offlineOfficers = Math.max(0, totalOfficers - onlineOfficers);
 
-      // ---- Breakdown stats (taluka, gender, disability) ---- (parallel)
-      const talukaIds = [37, 47];
-      const genderId = 4;
-      const disabilityId = 69;
-      const pTaluka = conn.query(`SELECT COALESCE(${answerCol}, 'Unknown') AS label, COUNT(DISTINCT aadhar_id) AS completed FROM answers WHERE question_id IN (?) GROUP BY COALESCE(${answerCol}, 'Unknown') ORDER BY completed DESC`, [talukaIds]);
-      const pGender = conn.query(
-        `SELECT CASE
-            WHEN LOWER(TRIM(${answerCol})) IN ('m','male','पुरुष') THEN 'पुरुष'
-            WHEN LOWER(TRIM(${answerCol})) IN ('f','female','स्त्री') THEN 'स्त्री'
-            ELSE 'इतर'
-          END AS label,
-          COUNT(DISTINCT aadhar_id) AS completed
-         FROM answers
-         WHERE question_id = ?
-         GROUP BY label
-         ORDER BY completed DESC`,
-        [genderId]
-      );
-      const pDisability = conn.query(
-        `SELECT dt.label_marathi AS label, COUNT(DISTINCT a.aadhar_id) AS completed
-         FROM disability_types dt
-         LEFT JOIN answers a
-           ON a.question_id = ?
-          AND (
-            JSON_SEARCH(dt.aliases, 'one', a.${answerCol}) IS NOT NULL
-            OR (LOWER(COALESCE(a.${answerCol}, '') COLLATE utf8mb4_unicode_ci) LIKE LOWER(CONCAT('%', dt.label_marathi COLLATE utf8mb4_unicode_ci, '%')))
-            OR (LOWER(COALESCE(a.${answerCol}, '') COLLATE utf8mb4_unicode_ci) LIKE LOWER(CONCAT('%', dt.label_english COLLATE utf8mb4_unicode_ci, '%')))
-          )
-         GROUP BY dt.id
-         ORDER BY completed DESC`,
-        [disabilityId]
-      );
+      // ---- Breakdown stats ----
+      const [completedDetailsRows] = await conn.query(`
+        SELECT sa.taluka, sa.gender, sa.district, sa.dob
+        FROM survey_aadhar sa
+        JOIN surveys s ON s.aadhaar_id = sa.id
+        WHERE s.no_of_questions_unanswered = 0
+      `);
 
-      // Age range by gender breakdown
-      const pAgeRanges = conn.query(
-        `SELECT 
-            CASE 
-              WHEN CAST(a.${answerCol} AS UNSIGNED) BETWEEN 0 AND 5 THEN '0–5 वर्ष'
-              WHEN CAST(a.${answerCol} AS UNSIGNED) BETWEEN 6 AND 14 THEN '6–14 वर्ष'
-              WHEN CAST(a.${answerCol} AS UNSIGNED) BETWEEN 15 AND 18 THEN '15–18 वर्ष'
-              WHEN CAST(a.${answerCol} AS UNSIGNED) BETWEEN 19 AND 35 THEN '19–35 वर्ष'
-              WHEN CAST(a.${answerCol} AS UNSIGNED) BETWEEN 36 AND 60 THEN '36–60 वर्ष'
-              WHEN CAST(a.${answerCol} AS UNSIGNED) >= 61 THEN '60+ वर्ष'
-              ELSE 'Unknown'
-            END AS age_range,
-            CASE 
-              WHEN LOWER(TRIM(g.${answerCol})) IN ('m','male','पुरुष') THEN 'पुरुष'
-              WHEN LOWER(TRIM(g.${answerCol})) IN ('f','female','स्त्री') THEN 'स्त्री'
-              ELSE 'इतर'
-            END AS gender_key,
-            COUNT(DISTINCT a.aadhar_id) AS c
-         FROM answers a
-         LEFT JOIN answers g ON g.aadhar_id = a.aadhar_id AND g.question_id = ?
-         WHERE a.question_id = ? AND a.${answerCol} REGEXP '^[0-9]+'
-         GROUP BY age_range, gender_key`,
-        [genderId, 3]
-      );
-      const [[talukaCompletedRows], [genderCompletedRows], [disabilityCompletedRows], [ageRangeRows]] = await Promise.all([pTaluka, pGender, pDisability, pAgeRanges]);
-      const taluka = Array.isArray(talukaCompletedRows) ? (talukaCompletedRows as any[]).map((r:any) => ({ name: r.label, completed: Number(r.completed) || 0 })) : [];
-      const gender = Array.isArray(genderCompletedRows) ? (genderCompletedRows as any[]).map((r:any) => ({ name: r.label, completed: Number(r.completed) || 0 })) : [];
-      const disability = Array.isArray(disabilityCompletedRows) ? (disabilityCompletedRows as any[]).map((r:any) => ({ name: r.label, completed: Number(r.completed) || 0 })) : [];
+      const talukaMap = new Map<string, number>();
+      const genderMap = new Map<string, number>();
+      const districtMap = new Map<string, number>();
 
-      // Build age range pivot rows
-      const desiredOrder = ['0–5 वर्ष','6–14 वर्ष','15–18 वर्ष','19–35 वर्ष','36–60 वर्ष','60+ वर्ष'];
-      const ageRanges = desiredOrder.map((label) => {
-        const male = (ageRangeRows as any[]).find(r => r.age_range === label && r.gender_key === 'पुरुष')?.c || 0;
-        const female = (ageRangeRows as any[]).find(r => r.age_range === label && r.gender_key === 'स्त्री')?.c || 0;
-        const other = (ageRangeRows as any[]).find(r => r.age_range === label && r.gender_key === 'इतर')?.c || 0;
-        return { label, male: Number(male)||0, female: Number(female)||0, other: Number(other)||0, total: Number(male||0)+Number(female||0)+Number(other||0) };
-      });
+      type AgeBucket = { label: string; male: number; female: number; other: number; total: number };
+      const ageBuckets: AgeBucket[] = [
+        { label: '0-17', male: 0, female: 0, other: 0, total: 0 },
+        { label: '18-30', male: 0, female: 0, other: 0, total: 0 },
+        { label: '31-45', male: 0, female: 0, other: 0, total: 0 },
+        { label: '46-60', male: 0, female: 0, other: 0, total: 0 },
+        { label: '60+', male: 0, female: 0, other: 0, total: 0 },
+      ];
+
+      const normalizeGender = (value: any) => {
+        const raw = (value || '').toString().trim().toLowerCase();
+        if (!raw) return 'इतर';
+        if (['male', 'm', 'पुरुष', 'man'].some(k => raw.includes(k))) return 'पुरुष';
+        if (['female', 'f', 'स्त्री', 'woman'].some(k => raw.includes(k))) return 'स्त्री';
+        return 'इतर';
+      };
+
+      const parseDobToAge = (dob: any) => {
+        if (!dob) return null;
+        const raw = dob.toString().trim();
+        if (!raw) return null;
+        let date: Date | null = null;
+        const direct = new Date(raw);
+        if (!isNaN(direct.getTime())) date = direct;
+        if (!date && raw.includes('/')) {
+          const parts = raw.split(/[\/\-\.]/).filter(Boolean);
+          if (parts.length === 3) {
+            const [p1, p2, p3] = parts;
+            const dayFirst = new Date(`${p3.length === 4 ? p3 : `20${p3}`}-${p2.padStart(2, '0')}-${p1.padStart(2, '0')}`);
+            if (!isNaN(dayFirst.getTime())) date = dayFirst;
+          }
+        }
+        if (!date) return null;
+        const today = new Date();
+        let age = today.getFullYear() - date.getFullYear();
+        const mDiff = today.getMonth() - date.getMonth();
+        if (mDiff < 0 || (mDiff === 0 && today.getDate() < date.getDate())) age--;
+        if (!Number.isFinite(age) || age < 0 || age > 120) return null;
+        return age;
+      };
+
+      if (Array.isArray(completedDetailsRows)) {
+        for (const row of completedDetailsRows as any[]) {
+          const talukaName = (row.taluka || 'इतर').toString().trim() || 'इतर';
+          talukaMap.set(talukaName, (talukaMap.get(talukaName) || 0) + 1);
+
+          const genderLabel = normalizeGender(row.gender);
+          genderMap.set(genderLabel, (genderMap.get(genderLabel) || 0) + 1);
+
+          const districtName = (row.district || 'इतर').toString().trim() || 'इतर';
+          districtMap.set(districtName, (districtMap.get(districtName) || 0) + 1);
+
+          const age = parseDobToAge(row.dob);
+          if (age !== null) {
+            let bucket: AgeBucket;
+            if (age < 18) bucket = ageBuckets[0];
+            else if (age <= 30) bucket = ageBuckets[1];
+            else if (age <= 45) bucket = ageBuckets[2];
+            else if (age <= 60) bucket = ageBuckets[3];
+            else bucket = ageBuckets[4];
+            bucket.total += 1;
+            if (genderLabel === 'पुरुष') bucket.male += 1;
+            else if (genderLabel === 'स्त्री') bucket.female += 1;
+            else bucket.other += 1;
+          }
+        }
+      }
+
+      const taluka = Array.from(talukaMap.entries())
+        .map(([name, completed]) => ({ name, completed }))
+        .sort((a, b) => b.completed - a.completed)
+        .slice(0, 10);
+
+      const gender = Array.from(genderMap.entries())
+        .map(([name, completed]) => ({ name, completed }))
+        .sort((a, b) => b.completed - a.completed);
+
+      const district = Array.from(districtMap.entries())
+        .map(([name, completed]) => ({ name, completed }))
+        .sort((a, b) => b.completed - a.completed)
+        .slice(0, 10);
+
+      const ageRanges = ageBuckets.filter(bucket => bucket.total > 0);
 
       const roleMap: Record<string, number> = {};
       if (Array.isArray(roleCountRows)) {
@@ -262,7 +276,7 @@ export async function GET(_req: NextRequest) {
         data: {
           totalSurveys,
           surveysToday,
-          totalAnswers,
+          completedSurveys,
           pendingSurveys,
           completionRate,
           otpToday: {
@@ -277,7 +291,7 @@ export async function GET(_req: NextRequest) {
           },
           activeQuestions,
           sections: Array.isArray(sectionsRows) ? (sectionsRows as any[]).map((r:any) => r.name).filter((n:any) => typeof n === 'string' && n.length > 0) : [],
-          breakdowns: { taluka, gender, disability, ageRanges, pendingOverall: pendingSurveys },
+          breakdowns: { taluka, gender, district, ageRanges, pendingOverall: pendingSurveys },
           roles: {
             field_officer: fieldOfficerRoles,
             therapy_specialist: therapyRoles,

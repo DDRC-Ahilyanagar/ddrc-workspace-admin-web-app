@@ -36,7 +36,20 @@ export const GET = async (request: NextRequest) => {
     );
   } catch (error: any) {
     const TALUKAS = [
-      'Nagar','Akole','Jamkhed','Karjat','Kopargaon','Newasa','Parner','Pathardi','Rahata','Rahuri','Sangamner','Shevgaon','Shrirampur','Shrigonda'
+      'Nagar',
+      'Akole',
+      'Jamkhed',
+      'Karjat',
+      'Kopargaon',
+      'Newasa',
+      'Parner',
+      'Pathardi',
+      'Rahata',
+      'Rahuri',
+      'Sangamner',
+      'Shevgaon',
+      'Shrirampur',
+      'Shrigonda',
     ];
     return NextResponse.json({ ok: true, talukas: TALUKAS });
   }

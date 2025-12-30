@@ -21,7 +21,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (source && source !== 'web' && role && !['field_officer', 'supervisor'].includes(role)) {
+    const allowedMobileRoles = ['field_officer', 'supervisor', 'therapy_specialist', 'admin'];
+    if (source && source !== 'web' && role && !allowedMobileRoles.includes(role)) {
       return NextResponse.json(
         { ok: false, error: 'forbidden_role' },
         { status: 403 }
@@ -65,25 +66,104 @@ export async function POST(req: NextRequest) {
       .then(([r]) => (Array.isArray(r) ? (r as any[]) : []))
       .catch(() => [] as any[]);
 
+    // Debug: Check total surveys count
+    const debugCountPromise = pool
+      .query(`SELECT COUNT(*) as total FROM surveys WHERE user_id = ?`, [user.id])
+      .then(([rows]) => {
+        const total = Array.isArray(rows) && (rows as any[]).length > 0 ? Number((rows as any[])[0]?.total) : 0;
+        console.log(`Total surveys for user ${user.id}: ${total}`);
+        return total;
+      })
+      .catch(() => 0);
+
+    // Get all mandatory/required questions (is_required = 1)
+    const requiredQuestionsPromise = pool
+      .query(
+        `SELECT id FROM questions 
+         WHERE is_required = 1
+           AND (status = 'Active' OR status IS NULL OR status = '')
+         ORDER BY id`,
+        []
+      )
+      .then(([rows]) => {
+        const requiredIds = new Set<number>();
+        if (Array.isArray(rows)) {
+          (rows as any[]).forEach((r: any) => {
+            if (r?.id) requiredIds.add(Number(r.id));
+          });
+        }
+        console.log(`Found ${requiredIds.size} required questions`);
+        return requiredIds;
+      })
+      .catch((err) => {
+        console.error('Error fetching required questions:', err);
+        return new Set<number>();
+      });
+
     const countsPromise = pool
       .query(
-        `SELECT 
-           SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
-           SUM(CASE WHEN status IS NULL OR status = 'pending' THEN 1 ELSE 0 END) AS pending
+        `SELECT id, survey_json, no_of_questions_answered, no_of_questions_unanswered
          FROM surveys WHERE user_id = ?`,
         [user.id]
       )
-      .then(([rows]) => {
-        if (Array.isArray(rows) && (rows as any[]).length > 0) {
-          const r = (rows as any[])[0];
-          return {
-            completed: parseInt(r?.completed || 0),
-            pending: parseInt(r?.pending || 0),
-          };
+      .then(async (surveysResult) => {
+        const requiredQuestionIds = await requiredQuestionsPromise;
+        const totalSurveys = await debugCountPromise;
+        
+        const surveys = Array.isArray(surveysResult[0]) ? (surveysResult[0] as any[]) : [];
+        let completed = 0;
+        let pending = 0;
+
+        for (const survey of surveys) {
+          if (!survey.survey_json) {
+            pending++;
+            continue;
+          }
+
+          try {
+            const surveyData = typeof survey.survey_json === 'string' 
+              ? JSON.parse(survey.survey_json) 
+              : survey.survey_json;
+            
+            const answers = surveyData.answers || [];
+            const answeredQuestionIds = new Set<number>();
+            
+            // Collect all answered question IDs (excluding '--' answers)
+            answers.forEach((ans: any) => {
+              const qid = Number(ans.question_id);
+              const answer = String(ans.answer || '').trim();
+              if (qid && answer && answer !== '--' && answer !== '') {
+                answeredQuestionIds.add(qid);
+              }
+            });
+
+            // Check if all required questions are answered
+            let allRequiredAnswered = true;
+            for (const reqId of requiredQuestionIds) {
+              if (!answeredQuestionIds.has(reqId)) {
+                allRequiredAnswered = false;
+                break;
+              }
+            }
+
+            if (allRequiredAnswered && requiredQuestionIds.size > 0) {
+              completed++;
+            } else {
+              pending++;
+            }
+          } catch (parseError) {
+            console.error('Error parsing survey JSON for survey', survey.id, ':', parseError);
+            pending++;
+          }
         }
-        return { completed: 0, pending: 0 };
+
+        console.log(`Dashboard counts for user ${user.id}: total=${totalSurveys}, required_questions=${requiredQuestionIds.size}, completed=${completed}, pending=${pending}`);
+        return { completed, pending };
       })
-      .catch(() => ({ completed: 0, pending: 0 }));
+      .catch((err) => {
+        console.error('Dashboard counts query error for user', user.id, ':', err);
+        return { completed: 0, pending: 0 };
+      });
 
     // Fetch rate in parallel too
     const ratePromise = pool

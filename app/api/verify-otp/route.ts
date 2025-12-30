@@ -3,6 +3,9 @@ import { dbQuery, dbQueryOne, getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';
 import { validatePhone, validateOTP, validateRequest } from '@/lib/validation';
 
+const normalizeRole = (value?: string | null) =>
+  (value || '').toString().trim().toLowerCase().replace(/\s+/g, '_');
+
 /**
  * @swagger
  * /api/verify-otp:
@@ -48,12 +51,14 @@ export async function POST(request: NextRequest) {
     const headerRole = request.headers.get('x-role')?.toString().toLowerCase() ?? '';
 
     const source = (body.source || headerSource || '').toString().toLowerCase();
-    const role = (body.role || headerRole || '').toString().toLowerCase();
+    const role = normalizeRole(body.role || headerRole);
     const phone = (body.phone || '').replace(/\D/g, '');
     const otp = (body.otp || '').replace(/\D/g, '');
     const name = (body.name || '').trim();
+    // Check if this is for survey verification (no user authentication required)
+    const isSurveyVerification = body.survey_verification === true || body.survey_verification === 'true';
 
-    Logger.info('hit_verify_otp', { raw: JSON.stringify(body), req: body });
+    Logger.info('hit_verify_otp', { raw: JSON.stringify(body), req: body, isSurveyVerification });
 
     const validation = validateRequest(
       { ...body, source, role },
@@ -66,9 +71,9 @@ export async function POST(request: NextRequest) {
           return ['web', 'mobile'].includes(v);
         },
         role: (r) => {
-          const v = (r || '').toString().toLowerCase();
+          const v = normalizeRole(r);
           if (!v) return true;
-          return ['admin', 'supervisor', 'field_officer'].includes(v);
+          return ['admin', 'supervisor', 'field_officer', 'therapy_specialist'].includes(v);
         },
       }
     );
@@ -101,103 +106,192 @@ export async function POST(request: NextRequest) {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
       `);
 
-      // Find latest unexpired sent OTP
-      const [rows] = await connection.execute(
-        `SELECT * FROM otp_verifications 
-         WHERE phone = ? AND status IN ('sent') 
-         ORDER BY id DESC LIMIT 1`,
-        [phone]
-      );
+      // Test mode for Google Play review: Allow test phone + OTP combination
+      const TEST_PHONE = '1234567890';
+      const TEST_OTP = '123456';
+      const isTestMode = phone === TEST_PHONE && otp === TEST_OTP;
 
-      const row = Array.isArray(rows) && rows.length > 0 ? rows[0] as any : null;
-
-      if (!row) {
-        return NextResponse.json(
-          { ok: false, error: 'OTP not found' },
-          { status: 404 }
+      // Find latest unexpired sent OTP (skip for test mode)
+      let row: any = null;
+      if (!isTestMode) {
+        const [rows] = await connection.execute(
+          `SELECT * FROM otp_verifications 
+           WHERE phone = ? AND status IN ('sent') 
+           ORDER BY id DESC LIMIT 1`,
+          [phone]
         );
+
+        row = Array.isArray(rows) && rows.length > 0 ? rows[0] as any : null;
+
+        if (!row) {
+          // No matching OTP in the DB – treat it as a stale request
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'otp_not_found',
+              message: 'ओटीपी सापडला नाही. कृपया पुन्हा विनंती करा.',
+            },
+            { status: 404 }
+          );
+        }
       }
 
-      if (new Date(row.expires_at) < new Date()) {
+      if (isTestMode) {
+        // For test mode, skip OTP validation and expiration checks
+        Logger.info('verify_otp_test_mode', { phone, otp });
+      } else {
+        // Normal OTP validation flow
+        if (new Date(row.expires_at) < new Date()) {
+          await connection.execute(
+            `UPDATE otp_verifications SET status = 'expired', updated_at = NOW() WHERE id = ?`,
+            [row.id]
+          );
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'otp_expired',
+              message: 'ओटीपीची वेळ संपली. कृपया नव्याने ओटीपी मागवा.',
+            },
+            { status: 410 }
+          );
+        }
+
+        if (row.otp !== otp) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'otp_invalid',
+              message: 'ओटीपी अयोग्य आहे. पुन्हा प्रयत्न करा.',
+            },
+            { status: 401 }
+          );
+        }
+      }
+
+      // Mark verified (skip for test mode if no row exists)
+      if (!isTestMode || row) {
         await connection.execute(
-          `UPDATE otp_verifications SET status = 'expired', updated_at = NOW() WHERE id = ?`,
+          `UPDATE otp_verifications 
+           SET status = 'verified', verified_at = NOW(), updated_at = NOW() 
+           WHERE id = ?`,
           [row.id]
         );
-        return NextResponse.json(
-          { ok: false, error: 'OTP expired' },
-          { status: 410 }
-        );
       }
 
-      if (row.otp !== otp) {
-        return NextResponse.json(
-          { ok: false, error: 'Invalid OTP' },
-          { status: 401 }
-        );
+      // For survey verification: Just return success, no user authentication needed
+      if (isSurveyVerification) {
+        Logger.info('verify_otp_survey_verification_ok', { phone });
+        return NextResponse.json({ 
+          ok: true, 
+          message: 'OTP verified successfully'
+        });
       }
-
-      // Mark verified
-      await connection.execute(
-        `UPDATE otp_verifications 
-         SET status = 'verified', verified_at = NOW(), updated_at = NOW() 
-         WHERE id = ?`,
-        [row.id]
-      );
 
       // Require existing user with active status and role based on source
       const isWebRequest = source === 'web';
 
-      // First, get the user's actual role from the database
+      // First, get the user's actual role from the database so that mobile/web
+      // clients cannot spoof their role via request payloads.
       const [userCheck] = await connection.execute(
-        `SELECT u.id, u.name, u.contact_number, u.passkey, u.user_type, ut.user_type AS related_type
+        `SELECT u.id, u.name, u.contact_number, u.passkey, u.user_type, u.status, u.is_active, ut.user_type AS related_type
          FROM users u
          LEFT JOIN user_types ut ON ut.id = u.user_type_id
          WHERE u.contact_number = ?
-           AND (u.status = 'active' OR u.is_active = 1)
+           AND (COALESCE(u.status, '') = 'active' OR COALESCE(u.is_active, 0) = 1)
          LIMIT 1`,
         [phone]
       );
       
       const userData = Array.isArray(userCheck) && (userCheck as any[]).length > 0 ? (userCheck as any[])[0] : null;
       
-      if (!userData) {
+      // For test mode, create a dummy user data if not found
+      let finalUserData = userData;
+      if (!userData && isTestMode) {
+        Logger.info('verify_otp_test_mode_user_not_found', { phone });
+        // Create a test user object for test mode
+        finalUserData = {
+          id: 999999,
+          name: 'Test User',
+          contact_number: TEST_PHONE,
+          passkey: null,
+          user_type: 'field_officer',
+          status: 'active',
+          is_active: 1,
+          related_type: 'field_officer'
+        };
+      } else if (!userData) {
         return NextResponse.json(
-          { ok: false, error: 'user_not_found' },
+          {
+            ok: false,
+            error: 'user_not_found',
+            message: 'वापरकर्ता नोंदणीकृत नाही. कृपया प्रवेश विनंती पाठवा.',
+          },
           { status: 404 }
         );
       }
 
       // Check user's actual role from database
-      const userType = (userData.user_type || '').toLowerCase();
-      const relatedType = (userData.related_type || '').toLowerCase();
-      const isAdmin = userType === 'admin' || relatedType === 'admin';
-      const isSupervisor = userType === 'supervisor' || relatedType === 'supervisor';
-      const isFieldOfficer = userType === 'field_officer' || relatedType === 'field officer' || relatedType === 'field_officer';
+      const userType = normalizeRole(finalUserData.user_type);
+      const relatedType = normalizeRole(finalUserData.related_type);
+      const effectiveRole = userType || relatedType;
+      const isAdmin = effectiveRole === 'admin';
+      const isSupervisor = effectiveRole === 'supervisor';
+      const isFieldOfficer = effectiveRole === 'field_officer';
 
       // For web requests, only allow admin/supervisor users
       if (isWebRequest && !isAdmin && !isSupervisor) {
         return NextResponse.json(
-          { ok: false, error: 'forbidden_role' },
+          {
+            ok: false,
+            error: 'forbidden_role',
+            message: 'या भूमिकेला वेब प्रवेश नाही.',
+          },
           { status: 403 }
         );
       }
 
-      // For mobile requests, allow field_officer/supervisor/admin users
-      if (!isWebRequest && role && !isFieldOfficer && !isSupervisor && !isAdmin) {
+      // For mobile requests, allow field_officer/supervisor/admin/therapy_specialist users
+      const isTherapySpecialist =
+        effectiveRole === 'therapy_specialist' ||
+        effectiveRole === 'practitioner';
+
+      if (
+        !isWebRequest &&
+        role &&
+        !isFieldOfficer &&
+        !isSupervisor &&
+        !isAdmin &&
+        !isTherapySpecialist
+      ) {
         return NextResponse.json(
-          { ok: false, error: 'forbidden_role' },
+          {
+            ok: false,
+            error: 'forbidden_role',
+            message: 'या भूमिकेला मोबाइल प्रवेश नाही.',
+          },
           { status: 403 }
         );
       }
 
-      Logger.info('verify_otp_ok', { phone, user_id: userData.id, has_passkey: !!userData.passkey });
+      if (!isWebRequest && role && effectiveRole && role !== effectiveRole) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'forbidden_role',
+            message: 'निवडलेली भूमिका आणि वापरकर्त्याची वास्तविक भूमिका जुळत नाही.',
+          },
+          { status: 403 }
+        );
+      }
+
+      Logger.info('verify_otp_ok', { phone, user_id: finalUserData.id, has_passkey: !!finalUserData.passkey, isTestMode });
       const response = NextResponse.json({ 
         ok: true, 
         user: {
-          id: userData.id,
-          name: userData.name,
-          phone: userData.contact_number,
-          passkey: userData.passkey ? String(userData.passkey) : null,
+          id: finalUserData.id,
+          name: finalUserData.name,
+          phone: finalUserData.contact_number,
+          passkey: finalUserData.passkey ? String(finalUserData.passkey) : null,
         }
       });
 

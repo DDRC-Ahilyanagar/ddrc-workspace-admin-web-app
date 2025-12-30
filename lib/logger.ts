@@ -17,7 +17,7 @@ function writeLog(level: string, message: string, context: any = {}) {
     ? JSON.stringify(context, null, 2) 
     : '';
   const line = `[${timestamp}] ${level}: ${message} ${ctx}\n`;
-  fs.appendFileSync(LOG_FILE, line, 'utf8');
+  fs.appendFile(LOG_FILE, line, 'utf8', () => {});
 }
 
 export const Logger = {

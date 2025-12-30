@@ -30,6 +30,14 @@ interface Section {
   updated_at?: string | null;
 }
 
+type OcrDefaults = {
+  aadhaar?: string;
+  name?: string;
+  gender?: string;
+  dob?: string;
+  address?: string;
+};
+
 function SectionsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -59,6 +67,75 @@ function SectionsContent() {
   const [aadhaarFrontFile, setAadhaarFrontFile] = useState<File | null>(null);
   const [aadhaarBackFile, setAadhaarBackFile] = useState<File | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
+
+  const getOcrStorageKey = () => (aadharId ? `ocr_defaults_${aadharId}` : '');
+
+  const readOcrDefaults = (): OcrDefaults => {
+    if (typeof window === 'undefined' || !aadharId) return {};
+    try {
+      const raw = localStorage.getItem(getOcrStorageKey());
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const persistOcrDefaults = (partial: OcrDefaults) => {
+    if (typeof window === 'undefined' || !aadharId) return;
+    const key = getOcrStorageKey();
+    if (!key) return;
+    const current = readOcrDefaults();
+    let changed = false;
+    Object.entries(partial || {}).forEach(([field, value]) => {
+      if (typeof value !== 'string') return;
+      const trimmed = value.trim();
+      if (!trimmed) return;
+      if (current[field as keyof OcrDefaults] !== trimmed) {
+        current[field as keyof OcrDefaults] = trimmed;
+        changed = true;
+      }
+    });
+    if (changed) {
+      localStorage.setItem(key, JSON.stringify(current));
+    }
+  };
+
+  const mergeAnswersWithOcr = (baseAnswers: Record<string, any>, sectionQuestions: Question[]) => {
+    if (!sectionQuestions.length) return baseAnswers;
+    const defaults = readOcrDefaults();
+    if (!Object.keys(defaults).length) return baseAnswers;
+    const merged = { ...baseAnswers };
+    const setIfMissing = (predicate: (q: Question) => boolean, value?: string) => {
+      if (!value) return;
+      const qMatch = sectionQuestions.find(predicate);
+      if (!qMatch) return;
+      const existing = merged[qMatch.id];
+      if (existing === undefined || existing === null || existing === '') {
+        merged[qMatch.id] = value;
+      }
+    };
+    setIfMissing(
+      (q) => (q.question.includes('आधार') || q.question.toLowerCase().includes('aadhaar')) && q.question_type.toLowerCase() !== 'upload',
+      defaults.aadhaar
+    );
+    setIfMissing(
+      (q) => q.question.toLowerCase().includes('name') || q.question.includes('नाव'),
+      defaults.name
+    );
+    setIfMissing(
+      (q) => q.question.toLowerCase().includes('gender') || q.question.includes('लिंग'),
+      defaults.gender
+    );
+    setIfMissing(
+      (q) => q.question.toLowerCase().includes('dob') || q.question.includes('जन्म'),
+      defaults.dob
+    );
+    setIfMissing(
+      (q) => q.question.toLowerCase().includes('address') || q.question.includes('पत्ता'),
+      defaults.address
+    );
+    return merged;
+  };
 
   // One-time init DataTables (guarded against React StrictMode double-invoke)
   const didInitRef = useRef(false);
@@ -228,9 +305,10 @@ function SectionsContent() {
         
         // Load saved answers from localStorage
         const savedAnswers = localStorage.getItem(`answers_${aadharId}_${sectionId}`);
-        if (savedAnswers) {
-          setAnswers(JSON.parse(savedAnswers));
-        }
+        const parsedAnswers = savedAnswers ? JSON.parse(savedAnswers) : {};
+        const answersWithOcr = mergeAnswersWithOcr(parsedAnswers, sectionQuestions);
+        setAnswers(answersWithOcr);
+        localStorage.setItem(`answers_${aadharId}_${sectionId}`, JSON.stringify(answersWithOcr));
       }
     } catch (err: any) {
       setError('प्रश्न लोड करण्यात अडचण');
@@ -343,6 +421,13 @@ function SectionsContent() {
             const ocrResult = await processOCR(file, 'aadhaar');
             if (ocrResult.ok && ocrResult.aadhaar_info) {
               const aadhaarInfo = ocrResult.aadhaar_info;
+              persistOcrDefaults({
+                aadhaar: aadhaarInfo.aadhaar,
+                name: aadhaarInfo.name,
+                gender: aadhaarInfo.gender,
+                dob: aadhaarInfo.dob,
+                address: aadhaarInfo.address,
+              });
               
               // Auto-fill Aadhaar number if found
               if (aadhaarInfo.aadhaar) {
@@ -398,6 +483,13 @@ function SectionsContent() {
       const res = await processOCRDual(aadhaarFrontFile, aadhaarBackFile, 'aadhaar', passkey);
       if (res.ok && res.aadhaar_info) {
         const info = res.aadhaar_info as any;
+        persistOcrDefaults({
+          aadhaar: info.aadhaar,
+          name: info.name,
+          gender: info.gender,
+          dob: info.dob,
+          address: info.address,
+        });
         // Map to known fields if questions exist
         const setIf = (predicate: (q: Question) => boolean, value?: string) => {
           if (!value) return;
@@ -421,7 +513,8 @@ function SectionsContent() {
     if (!q.rendering_condition || q.rendering_condition === 'No') return true;
     
     const renderingQuestion = questions.find(x => 
-      x.id.toString() === q.rendering_question?.toString()
+      x.id.toString() === q.rendering_question?.toString() ||
+      x.question === q.rendering_question
     );
     if (!renderingQuestion) return false;
     

@@ -4,8 +4,8 @@ generator client {
 }
 
 datasource db {
-  provider   = "mysql"
-  url        = env("DATABASE_URL")
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
   relationMode = "prisma"
 }
 
@@ -38,40 +38,51 @@ enum SurveyStatus {
   in_progress
 }
 
+enum MatadarSanghStatus {
+  Active
+  Inactive
+}
+
+enum ActiveInactiveStatus {
+  Active
+  Inactive
+}
+
 model UserTypeLookup {
-  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  userType   String?  @map("user_type") @db.VarChar(191)
-  createdAt  DateTime? @map("created_at") @default(now())
-  updatedAt  DateTime? @map("updated_at") @default(now()) @updatedAt
-  users      User[]   @relation("UserTypeRelation")
+  id        BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  userType  String?   @map("user_type") @db.VarChar(191)
+  createdAt DateTime? @default(now()) @map("created_at")
+  updatedAt DateTime? @default(now()) @updatedAt @map("updated_at")
+  users     User[]    @relation("UserTypeRelation")
 
   @@map("user_types")
 }
 
 model User {
-  id             BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
-  name           String      @db.VarChar(255)
-  email          String?     @db.VarChar(255)
-  contactNumber  String?     @map("contact_number") @db.VarChar(20)
-  passkey        Int?        @db.UnsignedSmallInt
-  userType       UserType    @map("user_type") @default(field_officer)
-  isActive       Boolean     @map("is_active") @default(true)
-  emailVerifiedAt DateTime?  @map("email_verified_at")
-  otpVerifiedAt  DateTime?   @map("otp_verified_at")
-  lastLogin      DateTime?   @map("last_login")
-  password       String?     @db.VarChar(255)
-  rememberToken  String?     @map("remember_token") @db.VarChar(100)
-  createdAt      DateTime?   @map("created_at") @default(now())
-  updatedAt      DateTime?   @map("updated_at") @default(now()) @updatedAt
-  userTypeId     BigInt?     @map("user_type_id") @db.UnsignedBigInt
-  profilePhoto   String?     @map("profile_photo") @db.Text
-  createdBy      BigInt?     @map("created_by") @db.UnsignedBigInt
-  updatedBy      BigInt?     @map("updated_by") @db.UnsignedBigInt
-  status         UserStatus? @default(active)
+  id              BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
+  name            String      @db.VarChar(255)
+  email           String?     @db.VarChar(255)
+  contactNumber   String?     @map("contact_number") @db.VarChar(20)
+  passkey         Int?        @db.UnsignedSmallInt
+  userType        UserType    @default(field_officer) @map("user_type")
+  isActive        Boolean     @default(true) @map("is_active")
+  emailVerifiedAt DateTime?   @map("email_verified_at")
+  otpVerifiedAt   DateTime?   @map("otp_verified_at")
+  lastLogin       DateTime?   @map("last_login")
+  password        String?     @db.VarChar(255)
+  rememberToken   String?     @map("remember_token") @db.VarChar(100)
+  createdAt       DateTime?   @default(now()) @map("created_at")
+  updatedAt       DateTime?   @default(now()) @updatedAt @map("updated_at")
+  userTypeId      BigInt?     @map("user_type_id") @db.UnsignedBigInt
+  profilePhoto    String?     @map("profile_photo") @db.Text
+  createdBy       BigInt?     @map("created_by") @db.UnsignedBigInt
+  updatedBy       BigInt?     @map("updated_by") @db.UnsignedBigInt
+  status          UserStatus? @default(active)
 
-  typeLookup     UserTypeLookup? @relation("UserTypeRelation", fields: [userTypeId], references: [id])
-  surveys        Survey[]
-  surveyAadhar   SurveyAadhar[]
+  typeLookup   UserTypeLookup? @relation("UserTypeRelation", fields: [userTypeId], references: [id])
+  surveys      Survey[]
+  surveyAadhar SurveyAadhar[]
+  surveyFiles  SurveyFile[]
 
   @@unique([email])
   @@unique([contactNumber])
@@ -85,8 +96,8 @@ model OtpVerification {
   status     OtpStatus @default(sent)
   expiresAt  DateTime? @map("expires_at")
   verifiedAt DateTime? @map("verified_at")
-  createdAt  DateTime? @map("created_at") @default(now())
-  updatedAt  DateTime? @map("updated_at") @default(now()) @updatedAt
+  createdAt  DateTime? @default(now()) @map("created_at")
+  updatedAt  DateTime? @default(now()) @updatedAt @map("updated_at")
 
   @@index([phone], map: "idx_phone")
   @@index([status], map: "idx_status")
@@ -100,8 +111,8 @@ model AccessRequest {
   selfieUrl String              @map("selfie_url") @db.VarChar(255)
   status    AccessRequestStatus @default(pending)
   adminNote String?             @map("admin_note") @db.Text
-  createdAt DateTime            @map("created_at") @default(now())
-  updatedAt DateTime            @map("updated_at") @default(now()) @updatedAt
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @default(now()) @updatedAt @map("updated_at")
 
   @@index([phone], map: "idx_phone")
   @@index([status], map: "idx_status")
@@ -109,42 +120,159 @@ model AccessRequest {
 }
 
 model AppSetting {
-  id           Int      @id @default(autoincrement()) @db.UnsignedInt
-  settingKey   String   @map("setting_key") @db.VarChar(191)
-  settingValue String?  @map("setting_value") @db.Text
-  createdAt    DateTime? @map("created_at") @default(now())
-  updatedAt    DateTime? @map("updated_at") @default(now()) @updatedAt
+  id           Int       @id @default(autoincrement()) @db.UnsignedInt
+  settingKey   String    @map("setting_key") @db.VarChar(191)
+  settingValue String?   @map("setting_value") @db.Text
+  createdAt    DateTime? @default(now()) @map("created_at")
+  updatedAt    DateTime? @default(now()) @updatedAt @map("updated_at")
 
   @@unique([settingKey])
   @@map("app_settings")
 }
 
 model SurveyAadhar {
-  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  aadharNo   String?  @map("aadhar_no") @db.VarChar(50)
-  userId     BigInt   @map("user_id") @db.UnsignedBigInt
-  frontImage String?  @map("front_image") @db.VarChar(255)
-  backImage  String?  @map("back_image") @db.VarChar(255)
-  createdAt  DateTime? @map("created_at") @default(now())
-  updatedAt  DateTime? @map("updated_at") @default(now()) @updatedAt
+  id        BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  userId    BigInt    @map("user_id") @db.UnsignedBigInt
+  aadharNo  String    @map("aadhar_no") @db.VarChar(20)
+  createdAt DateTime? @default(now()) @map("created_at")
+  updatedAt DateTime? @default(now()) @updatedAt @map("updated_at")
 
-  user       User     @relation(fields: [userId], references: [id])
+  user    User         @relation(fields: [userId], references: [id])
+  surveys Survey[]
+  files   SurveyFile[]
 
+  @@unique([aadharNo])
   @@index([userId])
   @@map("survey_aadhar")
 }
 
 model Survey {
-  id        BigInt       @id @default(autoincrement()) @db.UnsignedBigInt
-  userId    BigInt       @map("user_id") @db.UnsignedBigInt
-  status    SurveyStatus @default(pending)
-  createdAt DateTime?    @map("created_at") @default(now())
-  updatedAt DateTime?    @map("updated_at") @default(now()) @updatedAt
+  id                      BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  userId                  BigInt    @map("user_id") @db.UnsignedBigInt
+  aadhaarId               BigInt    @map("aadhaar_id") @db.UnsignedBigInt
+  noOfQuestionsAnswered   Int       @default(0) @map("no_of_questions_answered")
+  noOfQuestionsUnanswered Int       @default(0) @map("no_of_questions_unanswered")
+  surveyJson              String?   @map("survey_json") @db.LongText
+  jsonPath                String?   @map("json_path") @db.VarChar(255)
+  createdAt               DateTime? @default(now()) @map("created_at")
+  updatedAt               DateTime? @default(now()) @updatedAt @map("updated_at")
 
-  user      User         @relation(fields: [userId], references: [id])
+  user   User         @relation(fields: [userId], references: [id])
+  aadhar SurveyAadhar @relation(fields: [aadhaarId], references: [id])
 
+  @@unique([aadhaarId])
   @@index([userId])
-  @@index([status])
+  @@index([aadhaarId])
   @@map("surveys")
 }
 
+enum SurveyFileType {
+  aadhaar_front
+  aadhaar_back
+  udid
+  certificate
+  other
+}
+
+model SurveyFile {
+  id        BigInt         @id @default(autoincrement()) @db.UnsignedBigInt
+  userId    BigInt         @map("user_id") @db.UnsignedBigInt
+  aadhaarId BigInt         @map("aadhaar_id") @db.UnsignedBigInt
+  fileType  SurveyFileType @map("file_type")
+  filePath  String         @map("file_path") @db.VarChar(500)
+  createdAt DateTime?      @default(now()) @map("created_at")
+  updatedAt DateTime?      @default(now()) @updatedAt @map("updated_at")
+
+  user   User         @relation(fields: [userId], references: [id])
+  aadhar SurveyAadhar @relation(fields: [aadhaarId], references: [id])
+
+  @@index([userId])
+  @@index([aadhaarId])
+  @@index([fileType])
+  @@map("survey_files")
+}
+
+model MatadarSanghName {
+  id        Int                 @id @default(autoincrement())
+  sanghId   Int?                 @map("sangh_id")
+  name      String               @db.VarChar(255)
+  status    MatadarSanghStatus?  @default(Active)
+  createdBy Int?                 @map("created_by")
+  createdOn DateTime?             @map("created_on")
+  updatedBy Int?                 @map("updated_by")
+  updatedOn DateTime?             @map("updated_on")
+
+  @@index([sanghId])
+  @@map("tbl_matadar_sangh_names")
+}
+
+model DisabilityDiagnosis {
+  id           Int                  @id @default(autoincrement())
+  disabilityId Int?                 @map("disability_id")
+  diagnosis    String               @db.VarChar(255)
+  status       ActiveInactiveStatus? @default(Active)
+  createdBy    Int?                 @map("created_by")
+  createdOn    DateTime?            @map("created_on")
+  updatedBy    Int?                 @map("updated_by")
+  updatedOn    DateTime?            @map("updated_on")
+
+  @@index([disabilityId])
+  @@map("tbl_disability_diagnoses")
+}
+
+// Early Detection Module - लवकर शोध
+// Parent phone number is unique, can have multiple babies
+model EarlyDetectionBaby {
+  id                      BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  parentPhone             String    @map("parent_phone") @db.VarChar(20)
+  userId                  BigInt?    @map("user_id") @db.UnsignedBigInt
+  
+  // Parents & Personal Information
+  fatherName              String?    @map("father_name") @db.VarChar(255)
+  motherName              String?    @map("mother_name") @db.VarChar(255)
+  babyName                String?    @map("baby_name") @db.VarChar(255)
+  babyBirthDate           DateTime?  @map("baby_birth_date") @db.Date
+  ageMonths               Int?       @map("age_months") @db.UnsignedSmallInt
+  
+  // Health & Siblings Information
+  gender                  String?    @db.VarChar(20)
+  currentWeight           Decimal?   @map("current_weight") @db.Decimal(5, 2)
+  birthWeight             Decimal?   @map("birth_weight") @db.Decimal(5, 2)
+  lengthHeight            Decimal?   @map("length_height") @db.Decimal(5, 2)
+  headCircumferenceAtBirth Decimal?  @map("head_circumference_at_birth") @db.Decimal(5, 2)
+  bloodGroup              String?    @map("blood_group") @db.VarChar(10)
+  noOfSiblings            Int?       @map("no_of_siblings") @db.UnsignedSmallInt
+  
+  // Address & Contact Information
+  address                 String?    @db.Text
+  district                String?    @db.VarChar(255)
+  taluka                  String?    @db.VarChar(255)
+  village                 String?    @db.VarChar(255)
+  talathi                 String?    @db.VarChar(255)
+  grampanchayat           String?    @db.VarChar(255)
+  phc                     String?    @db.VarChar(255)
+  statusUniversalEyeScreening String? @map("status_universal_eye_screening") @db.VarChar(255)
+  statusOaeTest           String?    @map("status_oae_test") @db.VarChar(255)
+  
+  // Delivery & Delivery Complications Information
+  typeOfMarriage          String?    @map("type_of_marriage") @db.VarChar(100)
+  typeOfDelivery          String?    @map("type_of_delivery") @db.VarChar(100)
+  prenatalComplications   String?    @map("prenatal_complications") @db.Text // JSON array
+  perinatalComplications  String?    @map("perinatal_complications") @db.Text // JSON array
+  postnatalComplications  String?    @map("postnatal_complications") @db.Text // JSON array
+  
+  // Ongoing and Past Medications Information
+  previousTreatment       String?    @map("previous_treatment") @db.Text
+  currentTreatment        String?    @map("current_treatment") @db.Text
+  currentMedications      String?    @map("current_medications") @db.Text
+  
+  createdAt               DateTime?  @default(now()) @map("created_at")
+  updatedAt               DateTime?  @default(now()) @updatedAt @map("updated_at")
+  createdBy               BigInt?    @map("created_by") @db.UnsignedBigInt
+  updatedBy               BigInt?    @map("updated_by") @db.UnsignedBigInt
+
+  @@index([parentPhone])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("early_detection_babies")
+}

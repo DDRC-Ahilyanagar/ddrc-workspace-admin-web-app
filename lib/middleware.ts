@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Simple rate limiting store (in production, use Redis)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
+const ENABLE_RATE_LIMIT = false;
 
 const RATE_LIMIT = {
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -9,6 +10,9 @@ const RATE_LIMIT = {
 };
 
 export function rateLimit(request: NextRequest): NextResponse | null {
+  if (!ENABLE_RATE_LIMIT) {
+    return null;
+  }
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
              request.headers.get('x-real-ip') || 
              'unknown';

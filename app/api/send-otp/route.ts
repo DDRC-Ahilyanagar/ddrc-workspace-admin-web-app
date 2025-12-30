@@ -43,17 +43,30 @@ import { validatePhone, validateRequest } from '@/lib/validation';
  *       500:
  *         description: Server error
  */
+// Set route timeout to 60 seconds to match database acquireTimeout
+export const maxDuration = 60;
+
+const normalizeRole = (value?: string | null) =>
+  (value || '').toString().trim().toLowerCase().replace(/\s+/g, '_');
+
+// NOTE: This handler is intentionally verbose because mobile and web apps share
+//       the same endpoint. The additional guards make sure the selected role
+//       from the client matches the server-side records and keeps RBAC strict.
 export async function POST(request: NextRequest) {
   try {
+    // Parse the body first; mobile clients send extra metadata (role/source)
+    // that we use later in the RBAC checks.
     const body = await request.json();
     const headerSource = request.headers.get('x-source')?.toString().toLowerCase() ?? '';
     const headerRole = request.headers.get('x-role')?.toString().toLowerCase() ?? '';
 
     const source = (body.source || headerSource || '').toString().toLowerCase();
-    const role = (body.role || headerRole || '').toString().toLowerCase();
+    const role = normalizeRole(body.role || headerRole);
     const phone = (body.phone || '').replace(/\D/g, '');
+    // Check if this is for survey verification (no user approval required)
+    const isSurveyVerification = body.survey_verification === true || body.survey_verification === 'true';
 
-    Logger.info('hit_send_otp', { raw: JSON.stringify(body), req: body });
+    Logger.info('hit_send_otp', { raw: JSON.stringify(body), req: body, isSurveyVerification });
 
     const validation = validateRequest(
       { ...body, source, role },
@@ -65,10 +78,10 @@ export async function POST(request: NextRequest) {
           return ['web', 'mobile'].includes(val);
         },
         role: (r) => {
-          const val = (r || '').toString().toLowerCase();
+          const val = normalizeRole(r);
           if (!val) return true;
-          return ['admin', 'supervisor', 'field_officer'].includes(val);
-        },
+          return ['admin', 'supervisor', 'field_officer', 'therapy_specialist'].includes(val);
+        }, // Allow therapy_specialist role for mobile app access
       }
     );
 
@@ -80,65 +93,166 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user exists by contact_number first to determine their role
-    const pool = await import('@/lib/db').then(m => m.getDbPool());
-    const existConn = await pool.getConnection();
-    let userData: any = null;
+    // ============================================================================
+    // For survey verification: Skip user approval check, just verify phone number
+    // For login/authentication: Require user to exist and be approved
+    // ============================================================================
+    let pool;
     try {
-      const [users] = await existConn.execute(
-        `SELECT u.id, u.user_type, u.status, u.is_active, ut.user_type AS related_type
-         FROM users u
-         LEFT JOIN user_types ut ON ut.id = u.user_type_id
-         WHERE u.contact_number = ?
-           AND (u.status = 'active' OR u.is_active = 1)
-         LIMIT 1`,
-        [phone]
-      );
-      if (Array.isArray(users) && (users as any[]).length > 0) {
-        userData = (users as any[])[0];
-      }
-    } finally {
-      existConn.release();
-    }
-
-    // If user not found, return error
-    if (!userData) {
+      const dbModule = await import('@/lib/db');
+      pool = dbModule.getDbPool();
+    } catch (dbError: any) {
+      Logger.error('send_otp_db_import_failed', { error: dbError.message, stack: dbError.stack });
       return NextResponse.json(
-        { ok: false, error: 'user_not_found' },
-        { status: 404 }
+        { ok: false, error: 'Database connection failed' },
+        { status: 500 }
       );
     }
+    
+    let userData: any = null;
+    let effectiveRole: string = '';
 
-    // Determine allowed user types based on source
-    const isWebRequest = source === 'web';
-    const userType = (userData.user_type || '').toLowerCase();
-    const relatedType = (userData.related_type || '').toLowerCase();
-
-    // For web requests, only allow admin/supervisor users
-    if (isWebRequest) {
-      const isAdmin = userType === 'admin' || relatedType === 'admin';
-      const isSupervisor = userType === 'supervisor' || relatedType === 'supervisor';
-      if (!isAdmin && !isSupervisor) {
+    if (!isSurveyVerification) {
+      // ============================================================================
+      // CRITICAL: Approval check MUST happen BEFORE any OTP generation or SMS sending
+      // This prevents wasting OTPs and SMS costs on unapproved users
+      // ============================================================================
+      let existConn;
+      try {
+        // Add timeout wrapper to fail fast if connection takes too long
+        existConn = await Promise.race([
+          pool.getConnection(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Database connection timeout')), 25000)
+          )
+        ]) as any;
+      } catch (connError: any) {
+        Logger.error('send_otp_db_connection_failed', { error: connError.message, phone });
         return NextResponse.json(
-          { ok: false, error: 'forbidden_role' },
+          { ok: false, error: connError.message?.includes('timeout') 
+            ? 'Database connection timeout. Please try again.' 
+            : 'Database connection failed. Please try again.' },
+          { status: 500 }
+        );
+      }
+      
+      try {
+        // Fetch user once so we can show precise error messages
+        const [userCheck] = await existConn.execute(
+          `SELECT 
+             u.id, 
+             u.user_type, 
+             u.status, 
+             u.is_active, 
+             ut.user_type AS related_type
+           FROM users u
+           LEFT JOIN user_types ut ON ut.id = u.user_type_id
+           WHERE u.contact_number = ?
+           LIMIT 1`,
+          [phone]
+        );
+
+        if (!Array.isArray(userCheck) || (userCheck as any[]).length === 0) {
+          Logger.info('send_otp_rejected_user_not_found', { phone });
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'user_not_found',
+              message: 'वापरकर्ता नोंदणीकृत नाही. कृपया प्रवेश विनंती पाठवा.',
+            },
+            { status: 404 }
+          );
+        }
+
+        userData = (userCheck as any[])[0];
+      } finally {
+        existConn.release();
+      }
+
+      const status = (userData.status || '').toLowerCase().trim();
+      const statusAllowsOtp = status === 'active' || status === 'approved';
+      const hasActiveFlag = Number(userData.is_active) === 1;
+
+      // If user exists but is not approved/active, return error IMMEDIATELY
+      // NO OTP will be generated, NO SMS will be sent
+      if (!statusAllowsOtp || !hasActiveFlag) {
+        Logger.info('send_otp_rejected_user_not_approved', { 
+          phone, 
+          status: userData.status, 
+          is_active: userData.is_active 
+        });
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'user_not_active',
+            message: 'आपले खाते अजून मंजूर झालेले नाही. कृपया प्रशासकाशी संपर्क साधा.',
+          },
           { status: 403 }
         );
       }
       
-    }
+      // ============================================================================
+      // Only proceed to OTP generation if user is approved and active
+      // At this point, userData is guaranteed to have status='active' AND is_active=1
+      // ============================================================================
 
-    // For mobile requests, allow field_officer/supervisor/admin users
-    if (!isWebRequest) {
-      const isFieldOfficer = userType === 'field_officer' || relatedType === 'field officer' || relatedType === 'field_officer';
-      const isSupervisor = userType === 'supervisor' || relatedType === 'supervisor';
-      const isAdmin = userType === 'admin' || relatedType === 'admin';
-      // Only check role if provided and user doesn't match any allowed role
-      if (role && !isFieldOfficer && !isSupervisor && !isAdmin) {
-        return NextResponse.json(
-          { ok: false, error: 'forbidden_role' },
-          { status: 403 }
-        );
+      // Determine allowed user types based on source
+      const isWebRequest = source === 'web';
+      const userType = normalizeRole(userData.user_type);
+      const relatedType = normalizeRole(userData.related_type);
+      effectiveRole = userType || relatedType;
+
+      // For web requests, only allow admin/supervisor users
+      if (isWebRequest) {
+        const isAdmin = userType === 'admin' || relatedType === 'admin';
+        const isSupervisor = userType === 'supervisor' || relatedType === 'supervisor';
+        if (!isAdmin && !isSupervisor) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'forbidden_role',
+              message: 'या भूमिकेला वेब प्रवेश नाही.',
+            },
+            { status: 403 }
+          );
+        }
+        
       }
+
+      // For mobile requests, allow field_officer/supervisor/admin/therapy_specialist users
+      if (!isWebRequest) {
+        const isFieldOfficer = effectiveRole === 'field_officer';
+        const isSupervisor = effectiveRole === 'supervisor';
+        const isAdmin = effectiveRole === 'admin';
+        const isTherapySpecialist = effectiveRole === 'therapy_specialist' || effectiveRole === 'practitioner';
+
+        // Only check role if provided and user doesn't match any allowed role
+        if (role && !isFieldOfficer && !isSupervisor && !isAdmin && !isTherapySpecialist) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'forbidden_role',
+              message: 'या भूमिकेला मोबाइल प्रवेश नाही.',
+            },
+            { status: 403 }
+          );
+        }
+
+        // Enforce requested role to match actual role when provided
+        if (role && effectiveRole && role !== effectiveRole) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'forbidden_role',
+              message: 'निवडलेली भूमिका आणि वापरकर्त्याची वास्तविक भूमिका जुळत नाही.',
+            },
+            { status: 403 }
+          );
+        }
+      }
+    } else {
+      // Survey verification: Just validate phone number, no user approval needed
+      Logger.info('send_otp_survey_verification', { phone });
     }
 
     // Generate OTP: 6-digit number (100000 to 999999)
@@ -158,28 +272,28 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + CONFIG.OTP_EXPIRY_MINUTES);
 
-    const connection = await pool.getConnection();
+    let connection;
+    try {
+      // Add timeout wrapper to fail fast if connection takes too long
+      connection = await Promise.race([
+        pool.getConnection(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Database connection timeout')), 25000)
+        )
+      ]) as any;
+    } catch (connError: any) {
+      Logger.error('send_otp_db_connection_failed_otp', { error: connError.message, phone });
+      return NextResponse.json(
+        { ok: false, error: connError.message?.includes('timeout')
+          ? 'Database connection timeout. Please try again.'
+          : 'Database connection failed. Please try again.' },
+        { status: 500 }
+      );
+    }
     
     try {
       await connection.beginTransaction();
       
-      // Ensure otp_verifications table exists
-      await connection.execute(`
-        CREATE TABLE IF NOT EXISTS otp_verifications (
-          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-          phone VARCHAR(20) NOT NULL,
-          otp VARCHAR(10) NOT NULL,
-          status ENUM('sent','verified','expired') DEFAULT 'sent',
-          expires_at TIMESTAMP NULL,
-          verified_at TIMESTAMP NULL,
-          created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (id),
-          KEY idx_phone (phone),
-          KEY idx_status (status)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-      `);
-
       const [result] = await connection.execute(
         `INSERT INTO otp_verifications (phone, otp, expires_at, status, created_at, updated_at) 
          VALUES (?, ?, ?, 'sent', NOW(), NOW())`,
@@ -199,32 +313,103 @@ export async function POST(request: NextRequest) {
         );
       }
       
-      // Get message with OTP replaced
-      let message: string;
-      try {
-        message = getOTPMessage(cleanOtp);
-        Logger.info('send_otp_message_generated', { phone, otp: cleanOtp, messageLength: message.length });
-      } catch (msgError: any) {
-        Logger.error('send_otp_message_failed', { error: msgError.message, otp: cleanOtp, phone });
-        return NextResponse.json(
-          { ok: false, error: `Failed to generate SMS message: ${msgError.message}` },
-          { status: 500 }
-        );
-      }
+      // Check if we're in local development mode (only skip SMS if explicitly enabled)
+      // SMS will work by default unless LOCAL_DEV_SKIP_SMS is explicitly set to 'true'
+      const isLocalDev = process.env.LOCAL_DEV_SKIP_SMS === 'true';
       
-      // Send SMS
-      const sms = await sendSMS(phone, message);
+      let sms: any = { ok: true, local_dev: true };
       
-      Logger.info('send_otp', { phone, otp_id: otpId, otp: cleanOtp, messageLength: message.length, resp: sms });
+      if (isLocalDev) {
+        // Local development: Skip SMS sending, log OTP instead
+        Logger.info('send_otp_local_dev', { 
+          phone, 
+          otp_id: otpId, 
+          otp: cleanOtp,
+          message: 'OTP sent in local development mode - SMS skipped'
+        });
+        console.log('\n========================================');
+        console.log('🔐 LOCAL DEV MODE - OTP FOR TESTING');
+        console.log('========================================');
+        console.log(`Phone: ${phone}`);
+        console.log(`OTP: ${cleanOtp}`);
+        console.log(`OTP ID: ${otpId}`);
+        console.log('========================================\n');
+        
+        // Return OTP in response for local development
+        return NextResponse.json({ 
+          ok: true, 
+          otp_id: otpId, 
+          otp: cleanOtp, // Include OTP in response for local dev
+          sms: { ok: true, local_dev: true, message: 'SMS skipped in local development' },
+          message: `Local dev mode: OTP is ${cleanOtp}`
+        });
+      } else {
+        // Production: Send actual SMS
+        let message: string;
+        try {
+          message = getOTPMessage(cleanOtp);
+          Logger.info('send_otp_message_generated', { phone, otp: cleanOtp, messageLength: message.length });
+        } catch (msgError: any) {
+          Logger.error('send_otp_message_failed', { error: msgError.message, otp: cleanOtp, phone });
+          return NextResponse.json(
+            { ok: false, error: `Failed to generate SMS message: ${msgError.message}` },
+            { status: 500 }
+          );
+        }
+        
+        // Send SMS (non-blocking - don't wait for it to complete)
+        sendSMS(phone, message).then((smsResult) => {
+          Logger.info('send_otp_sms_completed', { phone, otp_id: otpId, resp: smsResult });
+        }).catch((err) => {
+          Logger.error('send_otp_sms_failed', { phone, otp_id: otpId, error: err.message });
+        });
+        
+        // Return immediately - SMS will be sent in background
+        Logger.info('send_otp', { phone, otp_id: otpId, otp: cleanOtp, messageLength: message.length });
 
-      return NextResponse.json({ ok: true, otp_id: otpId, sms });
+        return NextResponse.json({ 
+          ok: true, 
+          otp_id: otpId, 
+          sms: { ok: true, queued: true, message: 'SMS queued for sending' }
+        });
+      }
+    } catch (dbError: any) {
+      // Rollback transaction if it was started
+      if (connection) {
+        try {
+          await connection.rollback();
+        } catch (rollbackError) {
+          Logger.error('send_otp_rollback_failed', { error: (rollbackError as any).message });
+        }
+      }
+      Logger.error('send_otp_db_error', { 
+        error: dbError.message, 
+        stack: dbError.stack,
+        phone 
+      });
+      throw dbError; // Re-throw to be caught by outer catch
     } finally {
-      connection.release();
+      if (connection) {
+        connection.release();
+      }
     }
   } catch (error: any) {
-    Logger.error('send_otp_failed', { error: error.message });
+    Logger.error('send_otp_failed', { 
+      error: error.message, 
+      stack: error.stack,
+      name: error.name,
+      phone: (error as any).phone || 'unknown'
+    });
+    
+    // Return a user-friendly error message
+    const errorMessage = error.message || 'An unexpected error occurred';
     return NextResponse.json(
-      { ok: false, error: error.message },
+      { 
+        ok: false, 
+        error: errorMessage.includes('timeout') || errorMessage.includes('ECONNREFUSED') 
+          ? 'Database connection timeout. Please try again.' 
+          : errorMessage
+      },
       { status: 500 }
     );
   }

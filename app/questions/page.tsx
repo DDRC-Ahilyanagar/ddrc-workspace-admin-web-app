@@ -14,6 +14,8 @@ interface Question {
   question_type: string;
   options: string | null;
   regex: string | null;
+  valid_input: string | null;
+  max_length: number | null;
   is_required: number;
   question_is_active: number;
   question_sort_order: number;
@@ -240,6 +242,8 @@ export default function QuestionsPage() {
       question_type: 'short_answer',
       options: null,
       regex: null,
+      valid_input: null,
+      max_length: null,
       is_required: 1,
       question_is_active: 1,
       question_sort_order: 0,
@@ -256,7 +260,12 @@ export default function QuestionsPage() {
   };
 
   const handleEdit = (q: Question) => {
-    setEditingQuestion({ ...q });
+    const questionWithDefaults = {
+      ...q,
+      valid_input: q.valid_input || null,
+      max_length: q.max_length || null,
+    };
+    setEditingQuestion(questionWithDefaults);
     setShowModal(true);
   };
 
@@ -456,10 +465,16 @@ function QuestionModal({ question, allQuestions, dbSections, onSave, onClose, on
   onSectionUpdate: () => void;
   sectionsList: string[];
 }) {
-  const [formData, setFormData] = useState<Question>(question);
+  const [formData, setFormData] = useState<Question>({
+    ...question,
+    valid_input: question.valid_input || null,
+    max_length: question.max_length || null,
+  });
   const [editingSection, setEditingSection] = useState<Section | null>(null);
   const [sectionInput, setSectionInput] = useState('');
   const [sectionMode, setSectionMode] = useState<'select' | 'new' | 'edit'>('select');
+  const [sampleValue, setSampleValue] = useState<string>('');
+  const [generatedRegex, setGeneratedRegex] = useState<string>(question.regex || '');
 
   const updateField = (field: keyof Question, value: any) => {
     setFormData({ ...formData, [field]: value });
@@ -467,6 +482,84 @@ function QuestionModal({ question, allQuestions, dbSections, onSave, onClose, on
 
   const questionTypes = ['short_answer', 'date', 'MCQ', 'upload'];
   const validInputs = ['text', 'numeric', 'alphanumeric', ''];
+
+  // Generate regex from sample value
+  const generateRegexFromSample = (sample: string): string => {
+    if (!sample || sample.trim() === '') return '';
+    
+    const trimmed = sample.trim().toUpperCase(); // Convert to uppercase for consistency
+    let regex = '^';
+    let i = 0;
+    
+    while (i < trimmed.length) {
+      const char = trimmed[i];
+      
+      // Handle special characters (dashes, slashes, spaces, etc.)
+      if (['-', '/', ' ', '_', '.'].includes(char)) {
+        regex += `\\${char}`;
+        i++;
+        continue;
+      }
+      
+      // Detect pattern: letters or digits
+      if (/[A-Z]/.test(char)) {
+        // Count consecutive letters
+        let letterCount = 0;
+        while (i < trimmed.length && /[A-Z]/.test(trimmed[i])) {
+          letterCount++;
+          i++;
+        }
+        regex += `[A-Z]{${letterCount}}`;
+      } else if (/\d/.test(char)) {
+        // Count consecutive digits
+        let digitCount = 0;
+        while (i < trimmed.length && /\d/.test(trimmed[i])) {
+          digitCount++;
+          i++;
+        }
+        regex += `\\d{${digitCount}}`;
+      } else {
+        // Other characters - escape them
+        regex += `\\${char}`;
+        i++;
+      }
+    }
+    
+    regex += '$';
+    return regex;
+  };
+
+  const handleSampleValueChange = (value: string) => {
+    setSampleValue(value);
+    const regex = generateRegexFromSample(value);
+    setGeneratedRegex(regex);
+    if (regex) {
+      updateField('regex', regex);
+      
+      // Auto-detect valid_input and max_length
+      const cleanedValue = value.replace(/[^A-Za-z0-9]/g, ''); // Remove separators
+      const onlyDigits = /^\d+$/.test(cleanedValue);
+      const hasLetters = /[A-Za-z]/.test(cleanedValue);
+      
+      if (onlyDigits) {
+        // Pure numeric (with or without separators)
+        updateField('valid_input', 'numeric');
+        updateField('max_length', cleanedValue.length); // Use cleaned length (without separators)
+      } else if (hasLetters) {
+        // Alphanumeric
+        updateField('valid_input', 'alphanumeric');
+        updateField('max_length', cleanedValue.length); // Use cleaned length
+      } else {
+        // Default to text if unclear
+        updateField('valid_input', 'text');
+        updateField('max_length', value.length);
+      }
+    } else {
+      // Clear regex if sample is empty
+      updateField('regex', null);
+      setGeneratedRegex('');
+    }
+  };
 
   const handleSectionSelect = (sectionName: string) => {
     if (sectionName === '__new__') {
@@ -675,7 +768,122 @@ function QuestionModal({ question, allQuestions, dbSections, onSave, onClose, on
               </div>
             )}
 
-            {/* Regex field intentionally hidden from modal per requirements; value remains stored in DB */}
+            {/* Regex Generator from Sample Value */}
+            <div className="mb-3">
+              <label className="form-label">Sample Value (for Regex Generation)</label>
+              <div className="input-group">
+                <input
+                  type="text"
+                  className="form-control"
+                  value={sampleValue}
+                  onChange={(e) => handleSampleValueChange(e.target.value)}
+                  placeholder="e.g., AB1234567890123456 or 123456789012 or ABC1234567"
+                />
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={() => {
+                    if (formData.regex) {
+                      setSampleValue('');
+                      setGeneratedRegex('');
+                      updateField('regex', null);
+                    }
+                  }}
+                  title="Clear sample value"
+                >
+                  Clear
+                </button>
+              </div>
+              <small className="text-muted">
+                Enter a sample value and regex will be auto-generated. Examples:
+                <br />
+                • <code>AB1234567890123456</code> → <code>^[A-Z]{2}\d{16}$</code> (2 letters + 16 digits)
+                <br />
+                • <code>123456789012</code> → <code>^\d{12}$</code> (12 digits)
+                <br />
+                • <code>ABC1234567</code> → <code>^[A-Z]{3}\d{7}$</code> (3 letters + 7 digits)
+                <br />
+                • <code>1234-5678-9012</code> → <code>^\d{4}-\d{4}-\d{4}$</code> (with dashes)
+              </small>
+            </div>
+
+            {/* Generated Regex (read-only, for reference) */}
+            {generatedRegex && (
+              <div className="mb-3">
+                <label className="form-label">Generated Regex</label>
+                <div className="input-group">
+                  <input
+                    type="text"
+                    className="form-control font-monospace"
+                    value={generatedRegex}
+                    readOnly
+                    style={{ backgroundColor: '#f8f9fa' }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary"
+                    onClick={() => {
+                      navigator.clipboard.writeText(generatedRegex);
+                      alert('Regex copied to clipboard!');
+                    }}
+                    title="Copy regex"
+                  >
+                    📋 Copy
+                  </button>
+                </div>
+                <small className="text-muted">This regex will be saved to the database</small>
+              </div>
+            )}
+
+            {/* Manual Regex Override (optional) */}
+            <div className="mb-3">
+              <label className="form-label">Regex (Manual Override - Optional)</label>
+              <input
+                type="text"
+                className="form-control font-monospace"
+                value={formData.regex || ''}
+                onChange={(e) => {
+                  updateField('regex', e.target.value || null);
+                  if (e.target.value) {
+                    setGeneratedRegex(e.target.value);
+                  }
+                }}
+                placeholder="Or enter regex manually (e.g., ^\\d{12}$)"
+              />
+              <small className="text-muted">
+                You can manually override the generated regex if needed. Use <code>\\</code> for backslashes.
+              </small>
+            </div>
+
+            {/* Valid Input and Max Length (auto-detected, but editable) */}
+            <div className="row mb-3">
+              <div className="col-md-6">
+                <label className="form-label">Valid Input</label>
+                <select
+                  className="form-select"
+                  value={formData.valid_input || ''}
+                  onChange={(e) => updateField('valid_input', e.target.value || null)}
+                >
+                  <option value="">Select...</option>
+                  <option value="text">text</option>
+                  <option value="numeric">numeric</option>
+                  <option value="alphanumeric">alphanumeric</option>
+                </select>
+                <small className="text-muted">Auto-detected from sample value</small>
+              </div>
+              <div className="col-md-6">
+                <label className="form-label">Max Length</label>
+                <input
+                  type="number"
+                  className="form-control"
+                  value={formData.max_length || ''}
+                  onChange={(e) => updateField('max_length', e.target.value ? parseInt(e.target.value) : null)}
+                  placeholder="Auto-detected from sample"
+                  min="1"
+                />
+                <small className="text-muted">Auto-detected from sample value</small>
+              </div>
+            </div>
 
             <div className="mb-3">
               <label className="form-label">Rendering Condition</label>

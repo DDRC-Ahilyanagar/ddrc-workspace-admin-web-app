@@ -254,8 +254,9 @@ export async function POST(request: NextRequest) {
     };
 
     // Extract information based on card type
+    let aadhaarInfo: any = null;
     if (cardType.toLowerCase() === 'aadhaar') {
-      const aadhaarInfo = extractAadhaarInfo(ocrText);
+      aadhaarInfo = extractAadhaarInfo(ocrText);
       // If we have back image text, prefer address from BACK only, others from FRONT
       const backMatch = ocrText.match(/BACK_IMAGE_TEXT\n([\s\S]*)$/);
       const frontMatch = ocrText.match(/FRONT_IMAGE_TEXT\n([\s\S]*?)\n\nBACK_IMAGE_TEXT/);
@@ -278,6 +279,115 @@ export async function POST(request: NextRequest) {
       const udidInfo = extractUDIDInfo(ocrText);
       result.udid_info = udidInfo;
       Logger.info('OCR_UDID_EXTRACTED', udidInfo);
+    }
+
+    // Save extracted Aadhaar data to survey_aadhar if aadhar_id is provided
+    if (cardType.toLowerCase() === 'aadhaar' && aadhaarInfo) {
+      const aadharIdParam = formData.get('aadhar_id');
+      const aadharId = aadharIdParam ? parseInt(String(aadharIdParam)) : null;
+      
+      if (aadharId && aadharId > 0) {
+        try {
+          const { getDbPool } = await import('@/lib/db');
+          const pool = getDbPool();
+          const conn = await pool.getConnection();
+          try {
+            // Parse address components if address is available
+            let addressText = aadhaarInfo.address || null;
+            let pincode: string | null = null;
+            let taluka: string | null = null;
+            let district: string | null = null;
+            
+            if (addressText) {
+              // Try to extract pincode (6 digits)
+              const pincodeMatch = addressText.match(/\b(\d{6})\b/);
+              if (pincodeMatch) {
+                pincode = pincodeMatch[1];
+              }
+              
+              // Try to extract district and taluka from address text
+              // This is a simple extraction - can be improved with AI parsing
+              const districtMatch = addressText.match(/\b(district|जिल्हा|जि\.?)\s*:?\s*([A-Za-z\u0900-\u097F]+)/i);
+              if (districtMatch) {
+                district = districtMatch[2].trim();
+              }
+              
+              const talukaMatch = addressText.match(/\b(taluka|तालुका|ता\.?)\s*:?\s*([A-Za-z\u0900-\u097F]+)/i);
+              if (talukaMatch) {
+                taluka = talukaMatch[2].trim();
+              }
+            }
+            
+            // Format DOB if available
+            let dobFormatted: string | null = null;
+            if (aadhaarInfo.dob) {
+              // Try to parse and format DOB
+              const dobStr = String(aadhaarInfo.dob);
+              // Handle various formats: DD-MM-YYYY, YYYY-MM-DD, etc.
+              const dobMatch = dobStr.match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
+              if (dobMatch) {
+                const [, day, month, year] = dobMatch;
+                dobFormatted = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+              } else {
+                dobFormatted = dobStr;
+              }
+            }
+            
+            // Format gender
+            let genderFormatted: string | null = null;
+            if (aadhaarInfo.gender) {
+              const genderStr = String(aadhaarInfo.gender).toUpperCase();
+              if (genderStr.includes('MALE') || genderStr === 'M') {
+                genderFormatted = 'Male';
+              } else if (genderStr.includes('FEMALE') || genderStr === 'F') {
+                genderFormatted = 'Female';
+              } else {
+                genderFormatted = aadhaarInfo.gender;
+              }
+            }
+            
+            // Update survey_aadhar with extracted data
+            await conn.query(
+              `UPDATE survey_aadhar 
+               SET holder_name = COALESCE(?, holder_name),
+                   gender = COALESCE(?, gender),
+                   dob = COALESCE(?, dob),
+                   address_text = COALESCE(?, address_text),
+                   pincode = COALESCE(?, pincode),
+                   taluka = COALESCE(?, taluka),
+                   district = COALESCE(?, district),
+                   updated_at = NOW()
+               WHERE id = ?`,
+              [
+                aadhaarInfo.name || null,
+                genderFormatted,
+                dobFormatted,
+                addressText,
+                pincode,
+                taluka,
+                district,
+                aadharId
+              ]
+            );
+            
+            Logger.info('OCR_DATA_SAVED_TO_SURVEY_AADHAR', {
+              aadhar_id: aadharId,
+              has_name: !!aadhaarInfo.name,
+              has_dob: !!aadhaarInfo.dob,
+              has_gender: !!aadhaarInfo.gender,
+              has_address: !!aadhaarInfo.address,
+            });
+          } finally {
+            conn.release();
+          }
+        } catch (saveError: any) {
+          Logger.error('OCR_SAVE_TO_DB_FAILED', {
+            error: saveError.message,
+            aadhar_id: aadharId,
+          });
+          // Don't fail the OCR request if save fails
+        }
+      }
     }
 
     // Include raw text in development (optional)

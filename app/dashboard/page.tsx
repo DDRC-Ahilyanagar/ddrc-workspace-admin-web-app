@@ -25,6 +25,59 @@ ChartJS.register(
   Legend
 );
 
+// Color palette for charts
+const CHART_COLORS = {
+  primary: [
+    'rgba(13, 71, 161, 0.9)',   // Deep Blue
+    'rgba(25, 118, 210, 0.9)',  // Blue
+    'rgba(66, 165, 245, 0.9)',  // Light Blue
+    'rgba(123, 31, 162, 0.9)',  // Purple
+    'rgba(156, 39, 176, 0.9)',  // Light Purple
+    'rgba(0, 105, 92, 0.9)',    // Teal
+    'rgba(0, 150, 136, 0.9)',   // Light Teal
+    'rgba(255, 152, 0, 0.9)',   // Orange
+    'rgba(255, 193, 7, 0.9)',   // Amber
+    'rgba(244, 67, 54, 0.9)',   // Red
+    'rgba(233, 30, 99, 0.9)',   // Pink
+    'rgba(76, 175, 80, 0.9)',   // Green
+  ],
+  borders: [
+    'rgba(13, 71, 161, 1)',
+    'rgba(25, 118, 210, 1)',
+    'rgba(66, 165, 245, 1)',
+    'rgba(123, 31, 162, 1)',
+    'rgba(156, 39, 176, 1)',
+    'rgba(0, 105, 92, 1)',
+    'rgba(0, 150, 136, 1)',
+    'rgba(255, 152, 0, 1)',
+    'rgba(255, 193, 7, 1)',
+    'rgba(244, 67, 54, 1)',
+    'rgba(233, 30, 99, 1)',
+    'rgba(76, 175, 80, 1)',
+  ],
+  gender: {
+    male: 'rgba(13, 71, 161, 0.9)',
+    female: 'rgba(233, 30, 99, 0.9)',
+    other: 'rgba(76, 175, 80, 0.9)',
+  },
+  genderBorders: {
+    male: 'rgba(13, 71, 161, 1)',
+    female: 'rgba(233, 30, 99, 1)',
+    other: 'rgba(76, 175, 80, 1)',
+  },
+};
+
+// Helper to get colors for multiple items
+const getColorsForItems = (count: number) => {
+  const colors = [];
+  const borders = [];
+  for (let i = 0; i < count; i++) {
+    colors.push(CHART_COLORS.primary[i % CHART_COLORS.primary.length]);
+    borders.push(CHART_COLORS.borders[i % CHART_COLORS.borders.length]);
+  }
+  return { colors, borders };
+};
+
 type Stats = {
   totalSurveys: number;
   surveysToday: number;
@@ -36,8 +89,9 @@ type Stats = {
   breakdowns?: {
     taluka: { name: string; completed: number }[];
     gender: { name: string; completed: number }[];
-    disability: { name: string; completed: number }[];
+    district: { name: string; completed: number }[];
     pendingOverall: number;
+    ageRanges?: { label: string; male: number; female: number; other: number; total: number }[];
   };
 };
 
@@ -123,9 +177,11 @@ export default function DashboardPage() {
                       datasets: [{
                         label: 'पूर्ण सर्वेक्षण',
                         data: stats.breakdowns.taluka.map(t => t.completed),
-                        backgroundColor: 'rgba(13, 71, 161, 0.8)',
-                        borderColor: 'rgba(13, 71, 161, 1)',
-                        borderWidth: 1,
+                        backgroundColor: getColorsForItems(stats.breakdowns.taluka.length).colors,
+                        borderColor: getColorsForItems(stats.breakdowns.taluka.length).borders,
+                        borderWidth: 2,
+                        borderRadius: 6,
+                        borderSkipped: false,
                       }],
                     }}
                     options={{
@@ -136,6 +192,10 @@ export default function DashboardPage() {
                           display: false,
                         },
                         tooltip: {
+                          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                          padding: 12,
+                          titleFont: { size: 14, weight: 'bold' },
+                          bodyFont: { size: 13 },
                           callbacks: {
                             label: function(context) {
                               return `पूर्ण: ${context.parsed.y}`;
@@ -148,6 +208,20 @@ export default function DashboardPage() {
                           beginAtZero: true,
                           ticks: {
                             stepSize: 1,
+                            font: { size: 11 },
+                          },
+                          grid: {
+                            color: 'rgba(0, 0, 0, 0.05)',
+                          }
+                        },
+                        x: {
+                          ticks: {
+                            font: { size: 11 },
+                            maxRotation: 45,
+                            minRotation: 0,
+                          },
+                          grid: {
+                            display: false,
                           }
                         }
                       }
@@ -155,33 +229,7 @@ export default function DashboardPage() {
                   />
                 ) : (
                   <div className="text-center py-5">
-                    <Bar
-                      data={{
-                        labels: [],
-                        datasets: [{
-                          label: 'पूर्ण सर्वेक्षण',
-                          data: [],
-                          backgroundColor: 'rgba(13, 71, 161, 0.8)',
-                          borderColor: 'rgba(13, 71, 161, 1)',
-                          borderWidth: 1,
-                        }],
-                      }}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: true,
-                        plugins: {
-                          legend: {
-                            display: false,
-                          },
-                        },
-                        scales: {
-                          y: {
-                            beginAtZero: true,
-                          }
-                        }
-                      }}
-                    />
-                    <p className="text-muted mt-3 mb-0">डेटा उपलब्ध नाही</p>
+                    <p className="text-muted mb-0">डेटा उपलब्ध नाही</p>
                   </div>
                 )}
               </div>
@@ -200,27 +248,41 @@ export default function DashboardPage() {
                         labels: stats.breakdowns.gender.map(g => g.name),
                         datasets: [{
                           data: stats.breakdowns.gender.map(g => g.completed),
-                          backgroundColor: [
-                            'rgba(13, 71, 161, 0.8)',
-                            'rgba(25, 118, 210, 0.8)',
-                            'rgba(66, 165, 245, 0.8)',
-                          ],
-                          borderColor: [
-                            'rgba(13, 71, 161, 1)',
-                            'rgba(25, 118, 210, 1)',
-                            'rgba(66, 165, 245, 1)',
-                          ],
-                          borderWidth: 2,
+                          backgroundColor: stats.breakdowns.gender.map((g, i) => {
+                            const name = g.name.toLowerCase();
+                            if (name.includes('पुरुष') || name.includes('male')) return CHART_COLORS.gender.male;
+                            if (name.includes('स्त्री') || name.includes('female')) return CHART_COLORS.gender.female;
+                            return CHART_COLORS.gender.other;
+                          }),
+                          borderColor: stats.breakdowns.gender.map((g, i) => {
+                            const name = g.name.toLowerCase();
+                            if (name.includes('पुरुष') || name.includes('male')) return CHART_COLORS.genderBorders.male;
+                            if (name.includes('स्त्री') || name.includes('female')) return CHART_COLORS.genderBorders.female;
+                            return CHART_COLORS.genderBorders.other;
+                          }),
+                          borderWidth: 3,
+                          hoverOffset: 8,
                         }],
                       }}
                       options={{
                         responsive: true,
                         maintainAspectRatio: false,
+                        cutout: '60%',
                         plugins: {
                           legend: {
                             position: 'bottom',
+                            labels: {
+                              padding: 15,
+                              font: { size: 12 },
+                              usePointStyle: true,
+                              pointStyle: 'circle',
+                            }
                           },
                           tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            padding: 12,
+                            titleFont: { size: 14, weight: 'bold' },
+                            bodyFont: { size: 13 },
                             callbacks: {
                               label: function(context) {
                                 const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
@@ -235,58 +297,30 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                   <div className="text-center py-5">
-                    <div style={{ height: '300px', position: 'relative' }}>
-                      <Doughnut
-                        data={{
-                          labels: [],
-                          datasets: [{
-                            data: [],
-                            backgroundColor: [
-                              'rgba(13, 71, 161, 0.8)',
-                              'rgba(25, 118, 210, 0.8)',
-                              'rgba(66, 165, 245, 0.8)',
-                            ],
-                            borderColor: [
-                              'rgba(13, 71, 161, 1)',
-                              'rgba(25, 118, 210, 1)',
-                              'rgba(66, 165, 245, 1)',
-                            ],
-                            borderWidth: 2,
-                          }],
-                        }}
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: {
-                              position: 'bottom',
-                            },
-                          }
-                        }}
-                      />
-                    </div>
-                    <p className="text-muted mt-3 mb-0">डेटा उपलब्ध नाही</p>
+                    <p className="text-muted mb-0">डेटा उपलब्ध नाही</p>
                   </div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Disability Breakdown Chart */}
+          {/* District Breakdown Chart */}
           <div className="col-12 col-lg-6">
             <div className="card h-100 animate__animated animate__fadeInUp" style={{ animationDelay: '0.4s' }}>
               <div className="card-body">
-                <h5 className="card-title mb-3">दिव्यांगता प्रकार निहाय</h5>
-                {stats?.breakdowns?.disability && stats.breakdowns.disability.length > 0 ? (
+                <h5 className="card-title mb-3">जिल्हा निहाय</h5>
+                {stats?.breakdowns?.district && stats.breakdowns.district.length > 0 ? (
                   <Bar
                     data={{
-                      labels: stats.breakdowns.disability.map(d => d.name.length > 20 ? d.name.substring(0, 20) + '...' : d.name),
+                      labels: stats.breakdowns.district.map(d => d.name.length > 20 ? d.name.substring(0, 20) + '...' : d.name),
                       datasets: [{
                         label: 'पूर्ण सर्वेक्षण',
-                        data: stats.breakdowns.disability.map(d => d.completed),
-                        backgroundColor: 'rgba(25, 118, 210, 0.8)',
-                        borderColor: 'rgba(25, 118, 210, 1)',
-                        borderWidth: 1,
+                        data: stats.breakdowns.district.map(d => d.completed),
+                        backgroundColor: getColorsForItems(stats.breakdowns.district.length).colors,
+                        borderColor: getColorsForItems(stats.breakdowns.district.length).borders,
+                        borderWidth: 2,
+                        borderRadius: 6,
+                        borderSkipped: false,
                       }],
                     }}
                     options={{
@@ -298,9 +332,13 @@ export default function DashboardPage() {
                           display: false,
                         },
                         tooltip: {
+                          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                          padding: 12,
+                          titleFont: { size: 14, weight: 'bold' },
+                          bodyFont: { size: 13 },
                           callbacks: {
                             title: function(context) {
-                              const fullName = stats.breakdowns?.disability?.[context[0].dataIndex]?.name || '';
+                              const fullName = stats.breakdowns?.district?.[context[0].dataIndex]?.name || '';
                               return fullName;
                             },
                             label: function(context) {
@@ -314,6 +352,18 @@ export default function DashboardPage() {
                           beginAtZero: true,
                           ticks: {
                             stepSize: 1,
+                            font: { size: 11 },
+                          },
+                          grid: {
+                            color: 'rgba(0, 0, 0, 0.05)',
+                          }
+                        },
+                        y: {
+                          ticks: {
+                            font: { size: 11 },
+                          },
+                          grid: {
+                            display: false,
                           }
                         }
                       }
@@ -321,34 +371,7 @@ export default function DashboardPage() {
                   />
                 ) : (
                   <div className="text-center py-5">
-                    <Bar
-                      data={{
-                        labels: [],
-                        datasets: [{
-                          label: 'पूर्ण सर्वेक्षण',
-                          data: [],
-                          backgroundColor: 'rgba(25, 118, 210, 0.8)',
-                          borderColor: 'rgba(25, 118, 210, 1)',
-                          borderWidth: 1,
-                        }],
-                      }}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: true,
-                        indexAxis: 'y',
-                        plugins: {
-                          legend: {
-                            display: false,
-                          },
-                        },
-                        scales: {
-                          x: {
-                            beginAtZero: true,
-                          }
-                        }
-                      }}
-                    />
-                    <p className="text-muted mt-3 mb-0">डेटा उपलब्ध नाही</p>
+                    <p className="text-muted mb-0">डेटा उपलब्ध नाही</p>
                   </div>
                 )}
               </div>
@@ -368,23 +391,29 @@ export default function DashboardPage() {
                         {
                           label: 'पुरुष',
                           data: (stats as any).breakdowns.ageRanges.map((r: any) => r.male || 0),
-                          backgroundColor: 'rgba(13, 71, 161, 0.8)',
-                          borderColor: 'rgba(13, 71, 161, 1)',
-                          borderWidth: 1,
+                          backgroundColor: CHART_COLORS.gender.male,
+                          borderColor: CHART_COLORS.genderBorders.male,
+                          borderWidth: 2,
+                          borderRadius: 6,
+                          borderSkipped: false,
                         },
                         {
                           label: 'स्त्री',
                           data: (stats as any).breakdowns.ageRanges.map((r: any) => r.female || 0),
-                          backgroundColor: 'rgba(25, 118, 210, 0.8)',
-                          borderColor: 'rgba(25, 118, 210, 1)',
-                          borderWidth: 1,
+                          backgroundColor: CHART_COLORS.gender.female,
+                          borderColor: CHART_COLORS.genderBorders.female,
+                          borderWidth: 2,
+                          borderRadius: 6,
+                          borderSkipped: false,
                         },
                         {
                           label: 'इतर',
                           data: (stats as any).breakdowns.ageRanges.map((r: any) => r.other || 0),
-                          backgroundColor: 'rgba(66, 165, 245, 0.8)',
-                          borderColor: 'rgba(66, 165, 245, 1)',
-                          borderWidth: 1,
+                          backgroundColor: CHART_COLORS.gender.other,
+                          borderColor: CHART_COLORS.genderBorders.other,
+                          borderWidth: 2,
+                          borderRadius: 6,
+                          borderSkipped: false,
                         },
                       ],
                     }}
@@ -394,8 +423,18 @@ export default function DashboardPage() {
                       plugins: {
                         legend: {
                           position: 'top',
+                          labels: {
+                            padding: 15,
+                            font: { size: 12 },
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                          }
                         },
                         tooltip: {
+                          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                          padding: 12,
+                          titleFont: { size: 14, weight: 'bold' },
+                          bodyFont: { size: 13 },
                           callbacks: {
                             footer: function(tooltipItems) {
                               const total = tooltipItems.reduce((sum: number, item: any) => {
@@ -411,6 +450,18 @@ export default function DashboardPage() {
                           beginAtZero: true,
                           ticks: {
                             stepSize: 1,
+                            font: { size: 11 },
+                          },
+                          grid: {
+                            color: 'rgba(0, 0, 0, 0.05)',
+                          }
+                        },
+                        x: {
+                          ticks: {
+                            font: { size: 11 },
+                          },
+                          grid: {
+                            display: false,
                           }
                         }
                       }
@@ -418,49 +469,7 @@ export default function DashboardPage() {
                   />
                 ) : (
                   <div className="text-center py-5">
-                    <Bar
-                      data={{
-                        labels: [],
-                        datasets: [
-                          {
-                            label: 'पुरुष',
-                            data: [],
-                            backgroundColor: 'rgba(13, 71, 161, 0.8)',
-                            borderColor: 'rgba(13, 71, 161, 1)',
-                            borderWidth: 1,
-                          },
-                          {
-                            label: 'स्त्री',
-                            data: [],
-                            backgroundColor: 'rgba(25, 118, 210, 0.8)',
-                            borderColor: 'rgba(25, 118, 210, 1)',
-                            borderWidth: 1,
-                          },
-                          {
-                            label: 'इतर',
-                            data: [],
-                            backgroundColor: 'rgba(66, 165, 245, 0.8)',
-                            borderColor: 'rgba(66, 165, 245, 1)',
-                            borderWidth: 1,
-                          },
-                        ],
-                      }}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: true,
-                        plugins: {
-                          legend: {
-                            position: 'top',
-                          },
-                        },
-                        scales: {
-                          y: {
-                            beginAtZero: true,
-                          }
-                        }
-                      }}
-                    />
-                    <p className="text-muted mt-3 mb-0">डेटा उपलब्ध नाही</p>
+                    <p className="text-muted mb-0">डेटा उपलब्ध नाही</p>
                   </div>
                 )}
               </div>
@@ -494,13 +503,13 @@ export default function DashboardPage() {
           <div className="col-12 col-xl-4">
             <div className="card h-100 animate__animated animate__fadeInUp" style={{ animationDelay: '0.5s' }}>
               <div className="card-body">
-                <h5 className="card-title">दिव्यांगता प्रकार (Completed)</h5>
-                {!stats?.breakdowns?.disability?.length ? (
+                <h5 className="card-title">जिल्हा (Completed)</h5>
+                {!stats?.breakdowns?.district?.length ? (
                   <p className="text-muted mb-0">डेटा उपलब्ध नाही</p>
                 ) : (
                   <ul className="list-group list-group-flush">
-                    {stats.breakdowns.disability.slice(0, 10).map((d, i) => (
-                      <li key={`dis-${i}`} className="list-group-item d-flex justify-content-between">
+                    {stats.breakdowns.district.slice(0, 10).map((d, i) => (
+                      <li key={`dist-${i}`} className="list-group-item d-flex justify-content-between">
                         <span>{d.name}</span>
                         <span className="badge bg-success">{d.completed}</span>
                       </li>

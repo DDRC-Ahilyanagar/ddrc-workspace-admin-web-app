@@ -36,6 +36,8 @@ function normalizeRow(b: any) {
     question_type: b.question_type || 'short_answer',
     options: b.options || null,
     regex: b.regex || null,
+    valid_input: b.valid_input || null,
+    max_length: b.max_length !== undefined && b.max_length !== null ? parseInt(b.max_length) : null,
     is_required: b.is_required !== undefined ? (b.is_required ? 1 : 0) : 1,
     is_active: b.is_active !== undefined ? (b.is_active ? 1 : 0) : 1,
     sort_order: b.sort_order || 0,
@@ -126,9 +128,9 @@ export async function POST(req: NextRequest) {
       try {
         // Map to actual table columns
         const [r] = await conn.query(
-          `INSERT INTO questions (question_marathi, question_english, question_type, options, regex, is_required, is_active, sort_order, rendering_condition, title, section_id, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT MAX(sort_order) FROM questions q), 0) + 1, ?, ?, ?, NOW(), NOW())`,
-          [row.question_marathi, row.question_english, row.question_type, row.options, row.regex, row.is_required, row.is_active, row.rendering_condition, row.title, row.section_id]
+          `INSERT INTO questions (question_marathi, question_english, question_type, options, regex, valid_input, max_length, is_required, is_active, sort_order, rendering_condition, title, section_id, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT MAX(sort_order) FROM questions q), 0) + 1, ?, ?, ?, NOW(), NOW())`,
+          [row.question_marathi, row.question_english, row.question_type, row.options, row.regex, row.valid_input, row.max_length, row.is_required, row.is_active, row.rendering_condition, row.title, row.section_id]
         );
       const id = (r as any).insertId;
       return NextResponse.json({ ok: true, id });
@@ -154,9 +156,9 @@ export async function PUT(req: NextRequest) {
         // Map to actual table columns
         await conn.query(
           `UPDATE questions SET
-           question_marathi=?, question_english=?, question_type=?, options=?, regex=?, is_required=?, is_active=?, sort_order=?, rendering_condition=?, title=?, section_id=?, updated_at=NOW()
+           question_marathi=?, question_english=?, question_type=?, options=?, regex=?, valid_input=?, max_length=?, is_required=?, is_active=?, sort_order=?, rendering_condition=?, title=?, section_id=?, updated_at=NOW()
          WHERE id=?`,
-          [row.question_marathi, row.question_english, row.question_type, row.options, row.regex, row.is_required, row.is_active, row.sort_order, row.rendering_condition, row.title, row.section_id, id]
+          [row.question_marathi, row.question_english, row.question_type, row.options, row.regex, row.valid_input, row.max_length, row.is_required, row.is_active, row.sort_order, row.rendering_condition, row.title, row.section_id, id]
         );
       return NextResponse.json({ ok: true });
     } finally {

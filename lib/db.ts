@@ -17,6 +17,10 @@ export function getDbPool(): mysql.Pool {
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
+      // Connection timeout to fail fast on initial connection
+      connectTimeout: 10000, // 10 seconds to establish initial connection
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 0,
     });
   }
   return pool;

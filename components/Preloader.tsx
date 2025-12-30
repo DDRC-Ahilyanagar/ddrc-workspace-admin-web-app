@@ -18,15 +18,28 @@ export default function Preloader() {
     w.__pendingFetch = 0;
     const emit = (name: 'app:busy' | 'app:idle') => window.dispatchEvent(new CustomEvent(name));
     const orig = window.fetch.bind(window);
+    
+    // URLs that should not trigger the loader
+    const shouldExcludeLoader = (url: string | Request): boolean => {
+      const urlString = typeof url === 'string' ? url : url.url;
+      // Exclude /api/access-requests?status=pending (with or without additional params)
+      return urlString.includes('/api/access-requests') && urlString.includes('status=pending');
+    };
+    
     window.fetch = async (...args: any[]) => {
+      const url = args[0];
+      const excludeLoader = shouldExcludeLoader(url);
+      
       try {
-        if (w.__pendingFetch++ === 0) emit('app:busy');
+        if (!excludeLoader && w.__pendingFetch++ === 0) emit('app:busy');
         const res = await orig(...(args as [RequestInfo, RequestInit]));
         return res;
       } finally {
-        if (--w.__pendingFetch <= 0) {
-          w.__pendingFetch = 0;
-          emit('app:idle');
+        if (!excludeLoader) {
+          if (--w.__pendingFetch <= 0) {
+            w.__pendingFetch = 0;
+            emit('app:idle');
+          }
         }
       }
     };

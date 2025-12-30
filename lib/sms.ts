@@ -13,7 +13,7 @@ if (envTemplate && !envTemplate.includes('{#var#}')) {
 }
 
 const SMS_CONFIG = {
-  url: process.env.SMS_URL || 'http://msg.icloudsms.com/rest/services/sendSMS/sendGroupSms',
+  url: process.env.SMS_URL || 'https://msg.icloudsms.com/rest/services/sendSMS/sendGroupSms',
   authKey: process.env.SMS_AUTH_KEY || '7e717a70bd48264130d89f149c798bc4',
   senderId: process.env.SMS_SENDER_ID || 'DRCVK',
   routeId: process.env.SMS_ROUTE_ID || '1',
@@ -71,7 +71,7 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
     // Check if responseCode indicates an error
     // iCloudSMS response codes:
     // 2001 = Success
-    // 3001 = Invalid credentials/Auth key
+    // 3001 = Success (alternative success code)
     // 3002 = Invalid sender ID
     // 3003 = Invalid route ID
     // 3004 = Invalid mobile number
@@ -79,11 +79,10 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
     // 3006 = DLT template not approved
     // Other codes = Various errors
     const isSuccess = httpCode >= 200 && httpCode < 300 && 
-                      (responseCode === '2001' || responseCode === '200' || responseCode === undefined);
+                      (responseCode === '2001' || responseCode === '3001' || responseCode === '200' || responseCode === undefined);
     
     if (!isSuccess && responseCode) {
       const errorMessages: Record<string, string> = {
-        '3001': 'Invalid AUTH_KEY or credentials',
         '3002': 'Invalid senderId (DRCVK) - may not be approved/registered',
         '3003': 'Invalid routeId',
         '3004': 'Invalid mobile number format',
@@ -107,11 +106,17 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
       responseCode,
     };
   } catch (error: any) {
-    console.error('[SMS] Error:', error);
+    console.error('[SMS] Error:', {
+      name: error.name,
+      message: error.message,
+      cause: error.cause,
+      url: SMS_CONFIG.url,
+    });
     return {
       ok: false,
-      error: error.message,
+      error: error.message || 'Unknown error',
       raw: null,
+      status: 0,
     };
   }
 }

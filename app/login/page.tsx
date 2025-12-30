@@ -49,7 +49,7 @@ export default function LoginPage() {
             />
             <div className="login-title-section animate__animated animate__fadeInUp">
               <h1 className="login-title-main text-white">
-                District Disability Rehabilitation Centre, Ahilyanagar
+                District Disability Rehabilitation Centre, Nagar
               </h1>
               <p className="login-title-sub text-white">
                 ( Ministry of Social Justice & Empowerment, Govt. of India approved)

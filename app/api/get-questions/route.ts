@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { dbQuery, getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * @swagger
  * /api/get-questions:
@@ -27,12 +29,12 @@ export async function GET(request: NextRequest) {
   try {
     const rows = await dbQuery('SELECT * FROM questions ORDER BY id ASC');
 
-    // If question 69 (Disability Type) has no options, populate from disability_types
-    // This keeps Flutter clients in sync without code changes.
+    // Inject dynamic options from database tables
     try {
       const pool = getDbPool();
       const conn = await pool.getConnection();
       try {
+        // Inject disability types for question 69
         await conn.query(`CREATE TABLE IF NOT EXISTS disability_types (
           id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
           label_marathi VARCHAR(255) NOT NULL,
@@ -42,11 +44,11 @@ export async function GET(request: NextRequest) {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
         const [types]: any = await conn.query(
-          'SELECT label_marathi FROM disability_types ORDER BY id ASC'
+          'SELECT label_english FROM disability_types ORDER BY id ASC'
         );
         const options = Array.isArray(types)
           ? (types as any[])
-              .map((t: any) => String(t.label_marathi || '').trim())
+              .map((t: any) => String(t.label_english || '').trim())
               .filter((s: string) => s.length > 0)
               .join(',')
           : '';
@@ -54,7 +56,97 @@ export async function GET(request: NextRequest) {
         if (options) {
           for (const r of rows as any[]) {
             if (parseInt(r.id || '0') === 69) {
-              r.options = options; // inject Marathi options list
+              r.options = options; // inject English options list
+            }
+          }
+        }
+
+        // Inject sports data for sports questions (22 = खेळ प्रकार, 23 = खेळ)
+        // Build sports map: { "मैदानी खेळ": ["धावणे", ...], "सांघिक खेळ": [...], ... }
+        const [sportsTypes]: any = await conn.query(
+          `SELECT id, name_marathi FROM sports_types WHERE is_active = 1 ORDER BY sort_order ASC, id ASC`
+        );
+
+        const [sportNames]: any = await conn.query(
+          `SELECT sn.sports_type_id, sn.name_marathi 
+           FROM sport_names sn
+           INNER JOIN sports_types st ON sn.sports_type_id = st.id
+           WHERE sn.is_active = 1 AND st.is_active = 1
+           ORDER BY sn.sports_type_id ASC, sn.sort_order ASC, sn.id ASC`
+        );
+
+        if (Array.isArray(sportsTypes) && Array.isArray(sportNames)) {
+          const sportsMap: Record<string, string[]> = {};
+          
+          for (const type of sportsTypes) {
+            const names = sportNames
+              .filter((n: any) => n.sports_type_id === type.id)
+              .map((n: any) => String(n.name_marathi || '').trim())
+              .filter((s: string) => s.length > 0);
+            if (names.length > 0) {
+              sportsMap[String(type.name_marathi || '').trim()] = names;
+            }
+          }
+
+          // Inject sports map as JSON string for questions 22 and 23
+          const sportsMapJson = JSON.stringify(sportsMap);
+          
+          for (const r of rows as any[]) {
+            const qid = parseInt(r.id || '0');
+            // Question 22: "खेळ प्रकार" - inject comma-separated types
+            if (qid === 22) {
+              r.options = Object.keys(sportsMap).join(',');
+            }
+            // Question 23: "खेळ" - inject JSON map
+            if (qid === 23) {
+              r.options = sportsMapJson;
+            }
+          }
+        }
+
+        // Inject disability organs for questions containing "दिव्यांगता अवयव" (e.g., 73, 101)
+        await conn.query(`CREATE TABLE IF NOT EXISTS disability_organs (
+          id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+          label_marathi VARCHAR(255) NOT NULL,
+          sort_order INT NOT NULL DEFAULT 0,
+          is_active TINYINT(1) NOT NULL DEFAULT 1,
+          created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uniq_label (label_marathi),
+          KEY idx_sort_order (sort_order),
+          KEY idx_is_active (is_active)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+
+        const [organs]: any = await conn.query(
+          `SELECT label_marathi FROM disability_organs 
+           WHERE is_active = 1 
+           ORDER BY sort_order ASC, id ASC`
+        );
+
+        const organOptions = Array.isArray(organs)
+          ? (organs as any[])
+              .map((o: any) => String(o.label_marathi || '').trim())
+              .filter((s: string) => s.length > 0)
+              .join(',')
+          : '';
+
+        if (organOptions) {
+          // Inject for question 73: दिव्यांगता अवयव (self)
+          // Question 101: पत्नी किंवा पती दिव्यांगता अवयव
+          // Also match any question text containing "दिव्यांगता अवयव" exactly
+          for (const r of rows as any[]) {
+            const qid = parseInt(r.id || '0');
+            const questionText = String(r.question || '').trim();
+            // Only inject if question text EXACTLY contains "दिव्यांगता अवयव" (not just "दिव्यांगता")
+            const isOrganQuestion = questionText.includes('दिव्यांगता अवयव') && 
+                                    !questionText.includes('उपचार') && 
+                                    !questionText.includes('बरे होण्यासाठी');
+            if (
+              qid === 73 ||
+              qid === 101 ||
+              isOrganQuestion
+            ) {
+              r.options = organOptions;
             }
           }
         }
@@ -64,7 +156,7 @@ export async function GET(request: NextRequest) {
         conn?.release?.();
       }
     } catch (e) {
-      Logger.info('get_questions_disability_options_skip', { error: (e as any)?.message });
+      Logger.info('get_questions_dynamic_options_skip', { error: (e as any)?.message });
     }
 
     const sectionSummary: Record<number, number> = {};

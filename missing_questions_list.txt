@@ -1,0 +1,122 @@
+MISSING QUESTIONS FROM COMPARISON.TXT
+=====================================
+
+This file lists all questions that are present in comparison.txt but are NOT found in the current system questions list.
+
+================================================================================
+QUESTION 35: Family Members Names
+================================================================================
+Question Text: "घर पालकांचे नावे आहे का?"
+Options: Yes, No
+Status: MISSING
+Notes: This question asks if family members' names are available. Not found in current system.
+
+================================================================================
+QUESTION 61: Income Tax Return
+================================================================================
+Question Text: "आयकर परतावा (Income Tax Return) भरला आहे का?"
+Options: Yes, No, NA
+Status: MISSING
+Notes: This question asks if Income Tax Return has been filed. Not found in current system.
+
+================================================================================
+QUESTION 85: School Type/Category (Enhanced Version)
+================================================================================
+Question Text: "शाळेचा प्रकार / कार्य"
+Current System Has: "शिक्षण घेत असलेल्या शाळेचा प्रकार?" with options: "सामान्य शाळा,विशेष शाळा,समावेशक शाळा,इतर"
+
+Missing Options from Comparison:
+- जि. प. शाळा (Zilla Parishad School)
+- खाजगी शाळा (Private School)
+- विद्यालय (College)
+- महाविद्यालय (University)
+- उच्च माध्यमिक (Higher Secondary)
+- अ. शिक्षित (Uneducated)
+- सरकारी शिक्षण (Government Education)
+- निजी शिक्षण (Private Education)
+
+Status: PARTIALLY MISSING - Question exists but needs more options
+
+================================================================================
+QUESTION 86: Current Class/Standard
+================================================================================
+Question Text: "सध्याचा शकत असलेला वर्ग / इयत्ता"
+Options: 1, 2, 3, 4, 5…… ---11, 12, उच्च माध्यमिक, पदवी, पदवीधर, इतर……
+Status: MISSING
+Notes: This question asks for the current class/standard the person is studying in. Not found in current system.
+
+================================================================================
+QUESTION 88: Professional Education (Enhanced Version)
+================================================================================
+Question Text: "व्यवसायीक शिक्षण"
+Current System Has: "शिक्षित असल्यास / शिक्षण घेत असल्यास" with basic options
+
+Missing Options from Comparison:
+- अभियांत्रिकी (Engineering)
+- डिप्लोमा (Diploma) - exists but needs more detail
+- वैद्यकीय (Medical)
+- फार्मसी (Pharmacy)
+- कृषी (Agriculture)
+- विधी (Law)
+- डी.एड/ बी. एड (D.Ed/B.Ed)
+- ITI
+- इतर (Other)
+
+Status: PARTIALLY MISSING - Question exists but needs more detailed professional education options
+
+================================================================================
+QUESTION 90: School Location/Village
+================================================================================
+Question Text: "शाळेचे ठिकाण (गावाचे नाव)"
+Status: MISSING
+Notes: This question asks for the school location/village name. Not found in current system.
+
+================================================================================
+QUESTION 91: Registration/Certificate Question
+================================================================================
+Question Text: [Partially readable due to encoding] "... Yes, No, NA"
+Status: UNCLEAR - Cannot determine exact question due to encoding issues
+Notes: This appears to be a registration or certificate related question but the exact text is not fully readable.
+
+================================================================================
+ADDITIONAL OBSERVATIONS
+================================================================================
+
+1. Question 49: Education Level Details
+   - Comparison file shows: "शिक्षण, अशिक्षित, शिक्षण घेत आहे, SSC, HSC, उच्च माध्यमिक, पदवी, पदवीधर"
+   - System has similar question but may need verification of all options
+
+2. Question 50: Additional Education Details
+   - Comparison file shows: "असल्यास अतिरिक्त शिक्षण: Diploma, ITI, Medical, Engineering, MBA, Low, Pharmacy, Other"
+   - System may have similar but needs verification
+
+3. Question 51: Computer Courses
+   - Comparison file shows: "संगणकाचे ज्ञान / शिक्षण: DTP, MSCIT, Other Courses"
+   - System has "आपणांस संगणकाचे ज्ञान आहे का?" but may need follow-up question for course details
+
+4. Question 52: Typing Speed
+   - Comparison file shows: "टंकन गती: English Speed, Marathi Speed"
+   - Status: MISSING - Not found in current system
+
+================================================================================
+SUMMARY
+================================================================================
+
+CONFIRMED MISSING QUESTIONS (Need to be added):
+1. Question 35: घर पालकांचे नावे आहे का?
+2. Question 52: टंकन गती (Typing Speed)
+3. Question 61: आयकर परतावा (Income Tax Return)
+4. Question 86: सध्याचा वर्ग / इयत्ता (Current Class/Standard)
+5. Question 90: शाळेचे ठिकाण (School Location/Village)
+
+NEEDS ENHANCEMENT (Questions exist but need more options):
+1. Question 85: School Type - needs more options
+2. Question 88: Professional Education - needs more detailed options
+
+UNCLEAR/NEEDS VERIFICATION:
+1. Question 91: Registration/Certificate question (encoding issue)
+
+================================================================================
+END OF REPORT
+================================================================================
+
