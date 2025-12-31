@@ -103,6 +103,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [sections, setSections] = useState<string[]>([]);
+  const [chartFilter, setChartFilter] = useState<'taluka' | 'gender' | 'disability' | 'udid'>('taluka');
 
   const handleStartSurvey = () => {
     router.push('/survekshan');
@@ -165,14 +166,30 @@ export default function DashboardPage() {
           {/* Removed OTP पडताळले card; replaced by sections list below */}
         </div>
 
-        {/* Charts Section */}
+        {/* Unified Chart Section with Filters */}
         <div className="row g-4 mb-4">
-          {/* Taluka Breakdown Chart */}
-          <div className="col-12 col-lg-6">
+          <div className="col-12">
             <div className="card h-100 animate__animated animate__fadeInUp" style={{ animationDelay: '0.3s' }}>
               <div className="card-body">
-                <h5 className="card-title mb-3">तालुका निहाय</h5>
-                {stats?.breakdowns?.taluka && stats.breakdowns.taluka.length > 0 ? (
+                <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
+                  <h5 className="card-title mb-0">सांख्यिकी आलेख</h5>
+                  <div className="d-flex gap-2 flex-wrap">
+                    <select 
+                      className="form-select form-select-sm" 
+                      style={{ minWidth: '180px' }}
+                      value={chartFilter}
+                      onChange={(e) => setChartFilter(e.target.value as 'taluka' | 'gender' | 'disability' | 'udid')}
+                    >
+                      <option value="taluka">तालुका निहाय</option>
+                      <option value="gender">लिंग निहाय</option>
+                      <option value="disability">दिव्यांगता प्रकार</option>
+                      <option value="udid">UDID कार्ड</option>
+                    </select>
+                  </div>
+                </div>
+                
+                {/* Taluka Chart */}
+                {chartFilter === 'taluka' && stats?.breakdowns?.taluka && stats.breakdowns.taluka.length > 0 ? (
                   <Bar
                     data={{
                       labels: stats.breakdowns.taluka.map(t => t.name),
@@ -229,22 +246,15 @@ export default function DashboardPage() {
                       }
                     }}
                   />
-                ) : (
+                ) : chartFilter === 'taluka' ? (
                   <div className="text-center py-5">
                     <p className="text-muted mb-0">डेटा उपलब्ध नाही</p>
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
+                ) : null}
 
-          {/* Gender Breakdown Chart */}
-          <div className="col-12 col-lg-6">
-            <div className="card h-100 animate__animated animate__fadeInUp" style={{ animationDelay: '0.35s' }}>
-              <div className="card-body">
-                <h5 className="card-title mb-3">लिंग निहाय</h5>
-                {stats?.breakdowns?.gender && stats.breakdowns.gender.length > 0 ? (
-                  <div style={{ height: '300px', position: 'relative' }}>
+                {/* Gender Chart */}
+                {chartFilter === 'gender' && stats?.breakdowns?.gender && stats.breakdowns.gender.length > 0 ? (
+                  <div style={{ height: '400px', position: 'relative' }}>
                     <Doughnut
                       data={{
                         labels: stats.breakdowns.gender.map(g => g.name),
@@ -297,95 +307,14 @@ export default function DashboardPage() {
                       }}
                     />
                   </div>
-                ) : (
+                ) : chartFilter === 'gender' ? (
                   <div className="text-center py-5">
                     <p className="text-muted mb-0">डेटा उपलब्ध नाही</p>
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
+                ) : null}
 
-          {/* District Breakdown Chart */}
-          <div className="col-12 col-lg-6">
-            <div className="card h-100 animate__animated animate__fadeInUp" style={{ animationDelay: '0.4s' }}>
-              <div className="card-body">
-                <h5 className="card-title mb-3">जिल्हा निहाय</h5>
-                {stats?.breakdowns?.district && stats.breakdowns.district.length > 0 ? (
-                  <Bar
-                    data={{
-                      labels: stats.breakdowns.district.map(d => d.name.length > 20 ? d.name.substring(0, 20) + '...' : d.name),
-                      datasets: [{
-                        label: 'पूर्ण सर्वेक्षण',
-                        data: stats.breakdowns.district.map(d => d.completed),
-                        backgroundColor: getColorsForItems(stats.breakdowns.district.length).colors,
-                        borderColor: getColorsForItems(stats.breakdowns.district.length).borders,
-                        borderWidth: 2,
-                        borderRadius: 6,
-                        borderSkipped: false,
-                      }],
-                    }}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: true,
-                      indexAxis: 'y',
-                      plugins: {
-                        legend: {
-                          display: false,
-                        },
-                        tooltip: {
-                          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                          padding: 12,
-                          titleFont: { size: 14, weight: 'bold' },
-                          bodyFont: { size: 13 },
-                          callbacks: {
-                            title: function(context) {
-                              const fullName = stats.breakdowns?.district?.[context[0].dataIndex]?.name || '';
-                              return fullName;
-                            },
-                            label: function(context) {
-                              return `पूर्ण: ${context.parsed.x}`;
-                            }
-                          }
-                        }
-                      },
-                      scales: {
-                        x: {
-                          beginAtZero: true,
-                          ticks: {
-                            stepSize: 1,
-                            font: { size: 11 },
-                          },
-                          grid: {
-                            color: 'rgba(0, 0, 0, 0.05)',
-                          }
-                        },
-                        y: {
-                          ticks: {
-                            font: { size: 11 },
-                          },
-                          grid: {
-                            display: false,
-                          }
-                        }
-                      }
-                    }}
-                  />
-                ) : (
-                  <div className="text-center py-5">
-                    <p className="text-muted mb-0">डेटा उपलब्ध नाही</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Disability Breakdown Chart */}
-          <div className="col-12 col-lg-6">
-            <div className="card h-100 animate__animated animate__fadeInUp" style={{ animationDelay: '0.4s' }}>
-              <div className="card-body">
-                <h5 className="card-title mb-3">दिव्यांगता प्रकार निहाय</h5>
-                {stats?.breakdowns?.disability && stats.breakdowns.disability.length > 0 ? (
+                {/* Disability Chart */}
+                {chartFilter === 'disability' && stats?.breakdowns?.disability && stats.breakdowns.disability.length > 0 ? (
                   <Bar
                     data={{
                       labels: stats.breakdowns.disability.map(d => d.name.length > 30 ? d.name.substring(0, 30) + '...' : d.name),
@@ -445,22 +374,15 @@ export default function DashboardPage() {
                       }
                     }}
                   />
-                ) : (
+                ) : chartFilter === 'disability' ? (
                   <div className="text-center py-5">
                     <p className="text-muted mb-0">डेटा उपलब्ध नाही</p>
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
+                ) : null}
 
-          {/* UDID Breakdown Chart */}
-          <div className="col-12 col-lg-6">
-            <div className="card h-100 animate__animated animate__fadeInUp" style={{ animationDelay: '0.45s' }}>
-              <div className="card-body">
-                <h5 className="card-title mb-3">UDID कार्ड निहाय</h5>
-                {stats?.breakdowns?.udid && stats.breakdowns.udid.length > 0 ? (
-                  <div style={{ height: '300px', position: 'relative' }}>
+                {/* UDID Chart */}
+                {chartFilter === 'udid' && stats?.breakdowns?.udid && stats.breakdowns.udid.length > 0 ? (
+                  <div style={{ height: '400px', position: 'relative' }}>
                     <Doughnut
                       data={{
                         labels: stats.breakdowns.udid.map(u => u.name),
@@ -511,16 +433,16 @@ export default function DashboardPage() {
                       }}
                     />
                   </div>
-                ) : (
+                ) : chartFilter === 'udid' ? (
                   <div className="text-center py-5">
                     <p className="text-muted mb-0">डेटा उपलब्ध नाही</p>
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
           </div>
 
-          {/* Age Ranges Chart */}
+          {/* Age Ranges Chart - Keep separate */}
           <div className="col-12 col-lg-6">
             <div className="card h-100 animate__animated animate__fadeInUp" style={{ animationDelay: '0.5s' }}>
               <div className="card-body">
