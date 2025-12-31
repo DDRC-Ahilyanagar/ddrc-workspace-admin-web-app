@@ -25,12 +25,22 @@
         - name: Build
           run: npm run build
 
+        - name: Test Server Connectivity
+          run: |
+            echo "Testing connection to ${{ secrets.VPS_HOST }}:${VPS_PORT:-22}"
+            timeout 10 bash -c "echo > /dev/tcp/${{ secrets.VPS_HOST }}/${VPS_PORT:-22}" 2>/dev/null && echo "Port is open" || echo "Port is closed or unreachable"
+          continue-on-error: true
+
         - name: Upload to Server
           uses: appleboy/scp-action@v0.1.7
           with:
             host: ${{ secrets.VPS_HOST }}
             username: ${{ secrets.VPS_USER }}
             key: ${{ secrets.VPS_KEY }}
+            port: ${{ secrets.VPS_PORT || 22 }}
+            timeout: 300s
+            command_timeout: 300s
+            debug: true
             source: ".next/**,package.json,package-lock.json,public/**,lib/**,app/**,middleware.ts,next.config.mjs,tsconfig.json,storage/**,prisma/**"
             target: "/var/www/surveys"
 
@@ -40,6 +50,10 @@
             host: ${{ secrets.VPS_HOST }}
             username: ${{ secrets.VPS_USER }}
             key: ${{ secrets.VPS_KEY }}
+            port: ${{ secrets.VPS_PORT || 22 }}
+            timeout: 300s
+            command_timeout: 300s
+            debug: true
             script: |
               cd /var/www/surveys
               rm -rf node_modules package-lock.json ~/.npm
