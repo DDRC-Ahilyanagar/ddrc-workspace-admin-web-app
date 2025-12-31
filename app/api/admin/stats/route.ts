@@ -162,16 +162,25 @@ export async function GET(_req: NextRequest) {
       const offlineOfficers = Math.max(0, totalOfficers - onlineOfficers);
 
       // ---- Breakdown stats ----
-      const [completedDetailsRows] = await conn.query(`
-        SELECT sa.taluka, sa.gender, sa.district, sa.dob
+      // Include all started surveys (not just completed)
+      const [allSurveysRows] = await conn.query(`
+        SELECT 
+          sa.id as aadhar_id,
+          sa.taluka, 
+          sa.gender, 
+          sa.district, 
+          sa.dob,
+          s.survey_json
         FROM survey_aadhar sa
-        JOIN surveys s ON s.aadhaar_id = sa.id
-        WHERE s.no_of_questions_unanswered = 0
+        LEFT JOIN surveys s ON s.aadhaar_id = sa.id
+        WHERE s.id IS NOT NULL
       `);
 
       const talukaMap = new Map<string, number>();
       const genderMap = new Map<string, number>();
       const districtMap = new Map<string, number>();
+      const disabilityMap = new Map<string, number>();
+      const udidMap = new Map<string, number>(); // 'होय' or 'नाही' or 'Unknown'
 
       type AgeBucket = { label: string; male: number; female: number; other: number; total: number };
       const ageBuckets: AgeBucket[] = [
@@ -214,8 +223,28 @@ export async function GET(_req: NextRequest) {
         return age;
       };
 
-      if (Array.isArray(completedDetailsRows)) {
-        for (const row of completedDetailsRows as any[]) {
+      // Helper to extract answer from survey_json
+      const getAnswerFromJson = (surveyJson: any, questionId: string | number): string | null => {
+        if (!surveyJson) return null;
+        try {
+          const json = typeof surveyJson === 'string' ? JSON.parse(surveyJson) : surveyJson;
+          if (!json || typeof json !== 'object') return null;
+          const qid = String(questionId);
+          // Check various possible structures
+          if (json[qid]) return String(json[qid]).trim();
+          if (json.answers && json.answers[qid]) return String(json.answers[qid]).trim();
+          if (Array.isArray(json)) {
+            const item = json.find((item: any) => String(item?.question_id || item?.questionId) === qid);
+            return item ? String(item.answer || '').trim() : null;
+          }
+          return null;
+        } catch {
+          return null;
+        }
+      };
+
+      if (Array.isArray(allSurveysRows)) {
+        for (const row of allSurveysRows as any[]) {
           const talukaName = (row.taluka || 'इतर').toString().trim() || 'इतर';
           talukaMap.set(talukaName, (talukaMap.get(talukaName) || 0) + 1);
 
@@ -224,6 +253,26 @@ export async function GET(_req: NextRequest) {
 
           const districtName = (row.district || 'इतर').toString().trim() || 'इतर';
           districtMap.set(districtName, (districtMap.get(districtName) || 0) + 1);
+
+          // Extract disability type (question ID 69)
+          const disabilityAnswer = getAnswerFromJson(row.survey_json, 69);
+          if (disabilityAnswer) {
+            // Normalize disability name - take first part before comma or parenthesis
+            const normalized = disabilityAnswer.split(',')[0].split('(')[0].trim();
+            const disabilityName = normalized || 'इतर';
+            disabilityMap.set(disabilityName, (disabilityMap.get(disabilityName) || 0) + 1);
+          } else {
+            disabilityMap.set('निर्दिष्ट नाही', (disabilityMap.get('निर्दिष्ट नाही') || 0) + 1);
+          }
+
+          // Extract UDID status (question ID 66)
+          const udidAnswer = getAnswerFromJson(row.survey_json, 66);
+          if (udidAnswer) {
+            const udidStatus = udidAnswer.toLowerCase().includes('होय') || udidAnswer.toLowerCase().includes('yes') ? 'होय' : 'नाही';
+            udidMap.set(udidStatus, (udidMap.get(udidStatus) || 0) + 1);
+          } else {
+            udidMap.set('निर्दिष्ट नाही', (udidMap.get('निर्दिष्ट नाही') || 0) + 1);
+          }
 
           const age = parseDobToAge(row.dob);
           if (age !== null) {
@@ -242,18 +291,34 @@ export async function GET(_req: NextRequest) {
       }
 
       const taluka = Array.from(talukaMap.entries())
-        .map(([name, completed]) => ({ name, completed }))
+        .map(([name, count]) => ({ name, completed: count }))
         .sort((a, b) => b.completed - a.completed)
         .slice(0, 10);
 
       const gender = Array.from(genderMap.entries())
-        .map(([name, completed]) => ({ name, completed }))
+        .map(([name, count]) => ({ name, completed: count }))
         .sort((a, b) => b.completed - a.completed);
 
       const district = Array.from(districtMap.entries())
-        .map(([name, completed]) => ({ name, completed }))
+        .map(([name, count]) => ({ name, completed: count }))
         .sort((a, b) => b.completed - a.completed)
         .slice(0, 10);
+
+      const disability = Array.from(disabilityMap.entries())
+        .map(([name, count]) => ({ name, completed: count }))
+        .sort((a, b) => b.completed - a.completed)
+        .slice(0, 15); // Top 15 disability types
+
+      const udid = Array.from(udidMap.entries())
+        .map(([name, count]) => ({ name, completed: count }))
+        .sort((a, b) => {
+          // Sort: होय first, then नाही, then others
+          if (a.name === 'होय') return -1;
+          if (b.name === 'होय') return 1;
+          if (a.name === 'नाही') return -1;
+          if (b.name === 'नाही') return 1;
+          return b.completed - a.completed;
+        });
 
       const ageRanges = ageBuckets.filter(bucket => bucket.total > 0);
 
@@ -291,7 +356,15 @@ export async function GET(_req: NextRequest) {
           },
           activeQuestions,
           sections: Array.isArray(sectionsRows) ? (sectionsRows as any[]).map((r:any) => r.name).filter((n:any) => typeof n === 'string' && n.length > 0) : [],
-          breakdowns: { taluka, gender, district, ageRanges, pendingOverall: pendingSurveys },
+          breakdowns: { 
+            taluka, 
+            gender, 
+            district, 
+            disability,
+            udid,
+            ageRanges, 
+            pendingOverall: pendingSurveys 
+          },
           roles: {
             field_officer: fieldOfficerRoles,
             therapy_specialist: therapyRoles,

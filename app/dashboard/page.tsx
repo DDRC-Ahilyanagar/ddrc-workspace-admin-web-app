@@ -90,6 +90,8 @@ type Stats = {
     taluka: { name: string; completed: number }[];
     gender: { name: string; completed: number }[];
     district: { name: string; completed: number }[];
+    disability?: { name: string; completed: number }[];
+    udid?: { name: string; completed: number }[];
     pendingOverall: number;
     ageRanges?: { label: string; male: number; female: number; other: number; total: number }[];
   };
@@ -378,9 +380,149 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Age Ranges Chart */}
+          {/* Disability Breakdown Chart */}
+          <div className="col-12 col-lg-6">
+            <div className="card h-100 animate__animated animate__fadeInUp" style={{ animationDelay: '0.4s' }}>
+              <div className="card-body">
+                <h5 className="card-title mb-3">दिव्यांगता प्रकार निहाय</h5>
+                {stats?.breakdowns?.disability && stats.breakdowns.disability.length > 0 ? (
+                  <Bar
+                    data={{
+                      labels: stats.breakdowns.disability.map(d => d.name.length > 30 ? d.name.substring(0, 30) + '...' : d.name),
+                      datasets: [{
+                        label: 'सर्वेक्षण',
+                        data: stats.breakdowns.disability.map(d => d.completed),
+                        backgroundColor: getColorsForItems(stats.breakdowns.disability.length).colors,
+                        borderColor: getColorsForItems(stats.breakdowns.disability.length).borders,
+                        borderWidth: 2,
+                        borderRadius: 6,
+                        borderSkipped: false,
+                      }],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: true,
+                      indexAxis: 'y',
+                      plugins: {
+                        legend: {
+                          display: false,
+                        },
+                        tooltip: {
+                          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                          padding: 12,
+                          titleFont: { size: 14, weight: 'bold' },
+                          bodyFont: { size: 13 },
+                          callbacks: {
+                            title: function(context) {
+                              const fullName = stats.breakdowns?.disability?.[context[0].dataIndex]?.name || '';
+                              return fullName;
+                            },
+                            label: function(context) {
+                              return `संख्या: ${context.parsed.x}`;
+                            }
+                          }
+                        }
+                      },
+                      scales: {
+                        x: {
+                          beginAtZero: true,
+                          ticks: {
+                            stepSize: 1,
+                            font: { size: 11 },
+                          },
+                          grid: {
+                            color: 'rgba(0, 0, 0, 0.05)',
+                          }
+                        },
+                        y: {
+                          ticks: {
+                            font: { size: 11 },
+                          },
+                          grid: {
+                            display: false,
+                          }
+                        }
+                      }
+                    }}
+                  />
+                ) : (
+                  <div className="text-center py-5">
+                    <p className="text-muted mb-0">डेटा उपलब्ध नाही</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* UDID Breakdown Chart */}
           <div className="col-12 col-lg-6">
             <div className="card h-100 animate__animated animate__fadeInUp" style={{ animationDelay: '0.45s' }}>
+              <div className="card-body">
+                <h5 className="card-title mb-3">UDID कार्ड निहाय</h5>
+                {stats?.breakdowns?.udid && stats.breakdowns.udid.length > 0 ? (
+                  <div style={{ height: '300px', position: 'relative' }}>
+                    <Doughnut
+                      data={{
+                        labels: stats.breakdowns.udid.map(u => u.name),
+                        datasets: [{
+                          data: stats.breakdowns.udid.map(u => u.completed),
+                          backgroundColor: stats.breakdowns.udid.map((u, i) => {
+                            if (u.name === 'होय') return 'rgba(76, 175, 80, 0.9)';
+                            if (u.name === 'नाही') return 'rgba(244, 67, 54, 0.9)';
+                            return CHART_COLORS.primary[i % CHART_COLORS.primary.length];
+                          }),
+                          borderColor: stats.breakdowns.udid.map((u, i) => {
+                            if (u.name === 'होय') return 'rgba(76, 175, 80, 1)';
+                            if (u.name === 'नाही') return 'rgba(244, 67, 54, 1)';
+                            return CHART_COLORS.borders[i % CHART_COLORS.borders.length];
+                          }),
+                          borderWidth: 3,
+                          hoverOffset: 8,
+                        }],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '60%',
+                        plugins: {
+                          legend: {
+                            position: 'bottom',
+                            labels: {
+                              padding: 15,
+                              font: { size: 12 },
+                              usePointStyle: true,
+                              pointStyle: 'circle',
+                            }
+                          },
+                          tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            padding: 12,
+                            titleFont: { size: 14, weight: 'bold' },
+                            bodyFont: { size: 13 },
+                            callbacks: {
+                              label: function(context) {
+                                const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
+                                const percentage = total > 0 ? ((context.parsed / total) * 100).toFixed(1) : 0;
+                                return `${context.label}: ${context.parsed} (${percentage}%)`;
+                              }
+                            }
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="text-center py-5">
+                    <p className="text-muted mb-0">डेटा उपलब्ध नाही</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Age Ranges Chart */}
+          <div className="col-12 col-lg-6">
+            <div className="card h-100 animate__animated animate__fadeInUp" style={{ animationDelay: '0.5s' }}>
               <div className="card-body">
                 <h5 className="card-title mb-3">वयोगटानुसार</h5>
                 {(stats as any)?.breakdowns?.ageRanges && (stats as any).breakdowns.ageRanges.length > 0 ? (
