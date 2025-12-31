@@ -190,22 +190,23 @@ export default function DashboardPage() {
                 
                 {/* Taluka Chart */}
                 {chartFilter === 'taluka' && stats?.breakdowns?.taluka && stats.breakdowns.taluka.length > 0 ? (
-                  <Bar
-                    data={{
-                      labels: stats.breakdowns.taluka.map(t => t.name),
-                      datasets: [{
-                        label: 'पूर्ण सर्वेक्षण',
-                        data: stats.breakdowns.taluka.map(t => t.completed),
-                        backgroundColor: getColorsForItems(stats.breakdowns.taluka.length).colors,
-                        borderColor: getColorsForItems(stats.breakdowns.taluka.length).borders,
-                        borderWidth: 2,
-                        borderRadius: 6,
-                        borderSkipped: false,
-                      }],
-                    }}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: true,
+                  <div style={{ height: '450px', position: 'relative' }}>
+                    <Bar
+                      data={{
+                        labels: stats.breakdowns.taluka.map(t => String(t.name || '')).filter(Boolean),
+                        datasets: [{
+                          label: 'सर्वेक्षण',
+                          data: stats.breakdowns.taluka.map(t => Number(t.completed) || 0),
+                          backgroundColor: getColorsForItems(stats.breakdowns.taluka.length).colors,
+                          borderColor: getColorsForItems(stats.breakdowns.taluka.length).borders,
+                          borderWidth: 2,
+                          borderRadius: 6,
+                          borderSkipped: false,
+                        }],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
                       plugins: {
                         legend: {
                           display: false,
@@ -245,7 +246,8 @@ export default function DashboardPage() {
                         }
                       }
                     }}
-                  />
+                    />
+                  </div>
                 ) : chartFilter === 'taluka' ? (
                   <div className="text-center py-5">
                     <p className="text-muted mb-0">डेटा उपलब्ध नाही</p>
@@ -254,12 +256,12 @@ export default function DashboardPage() {
 
                 {/* Gender Chart */}
                 {chartFilter === 'gender' && stats?.breakdowns?.gender && stats.breakdowns.gender.length > 0 ? (
-                  <div style={{ height: '400px', position: 'relative' }}>
+                  <div style={{ height: '450px', position: 'relative' }}>
                     <Doughnut
                       data={{
-                        labels: stats.breakdowns.gender.map(g => g.name),
+                        labels: stats.breakdowns.gender.map(g => String(g.name || '')).filter(Boolean),
                         datasets: [{
-                          data: stats.breakdowns.gender.map(g => g.completed),
+                          data: stats.breakdowns.gender.map(g => Number(g.completed) || 0),
                           backgroundColor: stats.breakdowns.gender.map((g, i) => {
                             const name = g.name.toLowerCase();
                             if (name.includes('पुरुष') || name.includes('male')) return CHART_COLORS.gender.male;
@@ -315,12 +317,16 @@ export default function DashboardPage() {
 
                 {/* Disability Chart */}
                 {chartFilter === 'disability' && stats?.breakdowns?.disability && stats.breakdowns.disability.length > 0 ? (
-                  <Bar
-                    data={{
-                      labels: stats.breakdowns.disability.map(d => d.name.length > 30 ? d.name.substring(0, 30) + '...' : d.name),
-                      datasets: [{
-                        label: 'सर्वेक्षण',
-                        data: stats.breakdowns.disability.map(d => d.completed),
+                  <div style={{ height: '450px', position: 'relative' }}>
+                    <Bar
+                      data={{
+                        labels: stats.breakdowns.disability.map(d => {
+                          const name = String(d.name || '');
+                          return name.length > 30 ? name.substring(0, 30) + '...' : name;
+                        }).filter(Boolean),
+                        datasets: [{
+                          label: 'सर्वेक्षण',
+                          data: stats.breakdowns.disability.map(d => Number(d.completed) || 0),
                         backgroundColor: getColorsForItems(stats.breakdowns.disability.length).colors,
                         borderColor: getColorsForItems(stats.breakdowns.disability.length).borders,
                         borderWidth: 2,
@@ -328,10 +334,10 @@ export default function DashboardPage() {
                         borderSkipped: false,
                       }],
                     }}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: true,
-                      indexAxis: 'y',
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
                       plugins: {
                         legend: {
                           display: false,
@@ -373,7 +379,8 @@ export default function DashboardPage() {
                         }
                       }
                     }}
-                  />
+                    />
+                  </div>
                 ) : chartFilter === 'disability' ? (
                   <div className="text-center py-5">
                     <p className="text-muted mb-0">डेटा उपलब्ध नाही</p>
@@ -382,12 +389,12 @@ export default function DashboardPage() {
 
                 {/* UDID Chart */}
                 {chartFilter === 'udid' && stats?.breakdowns?.udid && stats.breakdowns.udid.length > 0 ? (
-                  <div style={{ height: '400px', position: 'relative' }}>
+                  <div style={{ height: '450px', position: 'relative' }}>
                     <Doughnut
                       data={{
-                        labels: stats.breakdowns.udid.map(u => u.name),
+                        labels: stats.breakdowns.udid.map(u => String(u.name || '')).filter(Boolean),
                         datasets: [{
-                          data: stats.breakdowns.udid.map(u => u.completed),
+                          data: stats.breakdowns.udid.map(u => Number(u.completed) || 0),
                           backgroundColor: stats.breakdowns.udid.map((u, i) => {
                             if (u.name === 'होय') return 'rgba(76, 175, 80, 0.9)';
                             if (u.name === 'नाही') return 'rgba(244, 67, 54, 0.9)';
