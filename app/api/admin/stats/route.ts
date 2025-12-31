@@ -116,6 +116,25 @@ export async function GET(_req: NextRequest) {
         GROUP BY role_key
       `);
 
+      // Get field officers with their completed survey counts
+      const pFieldOfficers = safeQuery(`
+        SELECT 
+          u.id,
+          COALESCE(u.name, u.contact_number, CONCAT('User ', u.id)) AS officer_name,
+          COUNT(DISTINCT s.id) AS completed_surveys
+        FROM users u
+        LEFT JOIN user_types ut ON ut.id = u.user_type_id
+        LEFT JOIN surveys s ON s.user_id = u.id AND (s.no_of_questions_unanswered = 0 OR s.no_of_questions_answered > 0)
+        WHERE (
+          LOWER(COALESCE(NULLIF(u.user_type, ''), ut.user_type, '')) IN ('field_officer', 'field officer', 'officer')
+        )
+        AND (u.status = 'active' OR u.is_active = 1 OR u.status IS NULL)
+        GROUP BY u.id, u.name, u.contact_number
+        HAVING completed_surveys > 0
+        ORDER BY completed_surveys DESC
+        LIMIT 50
+      `);
+
       const [
         [totalAadharRows],
         [todayAadharRows],
@@ -126,7 +145,8 @@ export async function GET(_req: NextRequest) {
         [active1Rows],
         [active2Rows],
         [roleCountRows],
-      ] = await Promise.all([pTotalAadhar, pTodayAadhar, pCompleted, pPending, pOtpToday, pSections, pActive1, pActive2, pRoleCounts]);
+        [fieldOfficersRows],
+      ] = await Promise.all([pTotalAadhar, pTodayAadhar, pCompleted, pPending, pOtpToday, pSections, pActive1, pActive2, pRoleCounts, pFieldOfficers]);
 
       const activeQuestions = ((active1Rows as any[])[0]?.c || 0) || ((active2Rows as any[])[0]?.c || 0) || 0;
 
@@ -320,6 +340,14 @@ export async function GET(_req: NextRequest) {
           return b.completed - a.completed;
         });
 
+      // Process field officers data
+      const fieldOfficers = Array.isArray(fieldOfficersRows) 
+        ? (fieldOfficersRows as any[]).map((row: any) => ({
+            name: String(row.officer_name || `User ${row.id}`).trim(),
+            completed: Number(row.completed_surveys) || 0
+          }))
+        : [];
+
       const ageRanges = ageBuckets.filter(bucket => bucket.total > 0);
 
       const roleMap: Record<string, number> = {};
@@ -362,6 +390,7 @@ export async function GET(_req: NextRequest) {
             district, 
             disability,
             udid,
+            fieldOfficers,
             ageRanges, 
             pendingOverall: pendingSurveys 
           },

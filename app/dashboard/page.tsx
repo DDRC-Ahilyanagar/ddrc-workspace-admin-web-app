@@ -92,6 +92,7 @@ type Stats = {
     district: { name: string; completed: number }[];
     disability?: { name: string; completed: number }[];
     udid?: { name: string; completed: number }[];
+    fieldOfficers?: { name: string; completed: number }[];
     pendingOverall: number;
     ageRanges?: { label: string; male: number; female: number; other: number; total: number }[];
   };
@@ -103,7 +104,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [sections, setSections] = useState<string[]>([]);
-  const [chartFilter, setChartFilter] = useState<'taluka' | 'gender' | 'disability' | 'udid'>('taluka');
+  const [chartFilter, setChartFilter] = useState<'taluka' | 'gender' | 'disability' | 'udid' | 'fieldOfficers'>('taluka');
 
   const handleStartSurvey = () => {
     router.push('/survekshan');
@@ -178,12 +179,13 @@ export default function DashboardPage() {
                       className="form-select form-select-sm" 
                       style={{ minWidth: '180px' }}
                       value={chartFilter}
-                      onChange={(e) => setChartFilter(e.target.value as 'taluka' | 'gender' | 'disability' | 'udid')}
+                      onChange={(e) => setChartFilter(e.target.value as 'taluka' | 'gender' | 'disability' | 'udid' | 'fieldOfficers')}
                     >
                       <option value="taluka">तालुका निहाय</option>
                       <option value="gender">लिंग निहाय</option>
                       <option value="disability">दिव्यांगता प्रकार</option>
                       <option value="udid">UDID कार्ड</option>
+                      <option value="fieldOfficers">फील्ड ऑफिसर निहाय</option>
                     </select>
                   </div>
                 </div>
@@ -441,6 +443,79 @@ export default function DashboardPage() {
                     />
                   </div>
                 ) : chartFilter === 'udid' ? (
+                  <div className="text-center py-5">
+                    <p className="text-muted mb-0">डेटा उपलब्ध नाही</p>
+                  </div>
+                ) : null}
+
+                {/* Field Officers Chart */}
+                {chartFilter === 'fieldOfficers' && stats?.breakdowns?.fieldOfficers && stats.breakdowns.fieldOfficers.length > 0 ? (
+                  <div style={{ height: '450px', position: 'relative' }}>
+                    <Bar
+                      data={{
+                        labels: stats.breakdowns.fieldOfficers.map(f => {
+                          const name = String(f.name || '');
+                          return name.length > 25 ? name.substring(0, 25) + '...' : name;
+                        }).filter(Boolean),
+                        datasets: [{
+                          label: 'पूर्ण सर्वेक्षण',
+                          data: stats.breakdowns.fieldOfficers.map(f => Number(f.completed) || 0),
+                          backgroundColor: getColorsForItems(stats.breakdowns.fieldOfficers.length).colors,
+                          borderColor: getColorsForItems(stats.breakdowns.fieldOfficers.length).borders,
+                          borderWidth: 2,
+                          borderRadius: 6,
+                          borderSkipped: false,
+                        }],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: {
+                            display: false,
+                          },
+                          tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            padding: 12,
+                            titleFont: { size: 14, weight: 'bold' },
+                            bodyFont: { size: 13 },
+                            callbacks: {
+                              title: function(context) {
+                                const fullName = stats.breakdowns?.fieldOfficers?.[context[0].dataIndex]?.name || '';
+                                return fullName;
+                              },
+                              label: function(context) {
+                                return `पूर्ण सर्वेक्षण: ${context.parsed.y}`;
+                              }
+                            }
+                          }
+                        },
+                        scales: {
+                          y: {
+                            beginAtZero: true,
+                            ticks: {
+                              stepSize: 1,
+                              font: { size: 11 },
+                            },
+                            grid: {
+                              color: 'rgba(0, 0, 0, 0.05)',
+                            }
+                          },
+                          x: {
+                            ticks: {
+                              font: { size: 11 },
+                              maxRotation: 45,
+                              minRotation: 0,
+                            },
+                            grid: {
+                              display: false,
+                            }
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                ) : chartFilter === 'fieldOfficers' ? (
                   <div className="text-center py-5">
                     <p className="text-muted mb-0">डेटा उपलब्ध नाही</p>
                   </div>
