@@ -27,7 +27,13 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(request: NextRequest) {
   try {
-    const rows = await dbQuery('SELECT * FROM questions ORDER BY id ASC');
+    // Join with sections to get section names
+    const rows = await dbQuery(`
+      SELECT q.*, s.name AS section_name 
+      FROM questions q
+      LEFT JOIN sections s ON q.section_id = s.id
+      ORDER BY q.id ASC
+    `);
 
     // Inject dynamic options from database tables
     try {
