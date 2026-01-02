@@ -31,6 +31,8 @@ export default function PublicFormPage() {
   const [aadharNo, setAadharNo] = useState('');
   const [divyangName, setDivyangName] = useState('');
   const [aadharId, setAadharId] = useState<number | null>(null);
+  const [existingSurveyData, setExistingSurveyData] = useState<any>(null);
+  const [checkingExisting, setCheckingExisting] = useState(false);
   const [allQuestions, setAllQuestions] = useState<Question[]>([]);
   const [personalInfoQuestions, setPersonalInfoQuestions] = useState<Question[]>([]);
   const [addressQuestions, setAddressQuestions] = useState<Question[]>([]);
@@ -456,10 +458,63 @@ export default function PublicFormPage() {
     setError('');
   };
 
+  // Check for existing survey by Aadhar number
+  const checkExistingSurvey = async (aadharDigits: string) => {
+    if (aadharDigits.length !== 12) return;
+    
+    setCheckingExisting(true);
+    try {
+      const response = await apiCall('public/get-survey-by-aadhar', {
+        method: 'POST',
+        body: JSON.stringify({ aadhar_no: aadharDigits }),
+      });
+
+      if (response.ok && response.exists && response.data) {
+        setExistingSurveyData(response.data);
+        // Pre-fill name if available
+        if (response.data.holder_name) {
+          setDivyangName(response.data.holder_name);
+        }
+        // Pre-fill Aadhar ID if available
+        if (response.data.aadhar_id) {
+          setAadharId(response.data.aadhar_id);
+        }
+      } else {
+        setExistingSurveyData(null);
+      }
+    } catch (err: any) {
+      console.error('Error checking existing survey:', err);
+      setExistingSurveyData(null);
+    } finally {
+      setCheckingExisting(false);
+    }
+  };
+
   const createAadharRecord = async () => {
     setLoading(true);
     setError('');
     try {
+      // If existing survey data is available, use that aadhar_id
+      if (existingSurveyData && existingSurveyData.aadhar_id) {
+        setAadharId(existingSurveyData.aadhar_id);
+        
+        // Prefill answers if available
+        if (existingSurveyData.answers && Object.keys(existingSurveyData.answers).length > 0) {
+          setAnswers((prev) => ({ ...prev, ...existingSurveyData.answers }));
+        }
+        
+        // Pre-fill the name in personal info section
+        if (divyangName && allQuestions.length > 0) {
+          const nameQuestionId = getQuestionIdByText('दिव्यांगांचे नाव');
+          if (nameQuestionId) {
+            setAnswers((prev) => ({ ...prev, [nameQuestionId]: divyangName }));
+          }
+        }
+        
+        setCurrentStep('personal-info');
+        setLoading(false);
+        return;
+      }
       // First upload images
       const formData = new FormData();
       formData.append('front_image', frontImage!);
@@ -1238,17 +1293,80 @@ export default function PublicFormPage() {
                   </div>
                   <div className="mb-3">
                     <label className="form-label fw-semibold mb-2">आधार क्रमांक *</label>
-                    <input
-                      type="text"
-                      className="form-control form-control-lg"
-                      value={aadharNo}
-                      onChange={(e) => setAadharNo(e.target.value)}
-                      placeholder="1234-5678-9012"
-                      maxLength={14}
-                      required
-                      style={{ fontSize: '1rem' }}
-                    />
+                    <div className="d-flex gap-2">
+                      <input
+                        type="text"
+                        className="form-control form-control-lg"
+                        value={aadharNo}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setAadharNo(value);
+                          // Check for existing survey when 12 digits are entered
+                          const digits = value.replace(/\D/g, '');
+                          if (digits.length === 12) {
+                            checkExistingSurvey(digits);
+                          } else {
+                            setExistingSurveyData(null);
+                          }
+                        }}
+                        placeholder="1234-5678-9012"
+                        maxLength={14}
+                        required
+                        style={{ fontSize: '1rem' }}
+                      />
+                      {checkingExisting && (
+                        <button className="btn btn-outline-secondary" type="button" disabled>
+                          <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                          तपासत आहे...
+                        </button>
+                      )}
+                    </div>
                     <small className="form-text text-muted d-block mt-1">12 अंकी आधार क्रमांक प्रविष्ट करा</small>
+                    {existingSurveyData && (
+                      <div className="alert alert-warning mt-2" role="alert">
+                        <strong>⚠️ सर्वेक्षण आधीच अस्तित्वात आहे!</strong>
+                        <p className="mb-2 mt-2">
+                          या आधार क्रमांकासाठी सर्वेक्षण आधीच भरले गेले आहे. 
+                          {existingSurveyData.survey && (
+                            <span> उत्तरांची संख्या: {existingSurveyData.survey.answer_count}</span>
+                          )}
+                        </p>
+                        <div className="d-flex gap-2">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-primary"
+                            onClick={() => {
+                              // Prefill form with existing data
+                              if (existingSurveyData.holder_name) {
+                                setDivyangName(existingSurveyData.holder_name);
+                              }
+                              if (existingSurveyData.answers && Object.keys(existingSurveyData.answers).length > 0) {
+                                setAnswers((prev) => ({ ...prev, ...existingSurveyData.answers }));
+                              }
+                              if (existingSurveyData.front_image) {
+                                setFrontImageUrl(existingSurveyData.front_image);
+                              }
+                              if (existingSurveyData.back_image) {
+                                setBackImageUrl(existingSurveyData.back_image);
+                              }
+                              if (existingSurveyData.aadhar_id) {
+                                setAadharId(existingSurveyData.aadhar_id);
+                              }
+                              setExistingSurveyData(null);
+                            }}
+                          >
+                            माहिती पूर्व-भरणा करा
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary"
+                            onClick={() => setExistingSurveyData(null)}
+                          >
+                            नवीन सर्वेक्षण सुरू करा
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
