@@ -171,7 +171,7 @@ export async function GET(req: NextRequest) {
             s.approved_at,
             u_assigned.name AS assigned_to_name,
             u_verified.name AS verified_by_name,
-            u_approved.name AS approved_by_name,` : `
+            u_approved.name AS approved_by_name` : `
             NULL AS verification_status,
             NULL AS admin_approval_status,
             NULL AS assigned_to,
@@ -182,7 +182,7 @@ export async function GET(req: NextRequest) {
             NULL AS approved_at,
             NULL AS assigned_to_name,
             NULL AS verified_by_name,
-            NULL AS approved_by_name,`;
+            NULL AS approved_by_name`;
       
       const joinClauses = hasVerificationColumns ? `
           LEFT JOIN users u_assigned ON u_assigned.id = s.assigned_to
