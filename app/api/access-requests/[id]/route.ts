@@ -29,7 +29,7 @@ export const PATCH = requireAuth(async (request: NextRequest, user) => {
   const pool = getDbPool();
 
   const [existing]: any = await pool.query(
-    'SELECT id, status, name, phone FROM access_requests WHERE id = ? LIMIT 1',
+    'SELECT id, status, name, phone, email FROM access_requests WHERE id = ? LIMIT 1',
     [id]
   );
 
@@ -78,6 +78,7 @@ async function ensureMobileUserExists(pool: ReturnType<typeof getDbPool>, reques
     throw new Error('access_request_missing_phone');
   }
   const displayName = (requestRow?.name ?? '').toString().trim() || 'Field Officer';
+  const email = (requestRow?.email ?? '').toString().trim() || null;
 
   const [existingUser]: any = await pool.query(
     'SELECT id, user_type, user_type_id FROM users WHERE contact_number = ? LIMIT 1',
@@ -92,13 +93,14 @@ async function ensureMobileUserExists(pool: ReturnType<typeof getDbPool>, reques
 
   if (!Array.isArray(existingUser) || existingUser.length === 0) {
     await pool.query(
-      `INSERT INTO users (name, contact_number, user_type, user_type_id, status, is_active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'active', 1, NOW(), NOW())`,
-      [displayName, phone, DEFAULT_MOBILE_ROLE, fieldOfficerTypeId],
+      `INSERT INTO users (name, contact_number, email, user_type, user_type_id, status, is_active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'active', 1, NOW(), NOW())`,
+      [displayName, phone, email, DEFAULT_MOBILE_ROLE, fieldOfficerTypeId],
     );
     Logger.info('ACCESS_REQUEST_USER_AUTO_CREATED', {
       phone,
       name: displayName,
+      email,
       user_type: DEFAULT_MOBILE_ROLE,
     });
     return;
@@ -123,6 +125,13 @@ async function ensureMobileUserExists(pool: ReturnType<typeof getDbPool>, reques
     params.push(fieldOfficerTypeId);
   }
 
+  // Update email if provided and user doesn't have one
+  if (email) {
+    sql += `,
+           email = COALESCE(email, ?)`;
+    params.push(email);
+  }
+
   sql += `,
            updated_at = NOW()
      WHERE id = ?
@@ -130,7 +139,7 @@ async function ensureMobileUserExists(pool: ReturnType<typeof getDbPool>, reques
   params.push(existingId);
 
   await pool.query(sql, params);
-  Logger.info('ACCESS_REQUEST_USER_AUTO_ACTIVATED', { user_id: existingId, phone });
+  Logger.info('ACCESS_REQUEST_USER_AUTO_ACTIVATED', { user_id: existingId, phone, email });
 }
 
 

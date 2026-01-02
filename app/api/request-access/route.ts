@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
     
     const name = formData.get('name')?.toString().trim() ?? '';
     const phone = formData.get('phone')?.toString().trim() ?? '';
+    const email = formData.get('email')?.toString().trim() ?? '';
     const selfie = formData.get('selfie') as File | null;
     
     Logger.info('ACCESS_REQUEST_FIELDS_EXTRACTED', { 
@@ -84,9 +85,9 @@ export async function POST(request: NextRequest) {
     }
 
     const [result]: any = await pool.query(
-      `INSERT INTO access_requests (name, phone, selfie_url, status)
-       VALUES (?, ?, ?, 'pending')`,
-      [name, phone, relativeUrl]
+      `INSERT INTO access_requests (name, phone, selfie_url, status, email)
+       VALUES (?, ?, ?, 'pending', ?)`,
+      [name, phone, relativeUrl, email || null]
     );
 
     const duration = Date.now() - startTime;
