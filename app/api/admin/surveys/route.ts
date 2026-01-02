@@ -55,6 +55,22 @@ export async function GET(req: NextRequest) {
       // Get filter type (unassigned, all, etc.)
       const filterType = url.searchParams.get('filter') || 'all'; // 'all', 'unassigned', 'pending', 'verified', 'approved'
       
+      // Check if verification columns exist in surveys table
+      let hasVerificationColumns = false;
+      try {
+        const [columnCheck]: any = await conn.query(
+          `SELECT COUNT(*) as count 
+           FROM INFORMATION_SCHEMA.COLUMNS 
+           WHERE TABLE_SCHEMA = DATABASE() 
+             AND TABLE_NAME = 'surveys' 
+             AND COLUMN_NAME IN ('verification_status', 'admin_approval_status', 'assigned_to')`
+        );
+        hasVerificationColumns = Array.isArray(columnCheck) && columnCheck.length > 0 && columnCheck[0].count >= 3;
+      } catch (checkError) {
+        Logger.info('surveys_column_check_failed', { error: checkError });
+        hasVerificationColumns = false;
+      }
+
       // Build WHERE clause for search
       let whereClause = '1=1';
       const searchParams: any[] = [];
@@ -65,7 +81,7 @@ export async function GET(req: NextRequest) {
         // 1. Surveys assigned to them (under_review)
         // 2. All completed surveys (for verification)
         // 3. All incomplete surveys
-        if (filterType === 'assigned_to_me') {
+        if (filterType === 'assigned_to_me' && hasVerificationColumns) {
           whereClause += ` AND s.assigned_to = ?`;
           searchParams.push(userId);
         } else if (filterType === 'completed') {
@@ -76,15 +92,15 @@ export async function GET(req: NextRequest) {
         // 'all' shows everything - no additional filter
       } else {
         // Admin filter conditions
-        if (filterType === 'unassigned') {
+        if (filterType === 'unassigned' && hasVerificationColumns) {
           whereClause += ` AND (s.source = 'Divyang Self' OR s.source IS NULL) AND (s.assigned_to IS NULL OR s.assigned_to = 0)`;
-        } else if (filterType === 'pending') {
+        } else if (filterType === 'pending' && hasVerificationColumns) {
           whereClause += ` AND (s.verification_status = 'pending' OR s.verification_status IS NULL)`;
-        } else if (filterType === 'under_review') {
+        } else if (filterType === 'under_review' && hasVerificationColumns) {
           whereClause += ` AND s.verification_status = 'under_review'`;
-        } else if (filterType === 'verified') {
+        } else if (filterType === 'verified' && hasVerificationColumns) {
           whereClause += ` AND s.verification_status = 'verified'`;
-        } else if (filterType === 'approved') {
+        } else if (filterType === 'approved' && hasVerificationColumns) {
           whereClause += ` AND s.admin_approval_status = 'approved'`;
         }
         // 'all' shows everything - no additional filter
@@ -138,10 +154,40 @@ export async function GET(req: NextRequest) {
         // Fallback to sa.id for unknown columns
         orderByClause = 'sa.id';
       }
-      
+
       // Build the query with proper error handling
       const queryParams = [...searchParams, length, start];
       let rows: any;
+      
+      // Build SELECT fields based on whether verification columns exist
+      const verificationFields = hasVerificationColumns ? `
+            s.verification_status,
+            s.admin_approval_status,
+            s.assigned_to,
+            s.admin_corrections,
+            s.verified_by,
+            s.verified_at,
+            s.approved_by,
+            s.approved_at,
+            u_assigned.name AS assigned_to_name,
+            u_verified.name AS verified_by_name,
+            u_approved.name AS approved_by_name,` : `
+            NULL AS verification_status,
+            NULL AS admin_approval_status,
+            NULL AS assigned_to,
+            NULL AS admin_corrections,
+            NULL AS verified_by,
+            NULL AS verified_at,
+            NULL AS approved_by,
+            NULL AS approved_at,
+            NULL AS assigned_to_name,
+            NULL AS verified_by_name,
+            NULL AS approved_by_name,`;
+      
+      const joinClauses = hasVerificationColumns ? `
+          LEFT JOIN users u_assigned ON u_assigned.id = s.assigned_to
+          LEFT JOIN users u_verified ON u_verified.id = s.verified_by
+          LEFT JOIN users u_approved ON u_approved.id = s.approved_by` : '';
       
       try {
         [rows] = await conn.query(
@@ -156,23 +202,9 @@ export async function GET(req: NextRequest) {
               WHEN COALESCE(s.no_of_questions_answered, 0) > 0 THEN 'Completed'
               ELSE 'Pending'
             END AS status,
-            s.source,
-            s.verification_status,
-            s.admin_approval_status,
-            s.assigned_to,
-            s.admin_corrections,
-            s.verified_by,
-            s.verified_at,
-            s.approved_by,
-            s.approved_at,
-            u_assigned.name AS assigned_to_name,
-            u_verified.name AS verified_by_name,
-            u_approved.name AS approved_by_name
+            s.source${verificationFields ? ',' + verificationFields.trim() : ''}
           FROM survey_aadhar sa
-          LEFT JOIN surveys s ON s.aadhaar_id = sa.id
-          LEFT JOIN users u_assigned ON u_assigned.id = s.assigned_to
-          LEFT JOIN users u_verified ON u_verified.id = s.verified_by
-          LEFT JOIN users u_approved ON u_approved.id = s.approved_by
+          LEFT JOIN surveys s ON s.aadhaar_id = sa.id${joinClauses}
           WHERE ${whereClause}
           ORDER BY ${orderByClause} ${orderDir}
           LIMIT ? OFFSET ?`,
