@@ -433,7 +433,7 @@ body {
 }
 
 .dataTables_wrapper .dataTables_paginate .paginate_button.current {
-  background: var(--accent-100) !important;
+  background: linear-gradient(135deg, #0D47A1 0%, #1976D2 50%, #42A5F5 100%) !important;
   color: #fff !important;
 }
 
