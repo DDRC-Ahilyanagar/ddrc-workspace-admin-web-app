@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 
       // Get statistics for each officer
       const officersWithStats = await Promise.all(
-        officers.map(async (officer) => {
+        officers.map(async (officer: any) => {
           const userId = Number(officer.id);
 
           // Get completed surveys (where noOfQuestionsUnanswered = 0)

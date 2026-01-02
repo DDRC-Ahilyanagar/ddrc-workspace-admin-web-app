@@ -14,8 +14,12 @@ export async function apiCall<T = any>(
     const response = await fetch(`${API_BASE}/${endpoint}`, {
       ...options,
       credentials: 'include',
+      cache: 'no-store', // Prevent caching
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
         ...options.headers,
       },
     });
@@ -97,13 +101,14 @@ export async function createAadhar(aadharNo: string, frontImage?: string, backIm
   });
 }
 
-export async function submitAnswers(userId: number, aadharId: number, items: any[]): Promise<ApiResponse> {
+export async function submitAnswers(userId: number, aadharId: number, items: any[], source?: string): Promise<ApiResponse> {
   return apiCall('submit-answers', {
     method: 'POST',
     body: JSON.stringify({
       user_id: userId,
       aadhar_id: aadharId,
       items,
+      source: source || 'Divyang Self',
     }),
   });
 }

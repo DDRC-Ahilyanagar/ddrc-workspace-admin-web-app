@@ -699,7 +699,12 @@ function SectionsContent() {
           answer: answers[q.id],
         }));
 
-      const response = await submitAnswers(1, aadharId, items);
+      // Get admin name from localStorage or use "Admin" as default
+      const adminName = typeof window !== 'undefined' 
+        ? (localStorage.getItem('user_name') || 'Admin')
+        : 'Admin';
+
+      const response = await submitAnswers(1, aadharId, items, adminName);
 
       if (response.ok) {
         // Get next section

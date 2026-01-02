@@ -1,11 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // External packages for server components
-  serverExternalPackages: ['tesseract.js'],
-  // Turbopack configuration
-  turbopack: {
-    // Allow external packages
-  },
+  // Note: serverExternalPackages is only available in Next.js 15+
+  // For Next.js 14, external packages are handled automatically
+  // turbopack is a CLI flag (--turbo), not a config option
 };
 
 export default nextConfig;

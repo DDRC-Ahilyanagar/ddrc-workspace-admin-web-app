@@ -108,6 +108,21 @@ async function handleSubmit(request: NextRequest, user: any) {
       ? parseInt(String(body.camp_id))
       : NaN;
     const campId = Number.isFinite(campIdRaw) ? campIdRaw : 0;
+    
+    // Get source from body, or determine from user context
+    let source = body.source || '';
+    // If source not provided and user is authenticated, use user's name for field officers
+    if (!source && user) {
+      // Check if user is a field officer
+      const userType = (user.user_type || '').toLowerCase();
+      if (userType === 'field_officer' || userType === 'field officer') {
+        source = user.name || '';
+      }
+    }
+    // Default to "Divyang Self" if no source provided and no authenticated user
+    if (!source) {
+      source = 'Divyang Self';
+    }
 
     if (userId <= 0 || aadhaarId <= 0 || !Array.isArray(items)) {
       return NextResponse.json(
@@ -213,6 +228,7 @@ async function handleSubmit(request: NextRequest, user: any) {
             no_of_questions_unanswered INT NOT NULL DEFAULT 0,
             survey_json LONGTEXT NULL,
             json_path VARCHAR(255) NULL,
+            source VARCHAR(255) NULL,
             created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
@@ -369,6 +385,7 @@ async function handleSubmit(request: NextRequest, user: any) {
         await ensureColumn('no_of_questions_unanswered', 'no_of_questions_unanswered INT NOT NULL DEFAULT 0');
         await ensureColumn('survey_json', 'survey_json LONGTEXT NULL');
         await ensureColumn('json_path', 'json_path VARCHAR(255) NULL');
+        await ensureColumn('source', 'source VARCHAR(255) NULL');
         
         // Add unique constraint if it doesn't exist
         try {
@@ -471,9 +488,10 @@ async function handleSubmit(request: NextRequest, user: any) {
                  no_of_questions_unanswered = ?,
                  survey_json = ?,
                  json_path = ?,
+                 source = ?,
                  updated_at = NOW()
              WHERE aadhaar_id = ?`,
-            [totalAnswered, totalUnanswered, mergedJsonString, relativePath, aadhaarId]
+            [totalAnswered, totalUnanswered, mergedJsonString, relativePath, source, aadhaarId]
           );
           
           Logger.info('submit_answers_survey_updated', {
@@ -485,9 +503,9 @@ async function handleSubmit(request: NextRequest, user: any) {
         } else {
           // Insert new survey record with JSON
           const [insertSurvey] = await connection.execute(
-            `INSERT INTO surveys (user_id, aadhaar_id, no_of_questions_answered, no_of_questions_unanswered, survey_json, json_path, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())`,
-            [userId, aadhaarId, answeredCount, unansweredCount, responseJson, relativePath]
+            `INSERT INTO surveys (user_id, aadhaar_id, no_of_questions_answered, no_of_questions_unanswered, survey_json, json_path, source, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+            [userId, aadhaarId, answeredCount, unansweredCount, responseJson, relativePath, source]
           );
           
           if ((insertSurvey as any)?.insertId) {

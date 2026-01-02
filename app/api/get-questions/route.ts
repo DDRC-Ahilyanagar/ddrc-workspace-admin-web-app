@@ -27,9 +27,9 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(request: NextRequest) {
   try {
-    // Join with sections to get section names
+    // Join with sections to include section names and titles
     const rows = await dbQuery(`
-      SELECT q.*, s.name AS section_name 
+      SELECT q.*, s.name AS section_name, s.name as title, s.title_marathi 
       FROM questions q
       LEFT JOIN sections s ON q.section_id = s.id
       ORDER BY q.id ASC
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
       const pool = getDbPool();
       const conn = await pool.getConnection();
       try {
-        // Inject disability types for question 69
+        // Inject disability types for all questions containing "दिव्यांगता प्रकार" or "Disability Type"
         await conn.query(`CREATE TABLE IF NOT EXISTS disability_types (
           id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
           label_marathi VARCHAR(255) NOT NULL,
@@ -48,6 +48,35 @@ export async function GET(request: NextRequest) {
           aliases JSON NULL,
           UNIQUE KEY uniq_labels (label_marathi, label_english)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+        // Seed disability types if table is empty
+        const [dtc]: any = await conn.query('SELECT COUNT(*) AS c FROM disability_types');
+        if (((dtc as any[])?.[0]?.c || 0) === 0) {
+          const seedVals = [
+            ['अंध','Blindness',JSON.stringify(['Blindness','Blind','अंध'])],
+            ['दृष्टिदोष','Low Vision',JSON.stringify(['Low Vision','Low-vision','दृष्टिदोष'])],
+            ['कर्णबधिर','Hearing Impairment',JSON.stringify(['Hearing Impairment','deaf and hard of hearing','कर्णबधिर'])],
+            ['वाचादोष','Speech and Language Disability',JSON.stringify(['Speech and Language Disability','Speech & Language','वाचादोष'])],
+            ['अस्थिव्यंग','Locomotor Disability',JSON.stringify(['Locomotor Disability','अस्थिव्यंग'])],
+            ['मानसिक आजार','Mental Illness',JSON.stringify(['Mental Illness','मानसिक आजार'])],
+            ['अध्ययन अक्षमता','Specific Learning Disabilities',JSON.stringify(['Specific Learning Disabilities','Learning Disability','अध्ययन अक्षमता'])],
+            ['सेरेब्रल पालसी - मेंदूचा पक्षाघात','Cerebral Palsy',JSON.stringify(['Cerebral Palsy','सेरेब्रल पालसी'])],
+            ['स्वमग्न','Autism Spectrum Disorder',JSON.stringify(['Autism Spectrum Disorder','Autism','स्वमग्न'])],
+            ['बहुविकलांग','Multiple Disabilities including Deafblindness',JSON.stringify(['Multiple Disabilities including deafblindness','Multiple Disabilities','बहुविकलांग'])],
+            ['कुष्ठरोग','Leprosy Cured Persons',JSON.stringify(['Leprosy Cured persons','Leprosy','कुष्ठरोग'])],
+            ['बुटकेपणा','Dwarfism',JSON.stringify(['Dwarfism','बुटकेपणा'])],
+            ['मतिमंद','Intellectual Disability',JSON.stringify(['Intellectual Disability','ID','मतिमंद'])],
+            ['अविकसित मांसपेशी','Muscular Dystrophy',JSON.stringify(['Muscular Dystrophy','अविकसित मांसपेशी'])],
+            ['मज्जासंस्थेचे तीव्र आजार','Chronic Neurological Conditions',JSON.stringify(['Chronic Neurological conditions','Neurological','मज्जासंस्थेचे तीव्र आजार'])],
+            ['मेंदूतील चेतासंस्था संबंधी आजार','Multiple Sclerosis',JSON.stringify(['Multiple Sclerosis','MS','मेंदूतील चेतासंस्था संबंधी आजार'])],
+            ['रक्ता संबंधी कॅन्सर','Thalassemia',JSON.stringify(['Thalassemia','थॅलेसेमिया','रक्ता संबंधी कॅन्सर'])],
+            ['रक्तवाहिन्या संबंधित आजार','Hemophilia',JSON.stringify(['Hemophilia','रक्तवाहिन्या संबंधित आजार'])],
+            ['रक्ता संबंधी रक्ताचे प्रमाण कमी','Sickle Cell Disease',JSON.stringify(['Sickle Cell disease','Sickle Cell','रक्ता संबंधी रक्ताचे प्रमाण कमी'])],
+            ['एसिड हल्लाग्रस्त पीडित','Acid Attack Victim',JSON.stringify(['Acid Attack victim','Acid Attack','एसिड हल्लाग्रस्त पीडित'])],
+            ['कंपावत रोग',"Parkinson's Disease",JSON.stringify(["Parkinson's disease","Parkinsons","कंपावत रोग"])]
+          ];
+          await conn.query('INSERT INTO disability_types (label_marathi, label_english, aliases) VALUES ?', [seedVals]);
+        }
 
         const [types]: any = await conn.query(
           'SELECT label_english FROM disability_types ORDER BY id ASC'
@@ -61,7 +90,12 @@ export async function GET(request: NextRequest) {
 
         if (options) {
           for (const r of rows as any[]) {
-            if (parseInt(r.id || '0') === 69) {
+            const questionText = String(r.question || '').trim();
+            const questionId = parseInt(r.id || '0');
+            // Inject for question 69 or any question containing "दिव्यांगता प्रकार" or "Disability Type"
+            if (questionId === 69 || 
+                questionText.includes('दिव्यांगता प्रकार') || 
+                questionText.toLowerCase().includes('disability type')) {
               r.options = options; // inject English options list
             }
           }
