@@ -115,7 +115,8 @@ export async function GET(req: NextRequest) {
       const filteredRecords = (filteredCountRows as any[])[0]?.total || 0;
       
       // Get paginated data - use surveys table for answer count and status (primary source)
-      let orderByClause = `sa.${orderByColumn}`;
+      // Map column names to actual table columns
+      let orderByClause = 'sa.id'; // Default fallback
       if (orderByColumn === 'answer_count') {
         orderByClause = 'COALESCE(s.no_of_questions_answered, 0)';
       } else if (orderByColumn === 'status') {
@@ -123,42 +124,69 @@ export async function GET(req: NextRequest) {
           WHEN COALESCE(s.no_of_questions_answered, 0) > 0 THEN 'Completed'
           ELSE 'Pending'
         END`;
+      } else if (orderByColumn === 'id') {
+        orderByClause = 'sa.id';
+      } else if (orderByColumn === 'aadhar_no') {
+        orderByClause = 'sa.aadhar_no';
+      } else if (orderByColumn === 'user_id') {
+        orderByClause = 'sa.user_id';
+      } else if (orderByColumn === 'created_at') {
+        orderByClause = 'sa.created_at';
+      } else if (orderByColumn === 'updated_at') {
+        orderByClause = 'sa.updated_at';
+      } else {
+        // Fallback to sa.id for unknown columns
+        orderByClause = 'sa.id';
       }
       
-      const [rows]: any = await conn.query(
-        `SELECT 
-          sa.id,
-          sa.aadhar_no,
-          sa.user_id,
-          sa.created_at,
-          sa.updated_at,
-          COALESCE(s.no_of_questions_answered, 0) AS answer_count,
-          CASE 
-            WHEN COALESCE(s.no_of_questions_answered, 0) > 0 THEN 'Completed'
-            ELSE 'Pending'
-          END AS status,
-          s.source,
-          s.verification_status,
-          s.admin_approval_status,
-          s.assigned_to,
-          s.admin_corrections,
-          s.verified_by,
-          s.verified_at,
-          s.approved_by,
-          s.approved_at,
-          u_assigned.name AS assigned_to_name,
-          u_verified.name AS verified_by_name,
-          u_approved.name AS approved_by_name
-        FROM survey_aadhar sa
-        LEFT JOIN surveys s ON s.aadhaar_id = sa.id
-        LEFT JOIN users u_assigned ON u_assigned.id = s.assigned_to
-        LEFT JOIN users u_verified ON u_verified.id = s.verified_by
-        LEFT JOIN users u_approved ON u_approved.id = s.approved_by
-        WHERE ${whereClause}
-        ORDER BY ${orderByClause} ${orderDir}
-        LIMIT ? OFFSET ?`,
-        [...searchParams, length, start]
-      );
+      // Build the query with proper error handling
+      const queryParams = [...searchParams, length, start];
+      let rows: any;
+      
+      try {
+        [rows] = await conn.query(
+          `SELECT 
+            sa.id,
+            sa.aadhar_no,
+            sa.user_id,
+            sa.created_at,
+            sa.updated_at,
+            COALESCE(s.no_of_questions_answered, 0) AS answer_count,
+            CASE 
+              WHEN COALESCE(s.no_of_questions_answered, 0) > 0 THEN 'Completed'
+              ELSE 'Pending'
+            END AS status,
+            s.source,
+            s.verification_status,
+            s.admin_approval_status,
+            s.assigned_to,
+            s.admin_corrections,
+            s.verified_by,
+            s.verified_at,
+            s.approved_by,
+            s.approved_at,
+            u_assigned.name AS assigned_to_name,
+            u_verified.name AS verified_by_name,
+            u_approved.name AS approved_by_name
+          FROM survey_aadhar sa
+          LEFT JOIN surveys s ON s.aadhaar_id = sa.id
+          LEFT JOIN users u_assigned ON u_assigned.id = s.assigned_to
+          LEFT JOIN users u_verified ON u_verified.id = s.verified_by
+          LEFT JOIN users u_approved ON u_approved.id = s.approved_by
+          WHERE ${whereClause}
+          ORDER BY ${orderByClause} ${orderDir}
+          LIMIT ? OFFSET ?`,
+          queryParams
+        );
+      } catch (queryError: any) {
+        Logger.error('surveys_query_error', { 
+          error: queryError.message,
+          sql: `WHERE ${whereClause} ORDER BY ${orderByClause} ${orderDir}`,
+          params: queryParams,
+          stack: queryError.stack
+        });
+        throw queryError;
+      }
       
       const surveys = Array.isArray(rows) ? JSON.parse(JSON.stringify(rows)) : [];
       
@@ -193,14 +221,18 @@ export async function GET(req: NextRequest) {
       conn.release();
     }
   } catch (e: any) {
-    Logger.error('surveys_get_error', { error: e.message });
-    const draw = parseInt(new URL(req.url).searchParams.get('draw') || '1');
+    Logger.error('surveys_get_error', { 
+      error: e.message,
+      stack: e.stack,
+      name: e.name
+    });
+    const draw = parseInt(new URL(req.url || '').searchParams.get('draw') || '1');
     return NextResponse.json({ 
       draw,
       recordsTotal: 0,
       recordsFiltered: 0,
       data: [],
-      error: e.message
+      error: e.message || 'Internal server error'
     }, { status: 500 });
   }
 }
