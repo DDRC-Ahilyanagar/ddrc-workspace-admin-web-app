@@ -16,8 +16,6 @@ import { useRouter } from 'next/navigation';
 import Script from 'next/script';
 import AdminLayout from '@/components/AdminLayout';
 
-export const dynamic = 'force-dynamic';
-
 export default function SurvekshanPage() {
   const router = useRouter();
   
