@@ -16,6 +16,20 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Check if table exists
+    const pool = await import('@/lib/db').then(m => m.getDbPool());
+    const [tables] = await pool.execute("SHOW TABLES LIKE 'tbl_all_talathi'");
+    const tableExists = Array.isArray(tables) && tables.length > 0;
+
+    if (!tableExists) {
+      // Return empty array if table doesn't exist
+      Logger.info('get_talathi_table_missing', { taluka });
+      return NextResponse.json(
+        { ok: true, talathi: [] },
+        { headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+      );
+    }
+
     const rows = await dbQuery(
       `SELECT DISTINCT talathi 
        FROM tbl_all_talathi 
@@ -33,9 +47,10 @@ export async function GET(request: NextRequest) {
     );
   } catch (error: any) {
     Logger.error('get_talathi_failed', { error: error?.message });
+    // Return empty array on error instead of failing
     return NextResponse.json(
-      { ok: false, error: error?.message || 'failed to load talathi offices' },
-      { status: 500 }
+      { ok: true, talathi: [] },
+      { headers: { 'Content-Type': 'application/json; charset=utf-8' } }
     );
   }
 }

@@ -58,9 +58,11 @@ export async function GET(request: NextRequest) {
       { headers: { 'Content-Type': 'application/json; charset=utf-8' } }
     );
   } catch (error: any) {
+    // Return empty array on error instead of failing
+    console.error('Error fetching villages:', error);
     return NextResponse.json(
-      { ok: false, error: error.message },
-      { status: 500 }
+      { ok: true, villages: [] },
+      { headers: { 'Content-Type': 'application/json; charset=utf-8' } }
     );
   }
 }

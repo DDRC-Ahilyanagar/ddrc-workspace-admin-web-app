@@ -16,6 +16,20 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Check if table exists
+    const pool = await import('@/lib/db').then(m => m.getDbPool());
+    const [tables] = await pool.execute("SHOW TABLES LIKE 'tbl_all_phc'");
+    const tableExists = Array.isArray(tables) && tables.length > 0;
+
+    if (!tableExists) {
+      // Return empty array if table doesn't exist
+      Logger.info('get_phc_table_missing', { taluka });
+      return NextResponse.json(
+        { ok: true, phc: [] },
+        { headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+      );
+    }
+
     const rows = await dbQuery(
       `SELECT DISTINCT phc 
        FROM tbl_all_phc 
@@ -33,9 +47,10 @@ export async function GET(request: NextRequest) {
     );
   } catch (error: any) {
     Logger.error('get_phc_failed', { error: error?.message });
+    // Return empty array on error instead of failing
     return NextResponse.json(
-      { ok: false, error: error?.message || 'failed to load PHC list' },
-      { status: 500 }
+      { ok: true, phc: [] },
+      { headers: { 'Content-Type': 'application/json; charset=utf-8' } }
     );
   }
 }

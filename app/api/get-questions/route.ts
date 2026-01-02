@@ -28,10 +28,12 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   try {
     // Join with sections to include section names and titles
+    // Only fetch active questions
     const rows = await dbQuery(`
       SELECT q.*, s.name AS section_name, s.name as title, s.title_marathi 
       FROM questions q
       LEFT JOIN sections s ON q.section_id = s.id
+      WHERE q.status = 'Active' OR q.status IS NULL
       ORDER BY q.id ASC
     `);
 

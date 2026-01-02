@@ -32,6 +32,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Check if table exists
+    const pool = await import('@/lib/db').then(m => m.getDbPool());
+    const [tables] = await pool.execute("SHOW TABLES LIKE 'tbl_all_grams'");
+    const tableExists = Array.isArray(tables) && tables.length > 0;
+
+    if (!tableExists) {
+      // Return empty array if table doesn't exist
+      return NextResponse.json(
+        { ok: true, grams: [] },
+        { headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+      );
+    }
+
     const rows = await dbQuery(
       `SELECT DISTINCT gram FROM tbl_all_grams 
        WHERE taluka = ? AND (status IS NULL OR status = 'Active') 
@@ -39,16 +52,18 @@ export async function GET(request: NextRequest) {
       [taluka]
     );
 
-    const grams = rows.map((r: any) => r.gram);
+    const grams = rows.map((r: any) => r.gram).filter(Boolean);
 
     return NextResponse.json(
       { ok: true, grams },
       { headers: { 'Content-Type': 'application/json; charset=utf-8' } }
     );
   } catch (error: any) {
+    // Return empty array on error instead of failing
+    console.error('Error fetching grams:', error);
     return NextResponse.json(
-      { ok: false, error: error.message },
-      { status: 500 }
+      { ok: true, grams: [] },
+      { headers: { 'Content-Type': 'application/json; charset=utf-8' } }
     );
   }
 }
