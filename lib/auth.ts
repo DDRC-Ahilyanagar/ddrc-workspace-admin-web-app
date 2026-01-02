@@ -28,19 +28,21 @@ export async function verifyAuth(request: NextRequest): Promise<{ user: AuthUser
     }
 
     // Query using contact_number column (phone column doesn't exist)
+    // Also check user_types table via user_type_id to support verification_officer role
     const user = await dbQueryOne<AuthUser>(
-      `SELECT id,
-              name,
-              contact_number AS phone,
-              COALESCE(user_type, '') AS user_type,
+      `SELECT u.id,
+              u.name,
+              u.contact_number AS phone,
+              COALESCE(NULLIF(u.user_type, ''), ut.user_type, '') AS user_type,
               CASE
-                WHEN status IS NOT NULL THEN (status = 'active')
-                WHEN is_active IS NOT NULL THEN is_active
+                WHEN u.status IS NOT NULL THEN (u.status = 'active')
+                WHEN u.is_active IS NOT NULL THEN u.is_active
                 ELSE 1
               END AS is_active
-       FROM users
-       WHERE contact_number = ?
-         AND (status = 'active' OR is_active = 1 OR status IS NULL)
+       FROM users u
+       LEFT JOIN user_types ut ON ut.id = u.user_type_id
+       WHERE u.contact_number = ?
+         AND (u.status = 'active' OR u.is_active = 1 OR u.status IS NULL)
        LIMIT 1`,
       [phone]
     );

@@ -83,6 +83,7 @@ type Stats = {
   surveysToday: number;
   totalAnswers: number;
   pendingSurveys: number;
+  unassignedSurveys?: number;
   completionRate: number;
   otpToday: { sent: number; verified: number };
   activeQuestions: number;
@@ -105,6 +106,17 @@ export default function DashboardPage() {
   const [error, setError] = useState('');
   const [sections, setSections] = useState<string[]>([]);
   const [chartFilter, setChartFilter] = useState<'taluka' | 'gender' | 'disability' | 'udid' | 'fieldOfficers'>('taluka');
+  const [userType, setUserType] = useState('');
+
+  // Check if user is verification officer and redirect
+  useEffect(() => {
+    const storedUserType = localStorage.getItem('user_type') || '';
+    setUserType(storedUserType);
+    if (storedUserType?.toLowerCase() === 'verification_officer') {
+      // Verification officers should go directly to surveys page
+      router.push('/survekshan');
+    }
+  }, [router]);
 
   const handleStartSurvey = () => {
     router.push('/survekshan');
@@ -160,6 +172,7 @@ export default function DashboardPage() {
           <StatCard title="आजचे सर्वेक्षण" value={stats?.surveysToday ?? (loading ? '...' : 0)} delay="0.05s" />
           <StatCard title="पूर्णता दर" value={stats ? `${stats.completionRate}%` : (loading ? '...' : '0%')} subtitle="पूर्ण सबमिट झालेले" delay="0.1s" />
           <StatCard title="प्रलंबित" value={stats?.pendingSurveys ?? (loading ? '...' : 0)} delay="0.15s" />
+          <StatCard title="अनियुक्त सर्वेक्षण" value={stats?.unassignedSurveys ?? (loading ? '...' : 0)} delay="0.17s" subtitle="नियुक्तीची वाट पाहत आहे" />
           <StatCard title="उत्तरांची संख्या" value={stats?.totalAnswers ?? (loading ? '...' : 0)} delay="0.2s" />
           <StatCard title="प्रश्नावली विभाग" value={sections?.length ?? (loading ? '...' : 0)} delay="0.22s" />
           <StatCard title="सक्रिय प्रश्न" value={stats?.activeQuestions ?? (loading ? '...' : 0)} delay="0.24s" />

@@ -87,6 +87,10 @@ function OTPContent() {
         localStorage.setItem('logged_in', 'true');
         localStorage.setItem('user_name', name);
         localStorage.setItem('user_phone', phone);
+        // Store user_type if available
+        if (response.user?.user_type) {
+          localStorage.setItem('user_type', response.user.user_type);
+        }
         router.push('/dashboard');
       } else {
         setError(response.error || 'पडताळणी अयशस्वी');

@@ -30,6 +30,23 @@ export default function SurvekshanPage() {
   
   // Prevent multiple initialization attempts
   const initAttemptedRef = useRef(false);
+  
+  // User type and filter state
+  const [userType, setUserType] = useState('');
+  const [filterType, setFilterType] = useState('all');
+
+  // Get user type on mount
+  useEffect(() => {
+    const storedUserType = localStorage.getItem('user_type') || '';
+    setUserType(storedUserType);
+  }, []);
+
+  // Reload DataTable when filter changes
+  useEffect(() => {
+    if (dtInstanceRef.current && filterType) {
+      dtInstanceRef.current.ajax.reload();
+    }
+  }, [filterType]);
 
   /**
    * Setup global handler for DataTable view action button
@@ -89,6 +106,22 @@ export default function SurvekshanPage() {
       ajax: {
         url: '/api/admin/surveys',
         type: 'GET',
+        xhrFields: {
+          withCredentials: true
+        },
+        beforeSend: function(xhr: any) {
+          // Send phone as Authorization header for user identification
+          const userPhone = localStorage.getItem('user_phone') || '';
+          if (userPhone) {
+            xhr.setRequestHeader('Authorization', `Bearer ${userPhone}`);
+          }
+        },
+        data: function(d: any) {
+          // Add filter parameter to request
+          const currentFilter = filterType || 'all';
+          d.filter = currentFilter;
+          return d;
+        },
         error: (xhr: any, error: string, thrown: string) => {
           console.error('Surveys API request failed:', error, thrown);
           console.error('Response:', xhr.responseText);
@@ -279,6 +312,40 @@ export default function SurvekshanPage() {
           {/* Page Header */}
           <div className="d-flex justify-content-between align-items-center mb-4">
             <h2 className="mb-0">सर्वेक्षण यादी</h2>
+            {/* Filter Dropdown */}
+            <div className="d-flex align-items-center gap-3">
+              <label className="mb-0 fw-semibold">फिल्टर:</label>
+              <select
+                className="form-select form-select-sm"
+                style={{ minWidth: '200px' }}
+                value={filterType}
+                onChange={(e) => {
+                  setFilterType(e.target.value);
+                  // Reload DataTable with new filter
+                  if (dtInstanceRef.current) {
+                    dtInstanceRef.current.ajax.reload();
+                  }
+                }}
+              >
+                {userType?.toLowerCase() === 'verification_officer' ? (
+                  <>
+                    <option value="all">सर्व</option>
+                    <option value="completed">पूर्ण सर्वेक्षण</option>
+                    <option value="incomplete">अपूर्ण सर्वेक्षण</option>
+                    <option value="assigned_to_me">माझ्याकडे नियुक्त</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="all">सर्व</option>
+                    <option value="unassigned">अनियुक्त</option>
+                    <option value="pending">प्रलंबित</option>
+                    <option value="under_review">पुनरावलोकनाखाली</option>
+                    <option value="verified">पडताळले</option>
+                    <option value="approved">मंजूर</option>
+                  </>
+                )}
+              </select>
+            </div>
           </div>
 
           {/* Survey List Table Card */}

@@ -44,7 +44,25 @@
             source: ".next/**,package.json,package-lock.json,public/**,lib/**,app/**,middleware.ts,next.config.mjs,tsconfig.json,storage/**,prisma/**"
             target: "/var/www/surveys"
 
-        - name: Restart PM2
+        - name: Install Dependencies on Server
+          uses: appleboy/ssh-action@v1.2.0
+          with:
+            host: ${{ secrets.VPS_HOST }}
+            username: ${{ secrets.VPS_USER }}
+            key: ${{ secrets.VPS_KEY }}
+            port: ${{ secrets.VPS_PORT || 22 }}
+            timeout: 900s
+            command_timeout: 900s
+            debug: true
+            script: |
+              cd /var/www/surveys
+              echo "Cleaning old dependencies..."
+              rm -rf node_modules package-lock.json ~/.npm
+              echo "Installing production dependencies (this may take a few minutes)..."
+              npm install --production --no-audit --no-fund --prefer-offline || npm install --production --no-audit --no-fund
+              echo "Dependencies installed successfully"
+
+        - name: Setup Storage and Seed Database
           uses: appleboy/ssh-action@v1.2.0
           with:
             host: ${{ secrets.VPS_HOST }}
@@ -56,12 +74,24 @@
             debug: true
             script: |
               cd /var/www/surveys
-              rm -rf node_modules package-lock.json ~/.npm
-              npm install --production
               # Ensure storage directory exists
               mkdir -p storage/logs
-              # Run database seed to update questions/sections
+              echo "Running database seed..."
               npm run prisma:seed || echo "Seed script completed (may have skipped if already seeded)"
-              # Check PM2 status and restart
+
+        - name: Restart PM2
+          uses: appleboy/ssh-action@v1.2.0
+          with:
+            host: ${{ secrets.VPS_HOST }}
+            username: ${{ secrets.VPS_USER }}
+            key: ${{ secrets.VPS_KEY }}
+            port: ${{ secrets.VPS_PORT || 22 }}
+            timeout: 120s
+            command_timeout: 120s
+            debug: true
+            script: |
+              cd /var/www/surveys
+              echo "Restarting PM2..."
               pm2 restart surveys || pm2 start npm --name "surveys" -- start
               pm2 save
+              echo "PM2 restarted successfully"

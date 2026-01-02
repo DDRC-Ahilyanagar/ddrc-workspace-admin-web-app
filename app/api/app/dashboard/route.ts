@@ -45,13 +45,21 @@ export async function POST(req: NextRequest) {
     }
 
     const [uRows] = await pool.query(
-      `SELECT id, name, contact_number FROM users WHERE ${where} LIMIT 1`,
+      `SELECT u.id, u.name, u.contact_number, u.user_type, ut.user_type AS related_type
+       FROM users u
+       LEFT JOIN user_types ut ON ut.id = u.user_type_id
+       WHERE ${where} LIMIT 1`,
       params
     );
     const user = Array.isArray(uRows) && (uRows as any[]).length > 0 ? (uRows as any[])[0] : null;
     if (!user) {
       return NextResponse.json({ ok: false, error: 'user_not_found' }, { status: 404 });
     }
+    
+    // Determine effective user_type (from user_type column or user_types table)
+    const userType = (user.user_type || '').toString().trim().toLowerCase();
+    const relatedType = (user.related_type || '').toString().trim().toLowerCase();
+    const effectiveUserType = userType || relatedType || '';
 
     // Parallel work (DB IO is async; leverage pool.query in parallel).
     const recentPromise = pool
@@ -180,7 +188,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      user: { id: user.id, name: user.name, phone: user.contact_number },
+      user: { 
+        id: user.id, 
+        name: user.name, 
+        phone: user.contact_number,
+        user_type: effectiveUserType,
+      },
       wallet,
       rate,
       counts: counts || { completed: 0, pending: 0 },

@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
         role: (r) => {
           const v = normalizeRole(r);
           if (!v) return true;
-          return ['admin', 'supervisor', 'field_officer', 'therapy_specialist'].includes(v);
+          return ['admin', 'supervisor', 'field_officer', 'therapy_specialist', 'verification_officer'].includes(v);
         },
       }
     );
@@ -238,8 +238,9 @@ export async function POST(request: NextRequest) {
       const isSupervisor = effectiveRole === 'supervisor';
       const isFieldOfficer = effectiveRole === 'field_officer';
 
-      // For web requests, only allow admin/supervisor users
-      if (isWebRequest && !isAdmin && !isSupervisor) {
+      // For web requests, allow admin/supervisor/verification_officer users
+      const isVerificationOfficer = effectiveRole === 'verification_officer';
+      if (isWebRequest && !isAdmin && !isSupervisor && !isVerificationOfficer) {
         return NextResponse.json(
           {
             ok: false,
@@ -284,7 +285,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      Logger.info('verify_otp_ok', { phone, user_id: finalUserData.id, has_passkey: !!finalUserData.passkey, isTestMode });
+      Logger.info('verify_otp_ok', { phone, user_id: finalUserData.id, has_passkey: !!finalUserData.passkey, isTestMode, effectiveRole });
       const response = NextResponse.json({ 
         ok: true, 
         user: {
@@ -292,6 +293,7 @@ export async function POST(request: NextRequest) {
           name: finalUserData.name,
           phone: finalUserData.contact_number,
           passkey: finalUserData.passkey ? String(finalUserData.passkey) : null,
+          user_type: effectiveRole, // Include user type in response
         }
       });
 

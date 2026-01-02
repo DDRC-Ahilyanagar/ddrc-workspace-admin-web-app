@@ -80,8 +80,8 @@ export async function POST(request: NextRequest) {
         role: (r) => {
           const val = normalizeRole(r);
           if (!val) return true;
-          return ['admin', 'supervisor', 'field_officer', 'therapy_specialist'].includes(val);
-        }, // Allow therapy_specialist role for mobile app access
+          return ['admin', 'supervisor', 'field_officer', 'therapy_specialist', 'verification_officer'].includes(val);
+        }, // Allow therapy_specialist and verification_officer roles
       }
     );
 
@@ -202,11 +202,12 @@ export async function POST(request: NextRequest) {
       const relatedType = normalizeRole(userData.related_type);
       effectiveRole = userType || relatedType;
 
-      // For web requests, only allow admin/supervisor users
+      // For web requests, allow admin/supervisor/verification_officer users
       if (isWebRequest) {
         const isAdmin = userType === 'admin' || relatedType === 'admin';
         const isSupervisor = userType === 'supervisor' || relatedType === 'supervisor';
-        if (!isAdmin && !isSupervisor) {
+        const isVerificationOfficer = userType === 'verification_officer' || relatedType === 'verification_officer';
+        if (!isAdmin && !isSupervisor && !isVerificationOfficer) {
           return NextResponse.json(
             {
               ok: false,

@@ -1,11 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';
+import { verifyAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
+    // Get user info to check role (optional - for filtering)
+    let userType = '';
+    let userId: number | undefined;
+    let isVerificationOfficer = false;
+    
+    try {
+      const { user } = await verifyAuth(req);
+      if (user) {
+        userType = user.user_type?.toLowerCase() || '';
+        isVerificationOfficer = userType === 'verification_officer';
+        userId = user.id;
+      }
+    } catch (authError) {
+      // Auth is optional for this endpoint - continue without user info
+      Logger.info('surveys_get_no_auth', { note: 'Request without authentication' });
+    }
+
     const pool = getDbPool();
     const conn = await pool.getConnection();
     try {
@@ -34,25 +52,64 @@ export async function GET(req: NextRequest) {
       ];
       const orderByColumn = columns[orderColumnIndex] || 'id';
       
+      // Get filter type (unassigned, all, etc.)
+      const filterType = url.searchParams.get('filter') || 'all'; // 'all', 'unassigned', 'pending', 'verified', 'approved'
+      
       // Build WHERE clause for search
       let whereClause = '1=1';
       const searchParams: any[] = [];
       
+      // Apply filter conditions based on user role
+      if (isVerificationOfficer && userId) {
+        // Verification officers see:
+        // 1. Surveys assigned to them (under_review)
+        // 2. All completed surveys (for verification)
+        // 3. All incomplete surveys
+        if (filterType === 'assigned_to_me') {
+          whereClause += ` AND s.assigned_to = ?`;
+          searchParams.push(userId);
+        } else if (filterType === 'completed') {
+          whereClause += ` AND COALESCE(s.no_of_questions_answered, 0) > 0 AND (s.no_of_questions_unanswered = 0 OR s.no_of_questions_unanswered IS NULL)`;
+        } else if (filterType === 'incomplete') {
+          whereClause += ` AND (COALESCE(s.no_of_questions_answered, 0) = 0 OR (s.no_of_questions_unanswered > 0 AND s.no_of_questions_unanswered IS NOT NULL))`;
+        }
+        // 'all' shows everything - no additional filter
+      } else {
+        // Admin filter conditions
+        if (filterType === 'unassigned') {
+          whereClause += ` AND (s.source = 'Divyang Self' OR s.source IS NULL) AND (s.assigned_to IS NULL OR s.assigned_to = 0)`;
+        } else if (filterType === 'pending') {
+          whereClause += ` AND (s.verification_status = 'pending' OR s.verification_status IS NULL)`;
+        } else if (filterType === 'under_review') {
+          whereClause += ` AND s.verification_status = 'under_review'`;
+        } else if (filterType === 'verified') {
+          whereClause += ` AND s.verification_status = 'verified'`;
+        } else if (filterType === 'approved') {
+          whereClause += ` AND s.admin_approval_status = 'approved'`;
+        }
+        // 'all' shows everything - no additional filter
+      }
+      
       if (searchValue) {
-        whereClause += ` AND (aadhar_no LIKE ? OR id LIKE ?)`;
+        whereClause += ` AND (sa.aadhar_no LIKE ? OR sa.id LIKE ?)`;
         const searchPattern = `%${searchValue}%`;
         searchParams.push(searchPattern, searchPattern);
       }
       
-      // Get total count (before filtering)
+      // Get total count (before filtering) - count from surveys table joined with survey_aadhar
       const [totalCountRows]: any = await conn.query(
-        `SELECT COUNT(*) AS total FROM survey_aadhar`
+        `SELECT COUNT(DISTINCT sa.id) AS total 
+         FROM survey_aadhar sa
+         LEFT JOIN surveys s ON s.aadhaar_id = sa.id`
       );
       const totalRecords = (totalCountRows as any[])[0]?.total || 0;
       
       // Get filtered count
       const [filteredCountRows]: any = await conn.query(
-        `SELECT COUNT(*) AS total FROM survey_aadhar WHERE ${whereClause}`,
+        `SELECT COUNT(DISTINCT sa.id) AS total 
+         FROM survey_aadhar sa
+         LEFT JOIN surveys s ON s.aadhaar_id = sa.id
+         WHERE ${whereClause}`,
         searchParams
       );
       const filteredRecords = (filteredCountRows as any[])[0]?.total || 0;
@@ -79,9 +136,24 @@ export async function GET(req: NextRequest) {
           CASE 
             WHEN COALESCE(s.no_of_questions_answered, 0) > 0 THEN 'Completed'
             ELSE 'Pending'
-          END AS status
+          END AS status,
+          s.source,
+          s.verification_status,
+          s.admin_approval_status,
+          s.assigned_to,
+          s.admin_corrections,
+          s.verified_by,
+          s.verified_at,
+          s.approved_by,
+          s.approved_at,
+          u_assigned.name AS assigned_to_name,
+          u_verified.name AS verified_by_name,
+          u_approved.name AS approved_by_name
         FROM survey_aadhar sa
         LEFT JOIN surveys s ON s.aadhaar_id = sa.id
+        LEFT JOIN users u_assigned ON u_assigned.id = s.assigned_to
+        LEFT JOIN users u_verified ON u_verified.id = s.verified_by
+        LEFT JOIN users u_approved ON u_approved.id = s.approved_by
         WHERE ${whereClause}
         ORDER BY ${orderByClause} ${orderDir}
         LIMIT ? OFFSET ?`,
@@ -95,6 +167,10 @@ export async function GET(req: NextRequest) {
         ...s,
         created_at: s.created_at ? new Date(s.created_at).toLocaleString('en-IN') : '-',
         updated_at: s.updated_at ? new Date(s.updated_at).toLocaleString('en-IN') : '-',
+        verified_at: s.verified_at ? new Date(s.verified_at).toLocaleString('en-IN') : null,
+        approved_at: s.approved_at ? new Date(s.approved_at).toLocaleString('en-IN') : null,
+        verification_status: s.verification_status || 'pending',
+        admin_approval_status: s.admin_approval_status || 'pending',
       }));
       
       Logger.info('surveys_fetched', { 

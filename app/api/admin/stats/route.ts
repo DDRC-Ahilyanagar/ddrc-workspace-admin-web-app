@@ -150,6 +150,16 @@ export async function GET(_req: NextRequest) {
 
       const activeQuestions = ((active1Rows as any[])[0]?.c || 0) || ((active2Rows as any[])[0]?.c || 0) || 0;
 
+      // Get unassigned surveys count (surveys with source = 'Divyang Self' and not assigned)
+      const pUnassigned = safeQuery(`
+        SELECT COUNT(DISTINCT s.id) AS c
+        FROM surveys s
+        WHERE (s.source = 'Divyang Self' OR s.source IS NULL)
+          AND (s.assigned_to IS NULL OR s.assigned_to = 0)
+      `);
+      const [unassignedRows] = await pUnassigned;
+      const unassignedSurveys = (unassignedRows as any[])[0]?.c || 0;
+
       const totalSurveys = (totalAadharRows as any[])[0]?.c || 0;
       const surveysToday = (todayAadharRows as any[])[0]?.c || 0;
       const completedSurveys = (completedRows as any[])[0]?.c || 0;
@@ -371,6 +381,7 @@ export async function GET(_req: NextRequest) {
           surveysToday,
           completedSurveys,
           pendingSurveys,
+          unassignedSurveys,
           completionRate,
           otpToday: {
             sent: Number(otpToday.sent) || 0,

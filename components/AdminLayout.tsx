@@ -12,6 +12,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [userName, setUserName] = useState('');
   const [userPhone, setUserPhone] = useState('');
+  const [userType, setUserType] = useState('');
   const [mounted, setMounted] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
@@ -27,7 +28,39 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       router.push('/login');
     } else {
       setUserName(localStorage.getItem('user_name') || '');
-      setUserPhone(localStorage.getItem('user_phone') || '');
+      const phone = localStorage.getItem('user_phone') || '';
+      setUserPhone(phone);
+      
+      // Get user_type from localStorage first (for immediate render)
+      const storedUserType = localStorage.getItem('user_type') || '';
+      setUserType(storedUserType);
+      
+      // Always fetch user_type from API to ensure it's current
+      if (phone) {
+        const fetchUserType = async () => {
+          try {
+            const response = await fetch('/api/app/dashboard', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ phone }),
+            });
+            const data = await response.json();
+            if (data.ok && data.user) {
+              // Get user_type from the response
+              const fetchedUserType = (data.user.user_type || '').toString().trim().toLowerCase();
+              if (fetchedUserType) {
+                console.log('Fetched user_type from API:', fetchedUserType);
+                setUserType(fetchedUserType);
+                localStorage.setItem('user_type', fetchedUserType);
+              }
+            }
+          } catch (err) {
+            console.error('Failed to fetch user type:', err);
+          }
+        };
+        fetchUserType();
+      }
     }
   }, [router]);
 
@@ -130,7 +163,15 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     router.push('/login');
   };
 
-  const menuItems = [
+  // Different menu items based on user type
+  const isVerificationOfficer = userType?.toLowerCase().trim() === 'verification_officer';
+  
+  // Debug logging (remove in production)
+  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+    console.log('AdminLayout - userType:', userType, 'isVerificationOfficer:', isVerificationOfficer);
+  }
+  
+  const adminMenuItems = [
     { path: '/dashboard', label: 'डॅशबोर्ड', icon: 'bi-speedometer2' },
     { path: '/survekshan', label: 'सर्वेक्षण', icon: 'bi-clipboard-check' },
     { path: '/sections', label: 'सेक्शन', icon: 'bi-folder' },
@@ -139,6 +180,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     { path: '/officers', label: 'Field Officers', icon: 'bi-people' },
     { path: '/admin/rate', label: 'दर (Field officer)', icon: 'bi-cash-coin' },
   ];
+
+  const verificationOfficerMenuItems = [
+    { path: '/survekshan', label: 'सर्वेक्षण', icon: 'bi-clipboard-check' },
+  ];
+
+  const menuItems = isVerificationOfficer ? verificationOfficerMenuItems : adminMenuItems;
 
   if (!mounted) {
     return null;
@@ -164,7 +211,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           </div>
           
           <div className="d-flex align-items-center animate__animated animate__fadeInRight">
-            {/* Notification Bell */}
+            {/* Notification Bell - Only show for admin */}
+            {!isVerificationOfficer && (
             <div className="notification-wrapper position-relative me-3" ref={notifRef}>
               <button
                 className="btn btn-link text-white position-relative"
@@ -254,6 +302,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 </div>
               )}
             </div>
+            )}
             
             <div className="user-info me-3">
               <span className="text-white">{userName || 'User'}</span>
