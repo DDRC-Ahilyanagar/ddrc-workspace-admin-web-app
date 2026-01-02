@@ -305,9 +305,6 @@ export default function SurvekshanPage() {
         }}
       />
       
-      {/* DataTables CSS stylesheets */}
-      <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css" />
-      <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" />
       <AdminLayout>
         <div className="container-fluid p-4">
           {/* Page Header */}
