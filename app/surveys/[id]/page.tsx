@@ -83,12 +83,55 @@ function SurveyDetailsContent() {
     loadSurveyDetails();
   }, [surveyId]);
 
+  // Normalize image path/URL for display
+  const normalizeImagePath = (path: string): string => {
+    if (!path) return path;
+    
+    // If it's a full URL, check if it's localhost or invalid domain
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      // If URL contains localhost or 127.0.0.1, extract the path part
+      if (path.includes('localhost') || path.includes('127.0.0.1')) {
+        const urlObj = new URL(path);
+        return urlObj.pathname; // Return just the path part
+      }
+      // Otherwise return the full URL as-is
+      return path;
+    }
+    
+    // If it starts with /, it's already a valid relative path
+    if (path.startsWith('/')) {
+      return path;
+    }
+    
+    // If it contains 'uploads' but doesn't start with /, add it
+    if (path.includes('uploads') && !path.startsWith('/')) {
+      return `/${path}`;
+    }
+    
+    // If it looks like a filename (has extension), assume it's in uploads
+    if (path.match(/\.(jpg|jpeg|png|gif|webp|pdf)$/i)) {
+      // Remove any leading path separators and ensure it starts with /uploads/
+      const cleanPath = path.replace(/^\/+/, '').replace(/^uploads\//, '');
+      return `/uploads/${cleanPath}`;
+    }
+    
+    // If it's just a UUID or filename without extension, check if it's in uploads format
+    if (path.match(/^[a-f0-9-]{36}$/i)) {
+      // It's a UUID, likely a filename - check if it needs .jpg extension
+      return `/uploads/${path}.jpg`;
+    }
+    
+    // Otherwise return as-is
+    return path;
+  };
+
   const formatAnswer = (answer: Answer): string => {
     if (!answer.answer) return '-';
     
-    // If it's an image URL, return it as-is for display
-    if (answer.answer.startsWith('http') || answer.answer.startsWith('/')) {
-      return answer.answer;
+    // If it's an image URL, normalize and return it
+    const normalized = normalizeImagePath(answer.answer);
+    if (normalized.startsWith('http') || normalized.startsWith('/')) {
+      return normalized;
     }
     
     // If it's an array (for multi-select), join it
@@ -103,7 +146,11 @@ function SurveyDetailsContent() {
   };
 
   const isImageAnswer = (answer: string): boolean => {
-    return answer.startsWith('http') || answer.startsWith('/');
+    if (!answer) return false;
+    const normalized = normalizeImagePath(answer);
+    return normalized.startsWith('http') || normalized.startsWith('/') || 
+           normalized.includes('uploads') || 
+           /\.(jpg|jpeg|png|gif|webp|pdf)$/i.test(normalized);
   };
 
   const handleExport = async (format: 'xlsx' | 'pdf') => {
@@ -297,16 +344,28 @@ function SurveyDetailsContent() {
                   <div className="col-md-6">
                     <strong>आधार समोरील:</strong>
                     <div className="mt-2">
-                      {survey.front_image.startsWith('http') || survey.front_image.startsWith('/') ? (
-                        <img
-                          src={survey.front_image}
-                          alt="Aadhaar Front"
-                          className="img-fluid border rounded"
-                          style={{ maxHeight: '300px' }}
-                        />
-                      ) : (
-                        <span className="badge bg-secondary">{survey.front_image}</span>
-                      )}
+                      {(() => {
+                        const normalizedPath = normalizeImagePath(survey.front_image);
+                        const isValidImage = normalizedPath.startsWith('http') || normalizedPath.startsWith('/');
+                        return isValidImage ? (
+                          <img
+                            src={normalizedPath}
+                            alt="Aadhaar Front"
+                            className="img-fluid border rounded"
+                            style={{ maxHeight: '300px' }}
+                            onError={(e) => {
+                              // If image fails to load, show fallback
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              const parent = (e.target as HTMLImageElement).parentElement;
+                              if (parent) {
+                                parent.innerHTML = `<span class="badge bg-warning">Image not found: ${survey.front_image}</span>`;
+                              }
+                            }}
+                          />
+                        ) : (
+                          <span className="badge bg-secondary">{survey.front_image}</span>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}
@@ -314,16 +373,28 @@ function SurveyDetailsContent() {
                   <div className="col-md-6">
                     <strong>आधार मागील:</strong>
                     <div className="mt-2">
-                      {survey.back_image.startsWith('http') || survey.back_image.startsWith('/') ? (
-                        <img
-                          src={survey.back_image}
-                          alt="Aadhaar Back"
-                          className="img-fluid border rounded"
-                          style={{ maxHeight: '300px' }}
-                        />
-                      ) : (
-                        <span className="badge bg-secondary">{survey.back_image}</span>
-                      )}
+                      {(() => {
+                        const normalizedPath = normalizeImagePath(survey.back_image);
+                        const isValidImage = normalizedPath.startsWith('http') || normalizedPath.startsWith('/');
+                        return isValidImage ? (
+                          <img
+                            src={normalizedPath}
+                            alt="Aadhaar Back"
+                            className="img-fluid border rounded"
+                            style={{ maxHeight: '300px' }}
+                            onError={(e) => {
+                              // If image fails to load, show fallback
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              const parent = (e.target as HTMLImageElement).parentElement;
+                              if (parent) {
+                                parent.innerHTML = `<span class="badge bg-warning">Image not found: ${survey.back_image}</span>`;
+                              }
+                            }}
+                          />
+                        ) : (
+                          <span className="badge bg-secondary">{survey.back_image}</span>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}
@@ -377,6 +448,14 @@ function SurveyDetailsContent() {
                                       alt="Answer"
                                       className="img-fluid border rounded"
                                       style={{ maxHeight: '200px' }}
+                                      onError={(e) => {
+                                        // If image fails to load, show fallback
+                                        (e.target as HTMLImageElement).style.display = 'none';
+                                        const parent = (e.target as HTMLImageElement).parentElement;
+                                        if (parent) {
+                                          parent.innerHTML = `<span class="badge bg-warning">Image not found: ${answerText}</span>`;
+                                        }
+                                      }}
                                     />
                                   </div>
                                 ) : (
