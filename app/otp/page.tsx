@@ -19,11 +19,14 @@ function OTPContent() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameLoading, setNameLoading] = useState(false);
   const [nameError, setNameError] = useState('');
+  const [userType, setUserType] = useState('');
 
   useEffect(() => {
     const storedName = localStorage.getItem('user_name') || '';
     const storedPhone = localStorage.getItem('user_phone') || phoneParam;
+    const storedUserType = localStorage.getItem('user_type') || '';
     setName(storedName);
+    setUserType(storedUserType);
     if (!phone && storedPhone) {
       setPhone(storedPhone);
     }
@@ -47,10 +50,15 @@ function OTPContent() {
 
       if (response.ok && response.user) {
         const fetchedName = response.user.name || '';
+        const fetchedUserType = response.user.user_type || '';
         if (!isEditingName) {
           setName(fetchedName);
         }
         localStorage.setItem('user_name', fetchedName);
+        if (fetchedUserType) {
+          setUserType(fetchedUserType);
+          localStorage.setItem('user_type', fetchedUserType);
+        }
         setNameError('');
       } else {
         if (!isEditingName) {
@@ -231,6 +239,26 @@ function OTPContent() {
                     <div className="text-danger mt-2 small">{nameError}</div>
                   )}
                 </div>
+
+                {/* User Type Display */}
+                {userType && (
+                  <div className="mb-4">
+                    <label className="form-label">भूमिका (Role)</label>
+                    <div className="d-flex align-items-center">
+                      <span className="badge bg-primary fs-6 px-3 py-2" style={{ fontSize: '0.95rem', fontWeight: '500' }}>
+                        {(() => {
+                          const normalizedType = userType.toLowerCase().trim();
+                          if (normalizedType === 'verification_officer') return 'Verification Officer';
+                          if (normalizedType === 'admin') return 'Admin';
+                          if (normalizedType === 'field_officer') return 'Field Officer';
+                          if (normalizedType === 'supervisor') return 'Supervisor';
+                          // Fallback: capitalize and replace underscores
+                          return userType.charAt(0).toUpperCase() + userType.slice(1).replace(/_/g, ' ');
+                        })()}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="mb-4">
                   <label className="form-label">६ अंकी ओटीपी लिहा</label>
