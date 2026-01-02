@@ -65,8 +65,17 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   }, [router]);
 
   // Fetch pending access requests count - runs silently in background
+  // Only fetch for admin users, skip for verification officers
   useEffect(() => {
     if (!mounted) return;
+    
+    // Skip fetching access requests for verification officers
+    // Check both state and localStorage for user type
+    const storedUserType = localStorage.getItem('user_type') || '';
+    const currentUserType = (userType || storedUserType)?.toLowerCase().trim();
+    if (currentUserType === 'verification_officer') {
+      return; // Don't fetch access requests for verification officers
+    }
 
     let isMounted = true;
     let intervalId: NodeJS.Timeout | null = null;
@@ -127,7 +136,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         abortController.abort();
       }
     };
-  }, [mounted]);
+  }, [mounted, userType]);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
