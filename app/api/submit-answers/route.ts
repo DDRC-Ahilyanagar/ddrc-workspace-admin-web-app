@@ -501,23 +501,75 @@ async function handleSubmit(request: NextRequest, user: any) {
             unanswered: totalUnanswered,
           });
         } else {
-          // Insert new survey record with JSON
-          const [insertSurvey] = await connection.execute(
-            `INSERT INTO surveys (user_id, aadhaar_id, no_of_questions_answered, no_of_questions_unanswered, survey_json, json_path, source, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
-            [userId, aadhaarId, answeredCount, unansweredCount, responseJson, relativePath, source]
-          );
-          
-          if ((insertSurvey as any)?.insertId) {
-            surveyId = (insertSurvey as any).insertId as number;
+          // Insert new survey record with JSON (with ON DUPLICATE KEY UPDATE as safety)
+          try {
+            const [insertSurvey] = await connection.execute(
+              `INSERT INTO surveys (user_id, aadhaar_id, no_of_questions_answered, no_of_questions_unanswered, survey_json, json_path, source, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+               ON DUPLICATE KEY UPDATE
+                 no_of_questions_answered = VALUES(no_of_questions_answered),
+                 no_of_questions_unanswered = VALUES(no_of_questions_unanswered),
+                 survey_json = VALUES(survey_json),
+                 json_path = VALUES(json_path),
+                 source = VALUES(source),
+                 updated_at = NOW()`,
+              [userId, aadhaarId, answeredCount, unansweredCount, responseJson, relativePath, source]
+            );
+            
+            if ((insertSurvey as any)?.insertId) {
+              surveyId = (insertSurvey as any).insertId as number;
+            } else {
+              // If no insertId, it means it was an update - fetch the existing ID
+              const [existing] = await connection.query(
+                'SELECT id FROM surveys WHERE aadhaar_id = ? LIMIT 1',
+                [aadhaarId]
+              );
+              if (Array.isArray(existing) && (existing as any[]).length > 0) {
+                surveyId = (existing as any[])[0].id;
+              }
+            }
+            
+            Logger.info('submit_answers_survey_created_or_updated', {
+              survey_id: surveyId,
+              aadhaar_id: aadhaarId,
+              answered: answeredCount,
+              unanswered: unansweredCount,
+            });
+          } catch (insertError: any) {
+            // If duplicate key error occurs (race condition), try to update instead
+            if (insertError.code === 'ER_DUP_ENTRY' || insertError.message?.includes('Duplicate entry')) {
+              Logger.info('submit_answers_duplicate_detected_race_condition', { aadhaar_id: aadhaarId });
+              // Fetch existing survey and update it
+              const [existing] = await connection.query(
+                'SELECT id, survey_json FROM surveys WHERE aadhaar_id = ? LIMIT 1',
+                [aadhaarId]
+              );
+              if (Array.isArray(existing) && (existing as any[]).length > 0) {
+                const existingSurvey = (existing as any[])[0];
+                surveyId = existingSurvey.id;
+                // Update with new data
+                await connection.execute(
+                  `UPDATE surveys 
+                   SET no_of_questions_answered = ?,
+                       no_of_questions_unanswered = ?,
+                       survey_json = ?,
+                       json_path = ?,
+                       source = ?,
+                       updated_at = NOW()
+                   WHERE aadhaar_id = ?`,
+                  [answeredCount, unansweredCount, responseJson, relativePath, source, aadhaarId]
+                );
+                Logger.info('submit_answers_survey_updated_after_duplicate', {
+                  survey_id: surveyId,
+                  aadhaar_id: aadhaarId,
+                });
+              } else {
+                throw insertError;
+              }
+            } else {
+              throw insertError;
+            }
           }
-          
-          Logger.info('submit_answers_survey_created', {
-            survey_id: surveyId,
-            aadhaar_id: aadhaarId,
-            answered: answeredCount,
-            unanswered: unansweredCount,
-          });
         }
       } catch (surveyError: any) {
         Logger.error('submit_answers_survey_record_failed', { 

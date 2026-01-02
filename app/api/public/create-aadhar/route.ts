@@ -123,27 +123,65 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Insert or update Aadhar record
-      const [result] = await connection.execute(
-        `INSERT INTO survey_aadhar (aadhar_no, user_id, front_image, back_image, holder_name, created_at, updated_at)
-         VALUES (?, 1, ?, ?, ?, NOW(), NOW())
-         ON DUPLICATE KEY UPDATE 
-           front_image = COALESCE(?, front_image),
-           back_image = COALESCE(?, back_image),
-           holder_name = COALESCE(?, holder_name),
-           updated_at = NOW()`,
-        [aadharNo, finalFrontImage, finalBackImage, divyangName, finalFrontImage, finalBackImage, divyangName]
-      );
-
+      // Insert or update Aadhar record (prevents duplicates via UNIQUE constraint)
       let aadharId: number;
-      if ((result as any).insertId) {
-        aadharId = (result as any).insertId;
-      } else {
-        const [existing] = await connection.execute(
-          `SELECT id FROM survey_aadhar WHERE aadhar_no = ?`,
-          [aadharNo]
+      try {
+        const [result] = await connection.execute(
+          `INSERT INTO survey_aadhar (aadhar_no, user_id, front_image, back_image, holder_name, created_at, updated_at)
+           VALUES (?, 1, ?, ?, ?, NOW(), NOW())
+           ON DUPLICATE KEY UPDATE 
+             front_image = COALESCE(?, front_image),
+             back_image = COALESCE(?, back_image),
+             holder_name = COALESCE(?, holder_name),
+             updated_at = NOW()`,
+          [aadharNo, finalFrontImage, finalBackImage, divyangName, finalFrontImage, finalBackImage, divyangName]
         );
-        aadharId = (existing as any[])[0]?.id;
+
+        if ((result as any).insertId) {
+          aadharId = (result as any).insertId;
+        } else {
+          // ON DUPLICATE KEY UPDATE was triggered - fetch existing ID
+          const [existing] = await connection.execute(
+            `SELECT id FROM survey_aadhar WHERE aadhar_no = ? LIMIT 1`,
+            [aadharNo]
+          );
+          if (Array.isArray(existing) && (existing as any[]).length > 0) {
+            aadharId = (existing as any[])[0]?.id;
+            Logger.info('PUBLIC_CREATE_AADHAR_EXISTING_UPDATED', {
+              aadharId,
+              aadharNo,
+              holderName: divyangName,
+            });
+          } else {
+            throw new Error('Failed to retrieve Aadhar ID after insert/update');
+          }
+        }
+      } catch (insertError: any) {
+        // Handle duplicate key error (shouldn't happen with ON DUPLICATE KEY UPDATE, but just in case)
+        if (insertError.code === 'ER_DUP_ENTRY' || insertError.message?.includes('Duplicate entry')) {
+          Logger.info('PUBLIC_CREATE_AADHAR_DUPLICATE_DETECTED', { aadharNo });
+          const [existing] = await connection.execute(
+            `SELECT id FROM survey_aadhar WHERE aadhar_no = ? LIMIT 1`,
+            [aadharNo]
+          );
+          if (Array.isArray(existing) && (existing as any[]).length > 0) {
+            aadharId = (existing as any[])[0]?.id;
+            // Update the record with new data
+            await connection.execute(
+              `UPDATE survey_aadhar 
+               SET front_image = COALESCE(?, front_image),
+                   back_image = COALESCE(?, back_image),
+                   holder_name = COALESCE(?, holder_name),
+                   updated_at = NOW()
+               WHERE id = ?`,
+              [finalFrontImage, finalBackImage, divyangName, aadharId]
+            );
+          } else {
+            throw new Error('Aadhar record exists but could not be retrieved');
+          }
+        } else {
+          throw insertError;
+        }
       }
 
       Logger.info('PUBLIC_CREATE_AADHAR_SUCCESS', {
