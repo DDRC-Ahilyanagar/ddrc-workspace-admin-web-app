@@ -57,6 +57,9 @@ function SurveyDetailsContent() {
   const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null);
   const [userType, setUserType] = useState<string>('');
   const [markingVerified, setMarkingVerified] = useState(false);
+  const [markingRejected, setMarkingRejected] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   useEffect(() => {
     // Get user type from localStorage
@@ -229,6 +232,53 @@ function SurveyDetailsContent() {
     }
   };
 
+  const handleMarkRejected = async () => {
+    if (!surveyId || surveyId <= 0) return;
+    
+    if (!rejectionReason.trim()) {
+      alert('कृपया नाकारण्याचे कारण प्रविष्ट करा.');
+      return;
+    }
+
+    const confirmMessage = 'तुम्हाला खात्री आहे की तुम्ही हे सर्वेक्षण नाकारू इच्छिता?';
+    if (!confirm(confirmMessage)) return;
+
+    setMarkingRejected(true);
+    try {
+      const res = await fetch(`/api/admin/surveys/${surveyId}/mark-rejected`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        cache: 'no-store',
+        credentials: 'include',
+        body: JSON.stringify({ reason: rejectionReason }),
+      });
+      const json = await res.json();
+      
+      if (json.ok) {
+        alert('सर्वेक्षण यशस्वीरित्या नाकारले गेले.');
+        setShowRejectModal(false);
+        setRejectionReason('');
+        // Reload survey details
+        const res2 = await fetch(`/api/admin/surveys/${surveyId}`, {
+          cache: 'no-store',
+        });
+        const json2 = await res2.json();
+        if (json2.ok && json2.data) {
+          setSurvey(json2.data.survey);
+        }
+      } else {
+        alert(json.error || 'सर्वेक्षण नाकारण्यात अयशस्वी. कृपया पुन्हा प्रयत्न करा.');
+      }
+    } catch (err) {
+      console.error('Failed to mark survey as rejected', err);
+      alert('सर्वेक्षण नाकारण्यात अयशस्वी. कृपया पुन्हा प्रयत्न करा.');
+    } finally {
+      setMarkingRejected(false);
+    }
+  };
+
   if (loading) {
     return (
       <AdminLayout>
@@ -313,24 +363,35 @@ function SurveyDetailsContent() {
             </button>
             {userType === 'verification_officer' && 
              survey?.verification_status !== 'verified' && 
+             survey?.verification_status !== 'rejected' &&
              survey?.assigned_to && (
-              <button
-                className="btn btn-success"
-                disabled={markingVerified}
-                onClick={handleMarkVerified}
-              >
-                {markingVerified ? (
-                  <>
-                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
-                    पडताळत आहे...
-                  </>
-                ) : (
-                  <>
-                    <i className="bi bi-check-circle me-2"></i>
-                    पडताळलेले म्हणून चिन्हांकित करा
-                  </>
-                )}
-              </button>
+              <>
+                <button
+                  className="btn btn-success"
+                  disabled={markingVerified || markingRejected}
+                  onClick={handleMarkVerified}
+                >
+                  {markingVerified ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
+                      पडताळत आहे...
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-check-circle me-2"></i>
+                      पडताळलेले म्हणून चिन्हांकित करा
+                    </>
+                  )}
+                </button>
+                <button
+                  className="btn btn-danger"
+                  disabled={markingVerified || markingRejected}
+                  onClick={() => setShowRejectModal(true)}
+                >
+                  <i className="bi bi-x-circle me-2"></i>
+                  नाकारा
+                </button>
+              </>
             )}
             <button
               className="btn btn-secondary"
@@ -546,6 +607,75 @@ function SurveyDetailsContent() {
           <div className="card shadow-sm mb-4">
             <div className="card-body text-center text-muted">
               <p className="mb-0">कोणतेही उत्तरे उपलब्ध नाहीत</p>
+            </div>
+          </div>
+        )}
+
+        {/* Reject Modal */}
+        {showRejectModal && (
+          <div className="modal show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+            <div className="modal-dialog modal-dialog-centered">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">सर्वेक्षण नाकारा</h5>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={() => {
+                      setShowRejectModal(false);
+                      setRejectionReason('');
+                    }}
+                    disabled={markingRejected}
+                  ></button>
+                </div>
+                <div className="modal-body">
+                  <div className="mb-3">
+                    <label htmlFor="rejectionReason" className="form-label">
+                      <strong>नाकारण्याचे कारण:</strong>
+                    </label>
+                    <textarea
+                      id="rejectionReason"
+                      className="form-control"
+                      rows={4}
+                      value={rejectionReason}
+                      onChange={(e) => setRejectionReason(e.target.value)}
+                      placeholder="कृपया सर्वेक्षण नाकारण्याचे कारण प्रविष्ट करा..."
+                      disabled={markingRejected}
+                    />
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setShowRejectModal(false);
+                      setRejectionReason('');
+                    }}
+                    disabled={markingRejected}
+                  >
+                    रद्द करा
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    onClick={handleMarkRejected}
+                    disabled={markingRejected || !rejectionReason.trim()}
+                  >
+                    {markingRejected ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
+                        नाकारत आहे...
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-x-circle me-2"></i>
+                        नाकारा
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
