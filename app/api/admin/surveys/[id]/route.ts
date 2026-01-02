@@ -74,14 +74,37 @@ export async function GET(
 
       const survey = surveyRows[0];
 
+      // Check if verification columns exist (outside try block for scope)
+      let hasVerificationColumns = false;
+      try {
+        const [columnCheck]: any = await conn.query(
+          `SELECT COLUMN_NAME 
+           FROM INFORMATION_SCHEMA.COLUMNS 
+           WHERE TABLE_SCHEMA = DATABASE() 
+             AND TABLE_NAME = 'surveys' 
+             AND COLUMN_NAME IN ('verification_status', 'assigned_to', 'verified_by', 'verified_at', 'admin_corrections')
+           LIMIT 5`
+        );
+        hasVerificationColumns = Array.isArray(columnCheck) && columnCheck.length > 0;
+      } catch (colCheckError: any) {
+        Logger.info('verification_columns_check_failed', { error: colCheckError?.message });
+        hasVerificationColumns = false;
+      }
+
       // Try to get survey JSON from surveys table first (primary source)
       let answers: any[] = [];
       let answersBySection: Record<string, any[]> = {};
       let surveyRecord: any = null;
       
       try {
+        const verificationFields = hasVerificationColumns
+          ? `, s.verification_status, s.assigned_to, s.verified_by, s.verified_at, s.admin_corrections`
+          : '';
+        
         const [surveyJsonRows]: any = await conn.query(
-          'SELECT survey_json, no_of_questions_answered, no_of_questions_unanswered FROM surveys WHERE aadhaar_id = ? LIMIT 1',
+          `SELECT survey_json, no_of_questions_answered, no_of_questions_unanswered${verificationFields}
+           FROM surveys s
+           WHERE s.aadhaar_id = ? LIMIT 1`,
           [surveyId]
         );
         
@@ -284,6 +307,21 @@ export async function GET(
         answer_count: answerCount,
       });
 
+      // Get verification data from surveyRecord if available
+      const verificationData = surveyRecord && hasVerificationColumns ? {
+        verification_status: surveyRecord.verification_status || 'pending',
+        assigned_to: surveyRecord.assigned_to || null,
+        verified_by: surveyRecord.verified_by || null,
+        verified_at: surveyRecord.verified_at || null,
+        admin_corrections: surveyRecord.admin_corrections || null,
+      } : {
+        verification_status: 'pending',
+        assigned_to: null,
+        verified_by: null,
+        verified_at: null,
+        admin_corrections: null,
+      };
+
       return NextResponse.json({
         ok: true,
         data: {
@@ -306,6 +344,7 @@ export async function GET(
             answer_count: answerCount,
             created_at: survey.created_at,
             updated_at: survey.updated_at,
+            ...verificationData,
           },
           answers,
           answersBySection,

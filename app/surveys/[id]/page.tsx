@@ -23,6 +23,11 @@ interface Survey {
   answer_count: number;
   created_at: string;
   updated_at: string;
+  verification_status?: string | null;
+  assigned_to?: number | null;
+  verified_by?: number | null;
+  verified_at?: string | null;
+  admin_corrections?: string | null;
 }
 
 interface Answer {
@@ -50,6 +55,14 @@ function SurveyDetailsContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null);
+  const [userType, setUserType] = useState<string>('');
+  const [markingVerified, setMarkingVerified] = useState(false);
+
+  useEffect(() => {
+    // Get user type from localStorage
+    const storedUserType = typeof window !== 'undefined' ? localStorage.getItem('user_type') || '' : '';
+    setUserType(storedUserType);
+  }, []);
 
   useEffect(() => {
     if (!surveyId || surveyId <= 0) {
@@ -180,6 +193,42 @@ function SurveyDetailsContent() {
     }
   };
 
+  const handleMarkVerified = async () => {
+    if (!surveyId || surveyId <= 0) return;
+    
+    const confirmMessage = 'तुम्हाला खात्री आहे की तुम्ही हे सर्वेक्षण पडताळलेले म्हणून चिन्हांकित करू इच्छिता?';
+    if (!confirm(confirmMessage)) return;
+
+    setMarkingVerified(true);
+    try {
+      const res = await fetch(`/api/admin/surveys/${surveyId}/mark-verified`, {
+        method: 'POST',
+        cache: 'no-store',
+        credentials: 'include',
+      });
+      const json = await res.json();
+      
+      if (json.ok) {
+        alert('सर्वेक्षण यशस्वीरित्या पडताळलेले म्हणून चिन्हांकित केले गेले.');
+        // Reload survey details
+        const res2 = await fetch(`/api/admin/surveys/${surveyId}`, {
+          cache: 'no-store',
+        });
+        const json2 = await res2.json();
+        if (json2.ok && json2.data) {
+          setSurvey(json2.data.survey);
+        }
+      } else {
+        alert(json.error || 'सर्वेक्षण पडताळण्यात अयशस्वी. कृपया पुन्हा प्रयत्न करा.');
+      }
+    } catch (err) {
+      console.error('Failed to mark survey as verified', err);
+      alert('सर्वेक्षण पडताळण्यात अयशस्वी. कृपया पुन्हा प्रयत्न करा.');
+    } finally {
+      setMarkingVerified(false);
+    }
+  };
+
   if (loading) {
     return (
       <AdminLayout>
@@ -262,6 +311,27 @@ function SurveyDetailsContent() {
                 </>
               )}
             </button>
+            {userType === 'verification_officer' && 
+             survey?.verification_status !== 'verified' && 
+             survey?.assigned_to && (
+              <button
+                className="btn btn-success"
+                disabled={markingVerified}
+                onClick={handleMarkVerified}
+              >
+                {markingVerified ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
+                    पडताळत आहे...
+                  </>
+                ) : (
+                  <>
+                    <i className="bi bi-check-circle me-2"></i>
+                    पडताळलेले म्हणून चिन्हांकित करा
+                  </>
+                )}
+              </button>
+            )}
             <button
               className="btn btn-secondary"
               onClick={() => router.push('/survekshan')}
