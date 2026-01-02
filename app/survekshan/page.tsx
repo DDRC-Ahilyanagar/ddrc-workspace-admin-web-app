@@ -51,8 +51,11 @@ export default function SurvekshanPage() {
    * This allows the dynamically rendered buttons in DataTable to navigate to survey details
    */
   useEffect(() => {
+    // Ensure handleViewSurvey is always available before DataTable tries to use it
     (window as any).handleViewSurvey = (id: number) => {
-      router.push(`/surveys/${id}`);
+      if (router) {
+        router.push(`/surveys/${id}`);
+      }
     };
     return () => {
       delete (window as any).handleViewSurvey;
@@ -174,9 +177,9 @@ export default function SurvekshanPage() {
           title: 'क्रिया', // Actions
           orderable: false,
           render: (data: any, type: any, row: any) => {
-            // View button that calls global handler
+            // View button that calls global handler with safety check
             return `
-              <button class="btn btn-sm btn-outline-primary" onclick="window.handleViewSurvey(${row.id})" title="पहा">
+              <button class="btn btn-sm btn-outline-primary" onclick="if(window.handleViewSurvey && typeof window.handleViewSurvey === 'function'){window.handleViewSurvey(${row.id});}else{console.error('handleViewSurvey not available');}" title="पहा">
                 <i class="bi bi-eye"></i>
               </button>
             `;
