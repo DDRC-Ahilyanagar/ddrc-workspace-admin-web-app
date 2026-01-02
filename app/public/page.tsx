@@ -399,21 +399,23 @@ export default function PublicFormPage() {
       }
       await createAadharRecord();
     } else if (currentStep === 'personal-info') {
-      // Validate required fields
-      const requiredQuestions = personalInfoQuestions.filter((q) => {
-        if (q.rendering_condition === 'Yes' || q.rendering_condition === 'yes') {
-          return shouldShowQuestion(q);
-        }
-        return true;
+      // Validate ALL visible questions are required
+      const visibleQuestions = personalInfoQuestions.filter((q) => shouldShowQuestion(q));
+      const missing = visibleQuestions.find((q) => {
+        const answer = answers[q.id];
+        // Check if answer is empty, null, undefined, or empty array
+        if (answer === null || answer === undefined || answer === '') return true;
+        if (Array.isArray(answer) && answer.length === 0) return true;
+        if (typeof answer === 'string' && answer.trim() === '') return true;
+        return false;
       });
-      const missing = requiredQuestions.find((q) => !answers[q.id] || answers[q.id] === '');
       if (missing) {
         setError(`कृपया सर्व आवश्यक फील्ड भरा: ${missing.question}`);
         return;
       }
       
       // Validate mobile numbers (must be exactly 10 digits)
-      for (const q of personalInfoQuestions) {
+      for (const q of visibleQuestions) {
         if (q.question?.includes('मोबाईल') || q.question?.includes('Mobile')) {
           const mobileValue = answers[q.id];
           if (mobileValue && mobileValue.toString().trim()) {
@@ -441,6 +443,21 @@ export default function PublicFormPage() {
       setCurrentStep('address');
       setError('');
     } else if (currentStep === 'address') {
+      // Validate ALL visible address questions are required
+      const visibleAddressQuestions = addressQuestions.filter((q) => shouldShowQuestion(q));
+      const missing = visibleAddressQuestions.find((q) => {
+        const answer = answers[q.id];
+        // Check if answer is empty, null, undefined, or empty array
+        if (answer === null || answer === undefined || answer === '') return true;
+        if (Array.isArray(answer) && answer.length === 0) return true;
+        if (typeof answer === 'string' && answer.trim() === '') return true;
+        return false;
+      });
+      if (missing) {
+        setError(`कृपया सर्व आवश्यक फील्ड भरा: ${missing.question}`);
+        return;
+      }
+      
       await submitForm();
     }
   };
@@ -573,9 +590,26 @@ export default function PublicFormPage() {
         throw new Error('Aadhar ID not found');
       }
 
+      // Final validation: Ensure all visible questions have answers
+      const allVisibleQuestions = [...personalInfoQuestions, ...addressQuestions]
+        .filter((q) => shouldShowQuestion(q));
+      
+      const missingAnswers = allVisibleQuestions.find((q) => {
+        const answer = answers[q.id];
+        if (answer === null || answer === undefined || answer === '') return true;
+        if (Array.isArray(answer) && answer.length === 0) return true;
+        if (typeof answer === 'string' && answer.trim() === '') return true;
+        return false;
+      });
+      
+      if (missingAnswers) {
+        setError(`कृपया सर्व आवश्यक फील्ड भरा: ${missingAnswers.question}`);
+        setSubmitting(false);
+        return;
+      }
+
       // Combine all answers
-      const allAnswers = [...personalInfoQuestions, ...addressQuestions]
-        .filter((q) => shouldShowQuestion(q) && answers[q.id] !== undefined && answers[q.id] !== '')
+      const allAnswers = allVisibleQuestions
         .map((q) => ({
           question_id: q.id,
           section_id: q.section_id || null,
@@ -831,6 +865,7 @@ export default function PublicFormPage() {
                 className="form-select form-select-lg"
                 value={currentAnswer || ''}
                 onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+                required
                 style={{ fontSize: '1rem', minHeight: '48px' }}
               >
                 <option value="">-- निवडा --</option>
@@ -865,6 +900,7 @@ export default function PublicFormPage() {
                 className="form-control form-control-lg"
                 value={districtValue}
                 onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+                required
                 style={{ fontSize: '1rem', minHeight: '48px' }}
               />
             </div>
@@ -880,6 +916,7 @@ export default function PublicFormPage() {
                 className="form-select form-select-lg"
                 value={currentAnswer || ''}
                 onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+                required
                 style={{ fontSize: '1rem', minHeight: '48px' }}
               >
                 <option value="">-- निवडा --</option>
@@ -931,6 +968,7 @@ export default function PublicFormPage() {
                 }
               }}
               readOnly={isAgeField}
+              required={!isAgeField}
               maxLength={isMobileField ? 10 : (q.max_length || undefined)}
               style={{ fontSize: '1rem', minHeight: '48px', backgroundColor: isAgeField ? '#e9ecef' : undefined }}
               placeholder={isMobileField ? '10 अंकी मोबाईल नंबर' : isEmailField ? 'example@email.com' : undefined}
@@ -950,6 +988,7 @@ export default function PublicFormPage() {
               rows={4}
               value={currentAnswer || ''}
               onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+              required
               maxLength={q.max_length || undefined}
               style={{ fontSize: '1rem', minHeight: '100px' }}
             />
@@ -965,6 +1004,7 @@ export default function PublicFormPage() {
               className="form-control form-control-lg"
               value={currentAnswer || ''}
               onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+              required
               style={{ fontSize: '1rem', minHeight: '48px' }}
             />
           </div>
@@ -979,6 +1019,7 @@ export default function PublicFormPage() {
               className="form-control form-control-lg"
               value={currentAnswer || ''}
               onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+              required
               style={{ fontSize: '1rem', minHeight: '48px' }}
             />
           </div>
@@ -992,6 +1033,7 @@ export default function PublicFormPage() {
               type="file"
               className="form-control form-control-lg"
               accept="image/*"
+              required
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) {
