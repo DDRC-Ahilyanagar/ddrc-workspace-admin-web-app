@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { getAbsoluteImageUrl } from '@/lib/config';
 
 const LOGO_URL = getAbsoluteImageUrl('/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png');
@@ -10,9 +11,9 @@ const LOGO_URL = getAbsoluteImageUrl('/ddrc app icon (192 x 192 px) (1024 x 1024
 const carouselSlides = [
   {
     id: 1,
-    title: 'Comprehensive Disability Survey Portal',
-    subtitle: 'व्यापक दिव्यांग सर्वेक्षण पोर्टल',
-    description: 'Digital platform for efficient disability data collection and management',
+    title: 'District Disability Rehabilitation Centre, Ahilyanagar',
+    subtitle: 'जिल्हा दिव्यांग पुनर्वसन केंद्र, अहिल्यानगर',
+    description: 'Ministry of Social Justice & Empowerment, Govt. of India approved',
     bgImage: '/app_back.jpg',
   },
   {
@@ -32,8 +33,26 @@ const carouselSlides = [
 ];
 
 export default function LandingPage() {
+  const router = useRouter();
+  const downloadSectionRef = useRef<HTMLDivElement>(null);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
+
+  // Check if user is coming from login page and needs to scroll
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const userType = urlParams.get('userType');
+    const scrollToDownload = urlParams.get('scrollToDownload');
+    
+    if (scrollToDownload === 'true' && downloadSectionRef.current) {
+      setTimeout(() => {
+        downloadSectionRef.current?.scrollIntoView({ 
+          behavior: 'smooth',
+          block: 'start'
+        });
+      }, 500);
+    }
+  }, []);
 
   // Auto-advance carousel
   useEffect(() => {
@@ -64,6 +83,15 @@ export default function LandingPage() {
     setTimeout(() => setIsAutoPlaying(true), 10000);
   };
 
+  const scrollToDownload = () => {
+    if (downloadSectionRef.current) {
+      downloadSectionRef.current.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start'
+      });
+    }
+  };
+
   return (
     <div className="landing-page">
       {/* Navigation Bar */}
@@ -82,7 +110,7 @@ export default function LandingPage() {
                 Public Survey
               </Link>
               <Link href="/login" className="btn btn-primary btn-sm">
-                Admin Login
+                Login
               </Link>
             </div>
           </div>
@@ -117,7 +145,7 @@ export default function LandingPage() {
                       Start Survey
                     </Link>
                     <Link href="/login" className="btn btn-outline-light btn-lg">
-                      Admin Portal
+                      Login
                     </Link>
                   </div>
                 </div>
@@ -144,6 +172,73 @@ export default function LandingPage() {
               aria-label={`Go to slide ${index + 1}`}
             />
           ))}
+        </div>
+      </section>
+
+      {/* Download Mobile App Section */}
+      <section ref={downloadSectionRef} className="landing-section download-section">
+        <div className="container">
+          <div className="download-card">
+            <div className="download-header">
+              <div className="download-icon">
+                <i className="bi bi-phone"></i>
+              </div>
+              <h2 className="download-title">
+                Download Mobile App
+                <span className="download-title-marathi">मोबाइल अॅप डाउनलोड करा</span>
+              </h2>
+              <p className="download-subtitle">
+                Available on Google Play Store
+                <span className="download-subtitle-marathi">गूगल प्ले स्टोअरवर उपलब्ध</span>
+              </p>
+            </div>
+            <div className="download-content">
+              <div className="row align-items-center">
+                <div className="col-lg-6">
+                  <div className="download-info">
+                    <h3>For Field Officers</h3>
+                    <p className="download-text">
+                      If you are a field officer, download our mobile app from the Google Play Store 
+                      to collect survey data efficiently on the go. The app works offline and syncs 
+                      automatically when connected.
+                    </p>
+                    <div className="download-features">
+                      <div className="download-feature-item">
+                        <i className="bi bi-check-circle-fill"></i>
+                        <span>Offline data collection</span>
+                      </div>
+                      <div className="download-feature-item">
+                        <i className="bi bi-check-circle-fill"></i>
+                        <span>OCR-based data extraction</span>
+                      </div>
+                      <div className="download-feature-item">
+                        <i className="bi bi-check-circle-fill"></i>
+                        <span>Real-time synchronization</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="col-lg-6 text-center">
+                  <div className="play-store-badge">
+                    <a 
+                      href="javascript:void(0)" 
+                      className="play-store-link"
+                      onClick={(e) => e.preventDefault()}
+                    >
+                      <img 
+                        src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" 
+                        alt="Get it on Google Play" 
+                        className="play-store-image"
+                      />
+                    </a>
+                    <p className="play-store-note">
+                      Coming soon on Google Play Store
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -505,7 +600,7 @@ export default function LandingPage() {
               </Link>
               <Link href="/login" className="btn btn-outline-primary btn-lg">
                 <i className="bi bi-box-arrow-in-right me-2"></i>
-                Admin Portal Login
+                Login
               </Link>
             </div>
           </div>
@@ -531,7 +626,7 @@ export default function LandingPage() {
               <h4>Quick Links</h4>
               <ul className="footer-links">
                 <li><Link href="/public">Public Survey</Link></li>
-                <li><Link href="/login">Admin Login</Link></li>
+                <li><Link href="/login">Login</Link></li>
                 <li><Link href="/dashboard">Dashboard</Link></li>
               </ul>
             </div>

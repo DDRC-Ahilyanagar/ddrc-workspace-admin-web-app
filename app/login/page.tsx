@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { sendOTP } from '@/lib/api-client';
+import { sendOTP, fetchUserByPhone } from '@/lib/api-client';
 import { BASE_URL, getAbsoluteImageUrl } from '@/lib/config';
 
 const LOGO_URL = getAbsoluteImageUrl('/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png');
@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,6 +25,28 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
+      // First check user type
+      const userResponse = await fetchUserByPhone(phone);
+      
+      if (userResponse.ok && userResponse.user) {
+        const userType = userResponse.user.user_type?.toLowerCase() || '';
+        
+        // Redirect beneficiary to public survey
+        if (userType === 'beneficiary' || userType === 'public') {
+          router.push('/public');
+          setLoading(false);
+          return;
+        }
+        
+        // Redirect field officer to landing page with scroll to download section
+        if (userType === 'field_officer' || userType === 'field officer') {
+          router.push('/?scrollToDownload=true');
+          setLoading(false);
+          return;
+        }
+      }
+      
+      // For admin and verification officer, proceed with OTP
       const response = await sendOTP(phone, 'web');
       if (response.ok) {
         localStorage.setItem('user_phone', phone);
