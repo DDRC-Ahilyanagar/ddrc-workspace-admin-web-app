@@ -185,7 +185,7 @@ export default function LandingPage() {
               </div>
               <h2 className="download-title">
                 Download Mobile App
-                <span className="download-title-marathi">मोबाइल अॅप डाउनलोड करा</span>
+                <span className="download-title-marathi">मोबाइल ऍप डाउनलोड करा</span>
               </h2>
               <p className="download-subtitle">
                 Available on Google Play Store
