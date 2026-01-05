@@ -42,14 +42,14 @@ export default function LoginPage() {
         <div className="login-left-side d-flex flex-column align-items-center justify-content-center animate__animated animate__fadeInLeft">
           <div className="login-branding text-center">
             <img 
-              src="/white_logo.jpeg" 
+              src="/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png" 
               alt="DDRC Logo" 
               className="login-logo mb-5 animate__animated animate__fadeInDown"
               style={{ maxWidth: '450px', width: '100%', height: 'auto' }}
             />
             <div className="login-title-section animate__animated animate__fadeInUp">
               <h1 className="login-title-main text-white">
-                District Disability Rehabilitation Centre, Nagar
+                District Disability Rehabilitation Centre, Ahilyanagar
               </h1>
               <p className="login-title-sub text-white">
                 ( Ministry of Social Justice & Empowerment, Govt. of India approved)
@@ -65,7 +65,30 @@ export default function LoginPage() {
         </div>
 
         {/* Right Side - 40% */}
-        <div className="login-right-side d-flex align-items-center justify-content-center animate__animated animate__fadeInRight">
+        <div className="login-right-side d-flex flex-column align-items-center justify-content-center animate__animated animate__fadeInRight">
+          {/* Mobile-only branding section */}
+          <div className="login-mobile-branding">
+            <div className="text-center mb-4">
+              <img 
+                src="/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png" 
+                alt="DDRC Logo" 
+                className="login-mobile-logo mb-3"
+              />
+              <h1 className="login-mobile-title-main">
+                District Disability Rehabilitation Centre, Ahilyanagar
+              </h1>
+              <p className="login-mobile-title-sub">
+                ( Ministry of Social Justice & Empowerment, Govt. of India approved)
+              </p>
+              <h2 className="login-mobile-title-marathi">
+                जिल्हा दिव्यांग पुनर्वसन केंद्र, अहिल्यानगर
+              </h2>
+              <p className="login-mobile-title-marathi-sub">
+                ( सामाजिक न्याय व अधिकारिता मंत्रालय भारत सरकार द्वारा नियुक्त )
+              </p>
+            </div>
+          </div>
+          
           <div className="login-card-wrapper">
             <div className="card shadow-lg border-0">
               <div className="card-body">

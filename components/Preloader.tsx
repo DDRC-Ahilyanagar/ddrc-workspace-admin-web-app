@@ -20,8 +20,24 @@ export default function Preloader() {
     const orig = window.fetch.bind(window);
     
     // URLs that should not trigger the loader
-    const shouldExcludeLoader = (url: string | Request): boolean => {
-      const urlString = typeof url === 'string' ? url : url.url;
+    const shouldExcludeLoader = (url: string | Request | URL): boolean => {
+      let urlString: string | undefined;
+      if (typeof url === 'string') {
+        urlString = url;
+      } else if (url instanceof URL) {
+        urlString = url.toString();
+      } else if (url instanceof Request) {
+        urlString = url.url;
+      } else {
+        // Fallback: try to get URL from any object
+        urlString = (url as any)?.url || (url as any)?.href || String(url);
+      }
+      
+      // If we still don't have a valid URL string, don't exclude (let loader show)
+      if (!urlString || typeof urlString !== 'string') {
+        return false;
+      }
+      
       // Exclude /api/access-requests?status=pending (with or without additional params)
       return urlString.includes('/api/access-requests') && urlString.includes('status=pending');
     };
@@ -91,7 +107,7 @@ export default function Preloader() {
   return (
     <div className={`global-preloader ${fadeOut ? 'fade-out' : ''}`}>
       <div className="preloader-inner">
-        <img src="/white_logo.jpeg" alt="loading" className="preloader-image" />
+        <img src="/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png" alt="loading" className="preloader-image" />
         <div className="preloader-text">Loading…</div>
       </div>
     </div>

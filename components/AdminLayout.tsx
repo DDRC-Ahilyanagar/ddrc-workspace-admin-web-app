@@ -9,7 +9,13 @@ interface AdminLayoutProps {
 }
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Close sidebar by default on mobile, open on desktop
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth > 768;
+    }
+    return true;
+  });
   const [userName, setUserName] = useState('');
   const [userPhone, setUserPhone] = useState('');
   const [userType, setUserType] = useState('');
@@ -17,7 +23,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const notifRef = useRef<HTMLDivElement | null>(null);
+  const sidebarRef = useRef<HTMLElement | null>(null);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -62,6 +70,23 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         fetchUserType();
       }
     }
+
+    // Handle window resize to adjust sidebar on mobile/desktop switch
+    const handleResize = () => {
+      const mobile = window.innerWidth <= 768;
+      setIsMobile(mobile);
+      if (mobile) {
+        setSidebarOpen(false);
+      } else {
+        setSidebarOpen(true);
+      }
+    };
+
+    // Set initial mobile state
+    setIsMobile(window.innerWidth <= 768);
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, [router]);
 
   // Fetch pending access requests count - runs silently in background
@@ -142,6 +167,29 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     setSidebarOpen(!sidebarOpen);
   };
 
+  // Close sidebar when clicking outside on mobile
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isMobile && sidebarOpen) {
+        if (sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
+          const target = event.target as HTMLElement;
+          // Don't close if clicking the toggle button or backdrop
+          if (!target.closest('.sidebar-toggle') && !target.closest('.sidebar-backdrop')) {
+            setSidebarOpen(false);
+          }
+        }
+      }
+    };
+
+    if (sidebarOpen && isMobile) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [sidebarOpen, isMobile]);
+
   const toggleNotifications = () => {
     setShowNotifications((prev) => !prev);
   };
@@ -175,11 +223,6 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   // Different menu items based on user type
   const isVerificationOfficer = userType?.toLowerCase().trim() === 'verification_officer';
   
-  // Debug logging (remove in production)
-  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-    console.log('AdminLayout - userType:', userType, 'isVerificationOfficer:', isVerificationOfficer);
-  }
-  
   const adminMenuItems = [
     { path: '/dashboard', label: 'डॅशबोर्ड', icon: 'bi-speedometer2' },
     { path: '/survekshan', label: 'सर्वेक्षण', icon: 'bi-clipboard-check' },
@@ -194,7 +237,20 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     { path: '/survekshan', label: 'सर्वेक्षण', icon: 'bi-clipboard-check' },
   ];
 
-  const menuItems = isVerificationOfficer ? verificationOfficerMenuItems : adminMenuItems;
+  // Default to admin menu items if userType is not set or empty
+  // Only use verification officer menu if userType is explicitly set and matches
+  const menuItems: Array<{ path: string; label: string; icon: string }> = 
+    (userType && userType.trim() && isVerificationOfficer) 
+      ? verificationOfficerMenuItems 
+      : adminMenuItems;
+  
+  // Debug: Log menu items in useEffect to avoid render-time issues
+  useEffect(() => {
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      console.log('AdminLayout - userType:', userType, 'isVerificationOfficer:', isVerificationOfficer);
+      console.log('AdminLayout - menuItems count:', menuItems?.length || 0);
+    }
+  }, [userType, isVerificationOfficer]);
 
   if (!mounted) {
     return null;
@@ -328,36 +384,67 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       </nav>
 
       <div className="admin-content-wrapper">
+        {/* Sidebar Backdrop for Mobile */}
+        {sidebarOpen && isMobile && (
+          <div 
+            className="sidebar-backdrop"
+            onClick={() => setSidebarOpen(false)}
+            style={{
+              position: 'fixed',
+              top: '70px',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.5)',
+              zIndex: 1040,
+              transition: 'opacity 0.3s ease'
+            }}
+          />
+        )}
+        
         {/* Sidebar */}
-        <aside className={`admin-sidebar ${sidebarOpen ? 'open animate__animated animate__fadeInLeft' : 'closed animate__animated animate__fadeOutLeft'}`}>
+        <aside 
+          ref={sidebarRef}
+          className={`admin-sidebar ${sidebarOpen ? 'open animate__animated animate__fadeInLeft' : 'closed animate__animated animate__fadeOutLeft'}`}
+        >
           <nav className="sidebar-nav">
             <div className="sidebar-logo-container mb-3 d-flex justify-content-center align-items-center animate__animated animate__fadeInDown" style={{ padding: '1rem' }}>
               <img 
-                src="/colored_logo.png" 
+                src="/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png" 
                 alt="DDRC Logo" 
                 style={{ maxWidth: '100%', height: 'auto', maxHeight: '80px' }}
               />
             </div>
             <ul className="nav flex-column">
-              {menuItems.map((item, index) => (
-                <li 
-                  key={item.path} 
-                  className="nav-item animate__animated animate__fadeInUp"
-                  style={{ animationDelay: `${index * 0.1}s`, animationDuration: '0.5s' }}
-                >
-                  <a
-                    className={`nav-link ${pathname === item.path ? 'active' : ''}`}
-                    href={item.path}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      router.push(item.path);
-                    }}
+              {menuItems && menuItems.length > 0 ? (
+                menuItems.map((item, index) => (
+                  <li 
+                    key={item.path} 
+                    className="nav-item animate__animated animate__fadeInUp"
+                    style={{ animationDelay: `${index * 0.1}s`, animationDuration: '0.5s' }}
                   >
-                    <i className={`nav-icon ${item.icon}`}></i>
-                    <span className="nav-label">{item.label}</span>
-                  </a>
+                    <a
+                      className={`nav-link ${pathname === item.path ? 'active' : ''}`}
+                      href={item.path}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        // Close sidebar on mobile when navigating
+                        if (isMobile) {
+                          setSidebarOpen(false);
+                        }
+                        router.push(item.path);
+                      }}
+                    >
+                      <i className={`nav-icon ${item.icon}`}></i>
+                      <span className="nav-label">{item.label}</span>
+                    </a>
+                  </li>
+                ))
+              ) : (
+                <li className="nav-item">
+                  <span className="nav-link text-muted">No menu items available</span>
                 </li>
-              ))}
+              )}
             </ul>
           </nav>
         </aside>
