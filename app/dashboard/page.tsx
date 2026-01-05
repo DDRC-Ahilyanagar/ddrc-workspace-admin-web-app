@@ -130,6 +130,29 @@ export default function DashboardPage() {
         const res = await fetch('/api/admin/stats', { cache: 'no-store' });
         const json = await res.json();
         if (json.ok) {
+          // Normalize disability names to ensure they're always strings
+          if (json.data?.breakdowns?.disability && Array.isArray(json.data.breakdowns.disability)) {
+            json.data.breakdowns.disability = json.data.breakdowns.disability.map((d: any) => {
+              let name = '';
+              if (typeof d.name === 'string') {
+                name = d.name;
+              } else if (d.name && typeof d.name === 'object') {
+                const nameObj = d.name as any;
+                name = nameObj.label_marathi || nameObj.label_english || nameObj.label || nameObj.name || '';
+                // If still empty, try to stringify
+                if (!name) {
+                  try {
+                    name = JSON.stringify(d.name);
+                  } catch {
+                    name = 'निर्दिष्ट नाही';
+                  }
+                }
+              } else {
+                name = String(d.name || 'निर्दिष्ट नाही');
+              }
+              return { ...d, name };
+            });
+          }
           setStats(json.data);
           if (Array.isArray(json.data?.sections)) setSections(json.data.sections);
         }
