@@ -1625,6 +1625,330 @@ body {
   background: #ffffff;
 }
 
+/* About Surveys Section */
+.about-surveys-section {
+  background: white;
+}
+
+.content-card {
+  background: var(--bg-100);
+  padding: 3rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.survey-features {
+  margin-top: 2rem;
+}
+
+.feature-box {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+}
+
+.feature-box i {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+/* User Roles Section */
+.roles-section {
+  background: var(--bg-100);
+}
+
+.role-card {
+  background: white;
+  padding: 2.5rem 2rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.role-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
+}
+
+.role-icon {
+  font-size: 3.5rem;
+  color: var(--primary-100);
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.role-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: var(--text-100);
+  text-align: center;
+}
+
+.role-subtitle {
+  font-size: 1.125rem;
+  color: var(--primary-100);
+  margin-bottom: 1.5rem;
+  text-align: center;
+  font-weight: 600;
+}
+
+.role-responsibilities {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  flex-grow: 1;
+}
+
+.role-responsibilities li {
+  padding: 0.75rem 0;
+  padding-left: 1.5rem;
+  position: relative;
+  color: var(--text-200);
+  line-height: 1.7;
+}
+
+.role-responsibilities li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: var(--primary-100);
+  font-weight: bold;
+  font-size: 1.125rem;
+}
+
+/* Survey Process Section */
+.process-section {
+  background: white;
+}
+
+.process-timeline {
+  position: relative;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem 0;
+}
+
+.process-timeline::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(180deg, var(--primary-100) 0%, var(--primary-200) 100%);
+  transform: translateX(-50%);
+}
+
+.process-step {
+  position: relative;
+  margin-bottom: 3rem;
+  display: flex;
+  align-items: center;
+}
+
+.process-step:nth-child(odd) {
+  flex-direction: row;
+}
+
+.process-step:nth-child(even) {
+  flex-direction: row-reverse;
+}
+
+.step-number {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary-100) 0%, var(--primary-200) 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.step-content {
+  flex: 1;
+  background: var(--bg-100);
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  margin: 0 2rem;
+}
+
+.process-step:nth-child(odd) .step-content {
+  margin-left: 2rem;
+  margin-right: 0;
+}
+
+.process-step:nth-child(even) .step-content {
+  margin-right: 2rem;
+  margin-left: 0;
+}
+
+.step-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: var(--text-100);
+}
+
+.step-subtitle {
+  font-size: 1.125rem;
+  color: var(--primary-100);
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+
+.step-description {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--text-200);
+}
+
+/* Data Security Section - Highlighted */
+.security-section {
+  background: linear-gradient(135deg, #1a237e 0%, #283593 50%, #3949ab 100%);
+  padding: 6rem 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.security-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  opacity: 0.3;
+}
+
+.security-card {
+  position: relative;
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: 20px;
+  padding: 4rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  border: 3px solid rgba(255, 215, 0, 0.3);
+}
+
+.security-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.security-icon {
+  font-size: 4rem;
+  color: #FFD700;
+  margin-bottom: 1.5rem;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.security-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: var(--text-100);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.security-title-marathi {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--primary-100);
+}
+
+.security-content {
+  color: var(--text-200);
+}
+
+.security-intro {
+  font-size: 1.25rem;
+  line-height: 1.8;
+  margin-bottom: 2.5rem;
+  padding: 1.5rem;
+  background: rgba(1, 155, 152, 0.1);
+  border-left: 4px solid var(--primary-100);
+  border-radius: 8px;
+}
+
+.security-features {
+  margin-bottom: 2.5rem;
+}
+
+.security-feature-item {
+  display: flex;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  background: var(--bg-100);
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.security-feature-item:hover {
+  transform: translateX(5px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.security-feature-item i {
+  font-size: 2.5rem;
+  color: var(--primary-100);
+  flex-shrink: 0;
+}
+
+.security-feature-item h4 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: var(--text-100);
+}
+
+.security-feature-item p {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--text-200);
+  margin: 0;
+}
+
+.security-note {
+  display: flex;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.1) 0%, rgba(255, 193, 7, 0.1) 100%);
+  border: 2px solid rgba(255, 215, 0, 0.3);
+  border-radius: 12px;
+  margin-top: 2rem;
+}
+
+.security-note i {
+  font-size: 1.5rem;
+  color: #FFD700;
+  flex-shrink: 0;
+}
+
+.security-note p {
+  margin: 0;
+  font-size: 1.0625rem;
+  line-height: 1.7;
+  color: var(--text-200);
+}
+
 /* Services Section */
 .services-section {
   background: var(--bg-100);
@@ -1812,6 +2136,24 @@ body {
   line-height: 1.7;
 }
 
+.footer-powered {
+  color: white !important;
+  margin-top: 1rem;
+}
+
+.footer-utkrranti {
+  color: white !important;
+  text-decoration: none;
+  font-weight: 600;
+  transition: opacity 0.3s ease;
+}
+
+.footer-utkrranti:hover {
+  opacity: 0.8;
+  color: white !important;
+  text-decoration: underline;
+}
+
 .footer-bottom {
   margin-top: 2rem;
   padding-top: 2rem;
@@ -1873,6 +2215,39 @@ body {
   }
 }
 
+@media (max-width: 991.98px) {
+  .process-timeline::before {
+    left: 30px;
+  }
+
+  .process-step {
+    flex-direction: row !important;
+    padding-left: 60px;
+  }
+
+  .step-number {
+    position: absolute;
+    left: 0;
+  }
+
+  .step-content {
+    margin: 0 !important;
+    margin-left: 2rem !important;
+  }
+
+  .security-card {
+    padding: 2.5rem 1.5rem;
+  }
+
+  .security-title {
+    font-size: 2rem;
+  }
+
+  .security-title-marathi {
+    font-size: 1.25rem;
+  }
+}
+
 @media (max-width: 767.98px) {
   .navbar-brand-text {
     display: none;
@@ -1914,6 +2289,44 @@ body {
 
   .section-title-marathi {
     font-size: 1.125rem;
+  }
+
+  .content-card {
+    padding: 2rem 1.5rem;
+  }
+
+  .role-card {
+    padding: 2rem 1.5rem;
+  }
+
+  .step-content {
+    padding: 1.5rem;
+    margin-left: 1rem !important;
+  }
+
+  .security-card {
+    padding: 2rem 1.5rem;
+  }
+
+  .security-icon {
+    font-size: 3rem;
+  }
+
+  .security-title {
+    font-size: 1.75rem;
+  }
+
+  .security-title-marathi {
+    font-size: 1.125rem;
+  }
+
+  .security-feature-item {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .security-feature-item i {
+    margin: 0 auto;
   }
 
   .service-card {

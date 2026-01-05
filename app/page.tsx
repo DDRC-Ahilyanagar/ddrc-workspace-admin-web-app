@@ -10,23 +10,23 @@ const LOGO_URL = getAbsoluteImageUrl('/ddrc app icon (192 x 192 px) (1024 x 1024
 const carouselSlides = [
   {
     id: 1,
-    title: 'District Disability Rehabilitation Centre',
-    subtitle: 'जिल्हा दिव्यांग पुनर्वसन केंद्र',
-    description: 'Empowering lives through comprehensive rehabilitation services',
+    title: 'Comprehensive Disability Survey Portal',
+    subtitle: 'व्यापक दिव्यांग सर्वेक्षण पोर्टल',
+    description: 'Digital platform for efficient disability data collection and management',
     bgImage: '/app_back.jpg',
   },
   {
     id: 2,
-    title: 'Ministry Approved',
-    subtitle: 'भारत सरकार द्वारा मान्यता प्राप्त',
-    description: 'Ministry of Social Justice & Empowerment, Govt. of India',
+    title: 'Secure & Encrypted Data Collection',
+    subtitle: 'सुरक्षित आणि एन्क्रिप्टेड डेटा संकलन',
+    description: 'Your sensitive information is protected with industry-standard encryption',
     bgImage: '/app_back.jpg',
   },
   {
     id: 3,
-    title: 'Comprehensive Survey Portal',
-    subtitle: 'व्यापक सर्वेक्षण पोर्टल',
-    description: 'Digital platform for efficient data collection and management',
+    title: 'Multi-Role Workflow System',
+    subtitle: 'बहु-भूमिका कार्यप्रवाह प्रणाली',
+    description: 'Streamlined process from data collection to verification and approval',
     bgImage: '/app_back.jpg',
   },
 ];
@@ -64,47 +64,6 @@ export default function LandingPage() {
     setTimeout(() => setIsAutoPlaying(true), 10000);
   };
 
-  // Animate statistics on scroll
-  useEffect(() => {
-    const observerOptions = {
-      threshold: 0.5,
-      rootMargin: '0px',
-    };
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          const statNumbers = entry.target.querySelectorAll('.stat-number');
-          statNumbers.forEach((stat) => {
-            const target = parseInt(stat.getAttribute('data-target') || '0');
-            const duration = 2000;
-            const increment = target / (duration / 16);
-            let current = 0;
-
-            const updateStat = () => {
-              current += increment;
-              if (current < target) {
-                stat.textContent = Math.floor(current).toLocaleString();
-                requestAnimationFrame(updateStat);
-              } else {
-                stat.textContent = target.toLocaleString();
-              }
-            };
-            updateStat();
-          });
-          observer.unobserve(entry.target);
-        }
-      });
-    }, observerOptions);
-
-    const statsSection = document.querySelector('.stats-section');
-    if (statsSection) {
-      observer.observe(statsSection);
-    }
-
-    return () => observer.disconnect();
-  }, []);
-
   return (
     <div className="landing-page">
       {/* Navigation Bar */}
@@ -119,10 +78,10 @@ export default function LandingPage() {
               </div>
             </div>
             <div className="navbar-actions">
-              <Link href="/public" className="btn btn-outline-light btn-sm me-2">
+              <Link href="/public" className="btn btn-outline-primary btn-sm me-2">
                 Public Survey
               </Link>
-              <Link href="/login" className="btn btn-light btn-sm">
+              <Link href="/login" className="btn btn-primary btn-sm">
                 Admin Login
               </Link>
             </div>
@@ -188,133 +147,221 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* About Section */}
-      <section className="landing-section about-section">
-        <div className="container">
-          <div className="row align-items-center">
-            <div className="col-lg-6">
-              <div className="section-image">
-                <img src={LOGO_URL} alt="DDRC" className="img-fluid rounded shadow-lg" />
-              </div>
-            </div>
-            <div className="col-lg-6">
-              <div className="section-content">
-                <h2 className="section-title">
-                  About DDRC Ahilyanagar
-                  <span className="section-title-marathi">जिल्हा दिव्यांग पुनर्वसन केंद्र, अहिल्यानगर</span>
-                </h2>
-                <p className="section-text">
-                  The District Disability Rehabilitation Centre (DDRC) Ahilyanagar is a government-approved 
-                  institution dedicated to providing comprehensive rehabilitation services to persons with 
-                  disabilities. Established under the Ministry of Social Justice & Empowerment, Government of India, 
-                  we work towards empowering individuals with disabilities through various programs and services.
-                </p>
-                <p className="section-text">
-                  Our mission is to ensure that every person with a disability receives the support, care, and 
-                  opportunities they deserve to lead a dignified and independent life.
-                </p>
-                <div className="section-features">
-                  <div className="feature-item">
-                    <i className="bi bi-check-circle-fill text-primary"></i>
-                    <span>Government Approved</span>
-                  </div>
-                  <div className="feature-item">
-                    <i className="bi bi-check-circle-fill text-primary"></i>
-                    <span>Comprehensive Services</span>
-                  </div>
-                  <div className="feature-item">
-                    <i className="bi bi-check-circle-fill text-primary"></i>
-                    <span>Digital Platform</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Services Section */}
-      <section className="landing-section services-section">
+      {/* About Surveys Section */}
+      <section className="landing-section about-surveys-section">
         <div className="container">
           <div className="section-header text-center mb-5">
             <h2 className="section-title">
-              Our Services
-              <span className="section-title-marathi">आमच्या सेवा</span>
+              About Disability Surveys
+              <span className="section-title-marathi">दिव्यांग सर्वेक्षणाबद्दल</span>
+            </h2>
+          </div>
+          <div className="row">
+            <div className="col-lg-8 mx-auto">
+              <div className="content-card">
+                <p className="section-text">
+                  The DDRC Survey Portal is a comprehensive digital platform designed to collect, manage, 
+                  and process disability-related information for the District Disability Rehabilitation Centre, 
+                  Ahilyanagar. This system enables efficient data collection through multiple channels and 
+                  ensures secure handling of sensitive personal information.
+                </p>
+                <p className="section-text">
+                  Our survey system captures detailed information including personal details, address information, 
+                  education background, disability specifics, employment status, and various government scheme 
+                  benefits. The platform uses advanced OCR (Optical Character Recognition) technology to automatically 
+                  extract and pre-fill information from Aadhar cards and UDID certificates, reducing data entry time 
+                  and minimizing errors.
+                </p>
+                <div className="survey-features">
+                  <div className="row g-3">
+                    <div className="col-md-6">
+                      <div className="feature-box">
+                        <i className="bi bi-check-circle-fill text-primary"></i>
+                        <span>Multi-section comprehensive data collection</span>
+                      </div>
+                    </div>
+                    <div className="col-md-6">
+                      <div className="feature-box">
+                        <i className="bi bi-check-circle-fill text-primary"></i>
+                        <span>OCR-based automatic data extraction</span>
+                      </div>
+                    </div>
+                    <div className="col-md-6">
+                      <div className="feature-box">
+                        <i className="bi bi-check-circle-fill text-primary"></i>
+                        <span>Offline data collection capability</span>
+                      </div>
+                    </div>
+                    <div className="col-md-6">
+                      <div className="feature-box">
+                        <i className="bi bi-check-circle-fill text-primary"></i>
+                        <span>Real-time data synchronization</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* User Roles Section */}
+      <section className="landing-section roles-section">
+        <div className="container">
+          <div className="section-header text-center mb-5">
+            <h2 className="section-title">
+              User Roles & Responsibilities
+              <span className="section-title-marathi">वापरकर्ता भूमिका आणि जबाबदाऱ्या</span>
             </h2>
             <p className="section-subtitle">
-              Comprehensive rehabilitation and support services for persons with disabilities
+              Each user role has specific responsibilities in the survey workflow
             </p>
           </div>
           <div className="row g-4">
-            <div className="col-md-4">
-              <div className="service-card">
-                <div className="service-icon">
-                  <i className="bi bi-clipboard-data"></i>
-                </div>
-                <h3 className="service-title">Survey & Assessment</h3>
-                <p className="service-text">
-                  Comprehensive disability surveys and assessments to identify needs and provide 
-                  appropriate support services.
-                </p>
-              </div>
-            </div>
-            <div className="col-md-4">
-              <div className="service-card">
-                <div className="service-icon">
-                  <i className="bi bi-person-check"></i>
-                </div>
-                <h3 className="service-title">Rehabilitation Services</h3>
-                <p className="service-text">
-                  Professional rehabilitation services including physical therapy, occupational 
-                  therapy, and counseling support.
-                </p>
-              </div>
-            </div>
-            <div className="col-md-4">
-              <div className="service-card">
-                <div className="service-icon">
-                  <i className="bi bi-file-earmark-text"></i>
-                </div>
-                <h3 className="service-title">Documentation & Certification</h3>
-                <p className="service-text">
-                  Assistance with disability certificates, UDID registration, and other 
-                  essential documentation processes.
-                </p>
-              </div>
-            </div>
-            <div className="col-md-4">
-              <div className="service-card">
-                <div className="service-icon">
-                  <i className="bi bi-award"></i>
-                </div>
-                <h3 className="service-title">Scheme Benefits</h3>
-                <p className="service-text">
-                  Guidance and support for accessing various government schemes and benefits 
-                  available for persons with disabilities.
-                </p>
-              </div>
-            </div>
-            <div className="col-md-4">
-              <div className="service-card">
-                <div className="service-icon">
-                  <i className="bi bi-people"></i>
-                </div>
-                <h3 className="service-title">Community Support</h3>
-                <p className="service-text">
-                  Community-based rehabilitation programs and support groups to foster 
-                  inclusion and empowerment.
-                </p>
-              </div>
-            </div>
-            <div className="col-md-4">
-              <div className="service-card">
-                <div className="service-icon">
+            <div className="col-lg-6">
+              <div className="role-card">
+                <div className="role-icon">
                   <i className="bi bi-phone"></i>
                 </div>
-                <h3 className="service-title">Digital Platform</h3>
-                <p className="service-text">
-                  Modern digital platform for easy access to services, online surveys, and 
-                  efficient data management.
+                <h3 className="role-title">Field Officer</h3>
+                <p className="role-subtitle">क्षेत्र अधिकारी</p>
+                <ul className="role-responsibilities">
+                  <li>Capture survey data using mobile application</li>
+                  <li>Collect Aadhar card images and personal information</li>
+                  <li>Verify beneficiary information on-site</li>
+                  <li>Upload survey data to the system</li>
+                  <li>Ensure data accuracy and completeness</li>
+                  <li>Work in offline mode when connectivity is limited</li>
+                </ul>
+              </div>
+            </div>
+            <div className="col-lg-6">
+              <div className="role-card">
+                <div className="role-icon">
+                  <i className="bi bi-shield-check"></i>
+                </div>
+                <h3 className="role-title">Verification Officer</h3>
+                <p className="role-subtitle">पडताळणी अधिकारी</p>
+                <ul className="role-responsibilities">
+                  <li>Review surveys assigned by administrators</li>
+                  <li>Verify data accuracy and completeness</li>
+                  <li>Edit survey data based on admin corrections</li>
+                  <li>Mark surveys as verified after review</li>
+                  <li>Ensure compliance with data standards</li>
+                  <li>Handle clarification requests from beneficiaries</li>
+                </ul>
+              </div>
+            </div>
+            <div className="col-lg-6">
+              <div className="role-card">
+                <div className="role-icon">
+                  <i className="bi bi-person-badge"></i>
+                </div>
+                <h3 className="role-title">Administrator</h3>
+                <p className="role-subtitle">प्रशासक</p>
+                <ul className="role-responsibilities">
+                  <li>Oversee entire survey workflow</li>
+                  <li>Review and add correction suggestions to surveys</li>
+                  <li>Assign surveys to verification officers</li>
+                  <li>Approve verified surveys</li>
+                  <li>Manage user accounts and permissions</li>
+                  <li>Generate reports and analytics</li>
+                  <li>Monitor system performance and data quality</li>
+                </ul>
+              </div>
+            </div>
+            <div className="col-lg-6">
+              <div className="role-card">
+                <div className="role-icon">
+                  <i className="bi bi-person"></i>
+                </div>
+                <h3 className="role-title">Public User / Beneficiary</h3>
+                <p className="role-subtitle">सार्वजनिक वापरकर्ता / लाभार्थी</p>
+                <ul className="role-responsibilities">
+                  <li>Access public survey form via web portal</li>
+                  <li>Submit personal information and documents</li>
+                  <li>Upload Aadhar card images</li>
+                  <li>Review submitted information</li>
+                  <li>Track survey status</li>
+                  <li>Respond to clarification requests if needed</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Survey Process Phases Section */}
+      <section className="landing-section process-section">
+        <div className="container">
+          <div className="section-header text-center mb-5">
+            <h2 className="section-title">
+              Survey Process Phases
+              <span className="section-title-marathi">सर्वेक्षण प्रक्रिया टप्पे</span>
+            </h2>
+            <p className="section-subtitle">
+              End-to-end workflow from data collection to final approval
+            </p>
+          </div>
+          <div className="process-timeline">
+            <div className="process-step">
+              <div className="step-number">1</div>
+              <div className="step-content">
+                <h3 className="step-title">Data Collection</h3>
+                <p className="step-subtitle">डेटा संकलन</p>
+                <p className="step-description">
+                  Field officers or public users collect comprehensive disability-related information 
+                  including personal details, address, education, disability specifics, and supporting 
+                  documents. Data can be collected via mobile app or web portal.
+                </p>
+              </div>
+            </div>
+            <div className="process-step">
+              <div className="step-number">2</div>
+              <div className="step-content">
+                <h3 className="step-title">Initial Submission</h3>
+                <p className="step-subtitle">प्रारंभिक सबमिशन</p>
+                <p className="step-description">
+                  Collected survey data is submitted to the system with status "pending". The system 
+                  automatically processes uploaded documents using OCR technology to extract relevant 
+                  information and pre-fill form fields.
+                </p>
+              </div>
+            </div>
+            <div className="process-step">
+              <div className="step-number">3</div>
+              <div className="step-content">
+                <h3 className="step-title">Admin Review</h3>
+                <p className="step-subtitle">प्रशासकीय पुनरावलोकन</p>
+                <p className="step-description">
+                  Administrators review submitted surveys, check data quality, and add correction 
+                  suggestions if needed. Surveys can be assigned to verification officers for detailed 
+                  review. Status changes to "under_review".
+                </p>
+              </div>
+            </div>
+            <div className="process-step">
+              <div className="step-number">4</div>
+              <div className="step-content">
+                <h3 className="step-title">Verification</h3>
+                <p className="step-subtitle">पडताळणी</p>
+                <p className="step-description">
+                  Verification officers review assigned surveys, verify data accuracy, make necessary 
+                  corrections based on admin suggestions, and mark surveys as "verified" after thorough 
+                  review and validation.
+                </p>
+              </div>
+            </div>
+            <div className="process-step">
+              <div className="step-number">5</div>
+              <div className="step-content">
+                <h3 className="step-title">Final Approval</h3>
+                <p className="step-subtitle">अंतिम मंजूरी</p>
+                <p className="step-description">
+                  Administrators review verified surveys and provide final approval. Once approved, 
+                  surveys are marked as "approved" and become part of the official database. Approved 
+                  surveys can be used for generating certificates and accessing government schemes.
                 </p>
               </div>
             </div>
@@ -322,50 +369,117 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Statistics Section */}
-      <section className="landing-section stats-section">
+      {/* Data Security Section - Highlighted */}
+      <section className="landing-section security-section">
         <div className="container">
-          <div className="section-header text-center mb-5">
-            <h2 className="section-title text-white">
-              Our Impact
-              <span className="section-title-marathi">आमचा प्रभाव</span>
-            </h2>
-          </div>
-          <div className="row g-4">
-            <div className="col-md-3 col-sm-6">
-              <div className="stat-card">
-                <div className="stat-icon">
-                  <i className="bi bi-people-fill"></i>
-                </div>
-                <div className="stat-number" data-target="10000">0</div>
-                <div className="stat-label">Beneficiaries Served</div>
+          <div className="security-card">
+            <div className="security-header">
+              <div className="security-icon">
+                <i className="bi bi-shield-lock-fill"></i>
               </div>
+              <h2 className="security-title">
+                Data Security & Encryption
+                <span className="security-title-marathi">डेटा सुरक्षा आणि एन्क्रिप्शन</span>
+              </h2>
             </div>
-            <div className="col-md-3 col-sm-6">
-              <div className="stat-card">
-                <div className="stat-icon">
-                  <i className="bi bi-clipboard-check"></i>
+            <div className="security-content">
+              <p className="security-intro">
+                <strong>Your sensitive information is our top priority.</strong> We understand that 
+                disability-related data contains highly sensitive personal information, and we have 
+                implemented multiple layers of security to protect your data.
+              </p>
+              
+              <div className="security-features">
+                <div className="row g-4">
+                  <div className="col-md-6">
+                    <div className="security-feature-item">
+                      <i className="bi bi-key-fill"></i>
+                      <div>
+                        <h4>End-to-End Encryption</h4>
+                        <p>
+                          All data transmitted between your device and our servers is encrypted using 
+                          industry-standard TLS/SSL protocols. This ensures that your information 
+                          cannot be intercepted or read during transmission.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="security-feature-item">
+                      <i className="bi bi-database-lock"></i>
+                      <div>
+                        <h4>Database Encryption</h4>
+                        <p>
+                          Sensitive data stored in our databases is encrypted at rest using AES-256 
+                          encryption, the same standard used by banks and government agencies. This 
+                          means your data is protected even if physical access to servers is gained.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="security-feature-item">
+                      <i className="bi bi-person-check-fill"></i>
+                      <div>
+                        <h4>Role-Based Access Control</h4>
+                        <p>
+                          Access to sensitive data is strictly controlled through role-based permissions. 
+                          Only authorized personnel with specific roles can access, view, or modify data 
+                          relevant to their responsibilities.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="security-feature-item">
+                      <i className="bi bi-file-earmark-lock"></i>
+                      <div>
+                        <h4>Secure File Storage</h4>
+                        <p>
+                          Uploaded documents such as Aadhar cards and certificates are stored in 
+                          encrypted storage with restricted access. Files are only accessible to 
+                          authorized personnel during the verification process.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="security-feature-item">
+                      <i className="bi bi-clock-history"></i>
+                      <div>
+                        <h4>Audit Logging</h4>
+                        <p>
+                          All data access and modifications are logged with timestamps and user 
+                          information. This creates a complete audit trail for compliance and 
+                          security monitoring purposes.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="security-feature-item">
+                      <i className="bi bi-shield-check"></i>
+                      <div>
+                        <h4>Regular Security Updates</h4>
+                        <p>
+                          Our security infrastructure is regularly updated to protect against 
+                          emerging threats. We follow industry best practices and comply with 
+                          government data protection guidelines.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="stat-number" data-target="5000">0</div>
-                <div className="stat-label">Surveys Completed</div>
               </div>
-            </div>
-            <div className="col-md-3 col-sm-6">
-              <div className="stat-card">
-                <div className="stat-icon">
-                  <i className="bi bi-award-fill"></i>
-                </div>
-                <div className="stat-number" data-target="3000">0</div>
-                <div className="stat-label">Certificates Issued</div>
-              </div>
-            </div>
-            <div className="col-md-3 col-sm-6">
-              <div className="stat-card">
-                <div className="stat-icon">
-                  <i className="bi bi-heart-fill"></i>
-                </div>
-                <div className="stat-number" data-target="95">0</div>
-                <div className="stat-label">% Satisfaction</div>
+
+              <div className="security-note">
+                <i className="bi bi-info-circle-fill"></i>
+                <p>
+                  <strong>Privacy Commitment:</strong> Your personal information is used solely for 
+                  the purpose of providing disability rehabilitation services. Data is never shared 
+                  with third-party commercial entities or used for marketing purposes. All data 
+                  handling complies with government regulations and privacy laws.
+                </p>
               </div>
             </div>
           </div>
@@ -428,8 +542,8 @@ export default function LandingPage() {
                 <br />
                 Ahilyanagar, Maharashtra, India
               </p>
-              <p className="text-muted">
-                Powered by <span className="text-danger">UTK</span>RRANTI
+              <p className="footer-powered">
+                Powered by <a href="https://ddrcnagar.in" target="_blank" rel="noopener noreferrer" className="footer-utkrranti">UTKRRANTI</a>
               </p>
             </div>
           </div>
