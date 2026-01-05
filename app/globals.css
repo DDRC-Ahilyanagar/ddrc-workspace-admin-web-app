@@ -1422,6 +1422,13 @@ html {
   line-height: 1.2;
 }
 
+.navbar-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+}
+
 .navbar-actions {
   display: flex;
   gap: 0.5rem;
