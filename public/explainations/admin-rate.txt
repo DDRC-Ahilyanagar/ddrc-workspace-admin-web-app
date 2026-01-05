@@ -1,0 +1,1 @@
+Admin rate page वर तुम्ही field officer साठी per survey rate set करू शकता. येथे rate per completed survey enter करा. हा rate dashboard वर wallet calculation साठी वापरला जातो. Rate save केल्यानंतर message दिसेल. Rate ला update करून save करू शकता.

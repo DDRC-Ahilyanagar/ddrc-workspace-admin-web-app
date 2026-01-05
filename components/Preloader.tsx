@@ -2,6 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { getAbsoluteImageUrl } from '@/lib/config';
+
+const LOGO_URL = getAbsoluteImageUrl('/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png');
 
 export default function Preloader() {
   const pathname = usePathname();
@@ -107,7 +110,7 @@ export default function Preloader() {
   return (
     <div className={`global-preloader ${fadeOut ? 'fade-out' : ''}`}>
       <div className="preloader-inner">
-        <img src="/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png" alt="loading" className="preloader-image" />
+        <img src={LOGO_URL} alt="loading" className="preloader-image" />
         <div className="preloader-text">Loading…</div>
       </div>
     </div>

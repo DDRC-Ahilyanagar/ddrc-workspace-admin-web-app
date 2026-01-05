@@ -76,15 +76,32 @@ export default function QuestionsPage() {
         setLoading(true);
         const res = await fetch('/api/admin/questions_view');
         const data = await res.json();
+        console.log('Questions View API Response:', { 
+          ok: data.ok, 
+          hasData: !!data.data, 
+          dataKeys: data.data ? Object.keys(data.data) : [],
+          questionsCount: data.data?.questions?.length || 0,
+          sectionsCount: data.data?.sections?.length || 0,
+          error: data.error 
+        });
+        
         if (data.ok && data.data) {
           const { questions: qList, sections: sList } = data.data;
+          console.log('Raw questions from API:', qList?.length || 0, 'questions');
           // Ensure only real question rows make it to the table
-          const tableRows = (qList || []).filter((q: any) => !!q?.question_id);
+          const tableRows = (qList || []).filter((q: any) => {
+            const hasId = !!q?.question_id;
+            if (!hasId) {
+              console.warn('Question filtered out (no question_id):', q);
+            }
+            return hasId;
+          });
+          console.log('Filtered questions for table:', tableRows.length, 'questions');
           setQuestions(tableRows);
           // Sections provided separately for the dropdown
           setSections((sList || []) as string[]);
         } else {
-          console.error('Questions View API error:', data?.error || 'Unknown error');
+          console.error('Questions View API error:', data?.error || 'Unknown error', data);
           setQuestions([]);
           setSections([]);
         }
@@ -347,9 +364,9 @@ export default function QuestionsPage() {
       <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css" />
       <AdminLayout>
         <div className="container-fluid p-4">
-        <div className="d-flex justify-content-between align-items-center mb-4">
+        <div className="table-page-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3 gap-md-0">
           <h2 className="mb-0">सर्वेक्षण प्रश्नावली</h2>
-          <button className="btn btn-primary" onClick={handleNew}>
+          <button className="btn btn-primary w-100 w-md-auto" onClick={handleNew}>
             <i className="bi bi-plus-circle me-2"></i>Add Question
           </button>
         </div>
@@ -357,18 +374,21 @@ export default function QuestionsPage() {
         <div className="card shadow-sm">
           <div className="card-body">
             <div className="row mb-3">
-              <div className="col-md-12">
-                <select
-                  className="form-select"
-                  value={sectionFilter}
-                  onChange={(e) => setSectionFilter(e.target.value)}
-                  style={{ maxWidth: '300px' }}
-                >
-                  <option value="">All Sections</option>
-                  {sections.map((s, idx) => (
-                    <option key={`section-${idx}-${s}`} value={s}>{s}</option>
-                  ))}
-                </select>
+              <div className="col-12 col-md-12">
+                <div className="d-flex flex-column flex-md-row align-items-start align-items-md-center gap-2">
+                  <label className="mb-0 fw-semibold">Filter by Section:</label>
+                  <select
+                    className="form-select"
+                    value={sectionFilter}
+                    onChange={(e) => setSectionFilter(e.target.value)}
+                    style={{ maxWidth: '300px', width: '100%' }}
+                  >
+                    <option value="">All Sections</option>
+                    {sections.map((s, idx) => (
+                      <option key={`section-${idx}-${s}`} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -377,10 +397,30 @@ export default function QuestionsPage() {
                 <div className="spinner-border" role="status">
                   <span className="visually-hidden">Loading...</span>
                 </div>
+                <p className="mt-2 text-muted">Loading questions...</p>
+              </div>
+            ) : !dtReady ? (
+              <div className="text-center p-5">
+                <div className="spinner-border text-warning" role="status">
+                  <span className="visually-hidden">Initializing DataTables...</span>
+                </div>
+                <p className="mt-2 text-muted">Initializing DataTables library...</p>
+                <p className="text-muted small">Questions loaded: {questions.length}</p>
+              </div>
+            ) : questions.length === 0 ? (
+              <div className="text-center py-5">
+                <i className="bi bi-question-circle" style={{ fontSize: '3rem', color: '#ccc' }}></i>
+                <p className="mt-3 text-muted">No questions found</p>
+                <p className="text-muted small">Please check:</p>
+                <ul className="text-muted small text-start" style={{ maxWidth: '400px', margin: '0 auto' }}>
+                  <li>Database view <code>view_sections_with_questions</code> exists</li>
+                  <li>Questions exist in the database</li>
+                  <li>Questions have <code>question_is_active = 1</code></li>
+                  <li>Check browser console for API errors</li>
+                </ul>
               </div>
             ) : (
               <div className="table-responsive">
-                {dtReady && (
                 <DataTable
                   ref={tableRef}
                   data={questions}
@@ -402,7 +442,7 @@ export default function QuestionsPage() {
                          "<'row g-2 mt-3'<'col-12 col-md-5'i><'col-12 col-md-7'p>>",
                   } as any}
                   className="table table-striped align-middle"
-                />)}
+                />
               </div>
             )}
           </div>

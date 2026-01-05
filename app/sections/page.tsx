@@ -784,10 +784,10 @@ function SectionsContent() {
         <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css" />
         <AdminLayout>
           <div className="container-fluid p-4">
-            <div className="d-flex justify-content-between align-items-center mb-4">
+            <div className="table-page-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3 gap-md-0">
               <h2 className="mb-0">प्रश्नावली विभाग</h2>
               <button
-                className="btn btn-primary"
+                className="btn btn-primary w-100 w-md-auto"
                 onClick={() => router.push('/survekshan')}
               >
                 <i className="bi bi-plus-circle me-2"></i>नवीन सर्वेक्षण सुरू करा

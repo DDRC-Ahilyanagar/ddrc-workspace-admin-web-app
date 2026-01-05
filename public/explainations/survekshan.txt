@@ -1,0 +1,1 @@
+Survey page वर सर्व surveys ची list दिसते. Verification officers साठी assigned surveys दिसतात. येथे तुम्ही सर्व surveys बघू शकता, search करू शकता आणि filter करू शकता. प्रत्येक survey वर click करून details बघू शकता. तुम्ही all, completed, incomplete किंवा pending surveys filter करू शकता. Survey details बघण्यासाठी survey वर click करा.

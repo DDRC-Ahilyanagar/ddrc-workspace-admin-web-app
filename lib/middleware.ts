@@ -62,10 +62,13 @@ export function addSecurityHeaders(response: NextResponse): NextResponse {
   response.headers.set('X-XSS-Protection', '1; mode=block');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   
-  // CORS headers for API
+  // CORS headers for API - allow mobile app connections
+  // Allow all origins for development (restrict in production)
   response.headers.set('Access-Control-Allow-Origin', '*');
-  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-role, x-source, x-passkey, Accept');
+  response.headers.set('Access-Control-Allow-Credentials', 'true');
+  response.headers.set('Access-Control-Max-Age', '86400'); // Cache preflight for 24 hours
   
   return response;
 }

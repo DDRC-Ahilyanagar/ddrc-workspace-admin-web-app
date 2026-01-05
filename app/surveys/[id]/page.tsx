@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import AdminLayout from '@/components/AdminLayout';
+import { getAbsoluteImageUrl } from '@/lib/config';
 
 interface Survey {
   id: number;
@@ -44,6 +45,13 @@ interface Answer {
   section_name: string | null;
 }
 
+interface EditingAnswer {
+  question_id: number;
+  value: string;
+  type: string;
+  options?: string;
+}
+
 function SurveyDetailsContent() {
   const router = useRouter();
   const params = useParams();
@@ -60,11 +68,21 @@ function SurveyDetailsContent() {
   const [markingRejected, setMarkingRejected] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [editingAnswer, setEditingAnswer] = useState<EditingAnswer | null>(null);
+  const [updatingAnswer, setUpdatingAnswer] = useState(false);
+  const [clarifications, setClarifications] = useState<Record<number, { reason: string; status: string }>>({});
+  const [showClarificationModal, setShowClarificationModal] = useState(false);
+  const [selectedQuestions, setSelectedQuestions] = useState<Record<number, string>>({});
+  const [sendingClarification, setSendingClarification] = useState(false);
 
   useEffect(() => {
     // Get user type from localStorage
     const storedUserType = typeof window !== 'undefined' ? localStorage.getItem('user_type') || '' : '';
     setUserType(storedUserType);
+    // Debug log
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      console.log('User type from localStorage:', storedUserType);
+    }
   }, []);
 
   useEffect(() => {
@@ -96,49 +114,33 @@ function SurveyDetailsContent() {
       }
     };
 
+    const loadClarifications = async () => {
+      try {
+        const res = await fetch(`/api/admin/surveys/${surveyId}/request-clarification`, {
+          cache: 'no-store',
+        });
+        const json = await res.json();
+        if (json.ok && Array.isArray(json.clarifications)) {
+          const clarMap: Record<number, { reason: string; status: string }> = {};
+          json.clarifications.forEach((c: any) => {
+            clarMap[c.question_id] = { reason: c.reason, status: c.status };
+          });
+          setClarifications(clarMap);
+        }
+      } catch (err) {
+        console.error('Failed to load clarifications', err);
+      }
+    };
+
     loadSurveyDetails();
+    loadClarifications();
   }, [surveyId]);
 
   // Normalize image path/URL for display
   const normalizeImagePath = (path: string): string => {
     if (!path) return path;
-    
-    // If it's a full URL, check if it's localhost or invalid domain
-    if (path.startsWith('http://') || path.startsWith('https://')) {
-      // If URL contains localhost or 127.0.0.1, extract the path part
-      if (path.includes('localhost') || path.includes('127.0.0.1')) {
-        const urlObj = new URL(path);
-        return urlObj.pathname; // Return just the path part
-      }
-      // Otherwise return the full URL as-is
-      return path;
-    }
-    
-    // If it starts with /, it's already a valid relative path
-    if (path.startsWith('/')) {
-      return path;
-    }
-    
-    // If it contains 'uploads' but doesn't start with /, add it
-    if (path.includes('uploads') && !path.startsWith('/')) {
-      return `/${path}`;
-    }
-    
-    // If it looks like a filename (has extension), assume it's in uploads
-    if (path.match(/\.(jpg|jpeg|png|gif|webp|pdf)$/i)) {
-      // Remove any leading path separators and ensure it starts with /uploads/
-      const cleanPath = path.replace(/^\/+/, '').replace(/^uploads\//, '');
-      return `/uploads/${cleanPath}`;
-    }
-    
-    // If it's just a UUID or filename without extension, check if it's in uploads format
-    if (path.match(/^[a-f0-9-]{36}$/i)) {
-      // It's a UUID, likely a filename - check if it needs .jpg extension
-      return `/uploads/${path}.jpg`;
-    }
-    
-    // Otherwise return as-is
-    return path;
+    // Use the utility function to get absolute URL
+    return getAbsoluteImageUrl(path);
   };
 
   const formatAnswer = (answer: Answer): string => {
@@ -279,6 +281,61 @@ function SurveyDetailsContent() {
     }
   };
 
+  const handleRequestClarification = async () => {
+    if (!surveyId || surveyId <= 0) return;
+    
+    const questions = Object.entries(selectedQuestions)
+      .filter(([_, reason]) => reason && reason.trim())
+      .map(([questionId, reason]) => ({
+        question_id: parseInt(questionId),
+        reason: reason.trim(),
+      }));
+
+    if (questions.length === 0) {
+      alert('कृपया किमान एक प्रश्न निवडा आणि कारण प्रविष्ट करा.');
+      return;
+    }
+
+    setSendingClarification(true);
+    try {
+      const res = await fetch(`/api/admin/surveys/${surveyId}/request-clarification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        cache: 'no-store',
+        credentials: 'include',
+        body: JSON.stringify({ questions }),
+      });
+      const json = await res.json();
+      
+      if (json.ok) {
+        alert(`स्पष्टीकरण विनंती यशस्वीरित्या पाठवल्या गेल्या (${questions.length} प्रश्न).`);
+        setShowClarificationModal(false);
+        setSelectedQuestions({});
+        // Reload clarifications
+        const res2 = await fetch(`/api/admin/surveys/${surveyId}/request-clarification`, {
+          cache: 'no-store',
+        });
+        const json2 = await res2.json();
+        if (json2.ok && Array.isArray(json2.clarifications)) {
+          const clarMap: Record<number, { reason: string; status: string }> = {};
+          json2.clarifications.forEach((c: any) => {
+            clarMap[c.question_id] = { reason: c.reason, status: c.status };
+          });
+          setClarifications(clarMap);
+        }
+      } else {
+        alert(json.error || 'स्पष्टीकरण विनंती पाठवण्यात अयशस्वी. कृपया पुन्हा प्रयत्न करा.');
+      }
+    } catch (err) {
+      console.error('Failed to request clarification', err);
+      alert('स्पष्टीकरण विनंती पाठवण्यात अयशस्वी. कृपया पुन्हा प्रयत्न करा.');
+    } finally {
+      setSendingClarification(false);
+    }
+  };
+
   if (loading) {
     return (
       <AdminLayout>
@@ -361,11 +418,19 @@ function SurveyDetailsContent() {
                 </>
               )}
             </button>
-            {userType === 'verification_officer' && 
+            {(userType || '').toLowerCase() === 'verification_officer' && 
              survey?.verification_status !== 'verified' && 
              survey?.verification_status !== 'rejected' &&
              survey?.assigned_to && (
               <>
+                <button
+                  className="btn btn-warning"
+                  disabled={markingVerified || markingRejected || sendingClarification}
+                  onClick={() => setShowClarificationModal(true)}
+                >
+                  <i className="bi bi-question-circle me-2"></i>
+                  स्पष्टीकरण विनंती करा
+                </button>
                 <button
                   className="btn btn-success"
                   disabled={markingVerified || markingRejected}
@@ -555,44 +620,223 @@ function SurveyDetailsContent() {
                       <thead>
                         <tr>
                           <th style={{ width: '5%' }}>ID</th>
-                          <th style={{ width: '40%' }}>प्रश्न</th>
-                          <th style={{ width: '55%' }}>उत्तर</th>
+                          <th style={{ width: '35%' }}>प्रश्न</th>
+                          <th style={{ width: '50%' }}>उत्तर</th>
+                          {(userType || '').toLowerCase() === 'verification_officer' && 
+                           survey?.verification_status !== 'verified' && 
+                           survey?.verification_status !== 'rejected' &&
+                           survey?.assigned_to && (
+                            <th style={{ width: '10%' }}>क्रिया</th>
+                          )}
                         </tr>
                       </thead>
                       <tbody>
-                        {sectionAnswers.map((ans) => {
+                        {sectionAnswers.map((ans, ansIdx) => {
                           const answerText = formatAnswer(ans);
                           const isImage = isImageAnswer(answerText);
+                          const clarification = clarifications[ans.question_id];
+                          const normalizedUserTypeForClarification = (userType || '').toLowerCase();
+                          const canRequestClarification = normalizedUserTypeForClarification === 'verification_officer' && 
+                                                         survey?.verification_status !== 'verified' && 
+                                                         survey?.verification_status !== 'rejected' &&
+                                                         survey?.assigned_to;
+                          // Allow editing for verification officers if survey is not verified/rejected
+                          // Backend will enforce assignment check
+                          const normalizedUserType = (userType || '').toLowerCase();
+                          const canEdit = normalizedUserType === 'verification_officer' && 
+                                        survey?.verification_status !== 'verified' && 
+                                        survey?.verification_status !== 'rejected' &&
+                                        !isImage;
+                          
+                          // Create unique key combining section_id, question_id, and index to avoid duplicates
+                          const uniqueKey = `${sectionKey}_${ans.section_id || 0}_${ans.question_id}_${ansIdx}`;
+                          
                           return (
-                            <tr key={ans.id}>
+                            <tr key={uniqueKey} className={clarification ? 'table-warning' : ''}>
                               <td>{ans.question_id}</td>
                               <td>
                                 <strong>
                                   {ans.question_marathi || ans.question_english || `Question ${ans.question_id}`}
                                 </strong>
-                              </td>
-                              <td>
-                                {isImage ? (
-                                  <div>
-                                    <img
-                                      src={answerText}
-                                      alt="Answer"
-                                      className="img-fluid border rounded"
-                                      style={{ maxHeight: '200px' }}
-                                      onError={(e) => {
-                                        // If image fails to load, show fallback
-                                        (e.target as HTMLImageElement).style.display = 'none';
-                                        const parent = (e.target as HTMLImageElement).parentElement;
-                                        if (parent) {
-                                          parent.innerHTML = `<span class="badge bg-warning">Image not found: ${answerText}</span>`;
-                                        }
-                                      }}
-                                    />
+                                {clarification && (
+                                  <div className="mt-1">
+                                    <span className="badge bg-warning text-dark">
+                                      <i className="bi bi-exclamation-triangle me-1"></i>
+                                      स्पष्टीकरण आवश्यक ({clarification.status === 'pending' ? 'प्रलंबित' : 'निराकरण'})
+                                    </span>
+                                    <div className="small text-muted mt-1">
+                                      <strong>कारण:</strong> {clarification.reason}
+                                    </div>
                                   </div>
-                                ) : (
-                                  <div>{answerText}</div>
                                 )}
                               </td>
+                              <td>
+                                {editingAnswer?.question_id === ans.question_id ? (
+                                  <div className="d-flex align-items-center gap-2">
+                                    {ans.question_type === 'dropdown' && ans.options ? (
+                                      <select
+                                        className="form-control form-control-sm"
+                                        value={editingAnswer.value}
+                                        onChange={(e) => setEditingAnswer({ ...editingAnswer, value: e.target.value })}
+                                        disabled={updatingAnswer}
+                                        style={{ minWidth: '200px' }}
+                                      >
+                                        <option value="">-- निवडा --</option>
+                                        {ans.options.split(',').map((opt: string, idx: number) => (
+                                          <option key={idx} value={opt.trim()}>
+                                            {opt.trim()}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    ) : ans.question_type === 'date' ? (
+                                      <input
+                                        type="date"
+                                        className="form-control form-control-sm"
+                                        value={editingAnswer.value}
+                                        onChange={(e) => setEditingAnswer({ ...editingAnswer, value: e.target.value })}
+                                        disabled={updatingAnswer}
+                                        style={{ minWidth: '200px' }}
+                                      />
+                                    ) : (
+                                      <input
+                                        type="text"
+                                        className="form-control form-control-sm"
+                                        value={editingAnswer.value}
+                                        onChange={(e) => setEditingAnswer({ ...editingAnswer, value: e.target.value })}
+                                        disabled={updatingAnswer}
+                                        style={{ minWidth: '300px' }}
+                                      />
+                                    )}
+                                    <button
+                                      className="btn btn-sm btn-success"
+                                      onClick={async () => {
+                                        if (!editingAnswer) return;
+                                        setUpdatingAnswer(true);
+                                        try {
+                                          const res = await fetch(`/api/admin/surveys/${surveyId}/update-answer`, {
+                                            method: 'PUT',
+                                            headers: {
+                                              'Content-Type': 'application/json',
+                                            },
+                                            cache: 'no-store',
+                                            credentials: 'include',
+                                            body: JSON.stringify({
+                                              question_id: ans.question_id,
+                                              answer: editingAnswer.value,
+                                            }),
+                                          });
+                                          const json = await res.json();
+                                          
+                                          if (json.ok) {
+                                            // Reload survey details
+                                            const res2 = await fetch(`/api/admin/surveys/${surveyId}`, {
+                                              cache: 'no-store',
+                                            });
+                                            const json2 = await res2.json();
+                                            if (json2.ok && json2.data) {
+                                              setSurvey(json2.data.survey);
+                                              setAnswers(json2.data.answers || []);
+                                              setAnswersBySection(json2.data.answersBySection || {});
+                                            }
+                                            setEditingAnswer(null);
+                                            alert('उत्तर यशस्वीरित्या अपडेट केले गेले.');
+                                          } else {
+                                            alert(json.error || 'उत्तर अपडेट करण्यात अयशस्वी. कृपया पुन्हा प्रयत्न करा.');
+                                          }
+                                        } catch (err) {
+                                          console.error('Failed to update answer', err);
+                                          alert('उत्तर अपडेट करण्यात अयशस्वी. कृपया पुन्हा प्रयत्न करा.');
+                                        } finally {
+                                          setUpdatingAnswer(false);
+                                        }
+                                      }}
+                                      disabled={updatingAnswer}
+                                      title="सेव्ह करा"
+                                    >
+                                      <i className="bi bi-check"></i>
+                                    </button>
+                                    <button
+                                      className="btn btn-sm btn-warning"
+                                      onClick={() => {
+                                        // Cancel editing and open clarification modal with this question
+                                        setEditingAnswer(null);
+                                        setSelectedQuestions({
+                                          ...selectedQuestions,
+                                          [ans.question_id]: clarification?.reason || '',
+                                        });
+                                        setShowClarificationModal(true);
+                                      }}
+                                      disabled={updatingAnswer}
+                                      title="फील्ड ऑफिसरला पाठवा"
+                                    >
+                                      <i className="bi bi-send"></i>
+                                    </button>
+                                    <button
+                                      className="btn btn-sm btn-secondary"
+                                      onClick={() => setEditingAnswer(null)}
+                                      disabled={updatingAnswer}
+                                      title="रद्द करा"
+                                    >
+                                      <i className="bi bi-x"></i>
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="d-flex align-items-center justify-content-between">
+                                    <div>
+                                      {isImage ? (
+                                        <img
+                                          src={getAbsoluteImageUrl(answerText)}
+                                          alt="Answer"
+                                          className="img-fluid border rounded"
+                                          style={{ maxHeight: '200px' }}
+                                          onError={(e) => {
+                                            (e.target as HTMLImageElement).style.display = 'none';
+                                            const parent = (e.target as HTMLImageElement).parentElement;
+                                            if (parent) {
+                                              parent.innerHTML = `<span class="badge bg-warning">Image not found: ${answerText}</span>`;
+                                            }
+                                          }}
+                                        />
+                                      ) : (
+                                        <span>{answerText || '-'}</span>
+                                      )}
+                                    </div>
+                                    {canEdit && (
+                                      <button
+                                        className="btn btn-sm btn-outline-primary ms-2"
+                                        onClick={() => {
+                                          setEditingAnswer({
+                                            question_id: ans.question_id,
+                                            value: ans.answer || '',
+                                            type: ans.question_type || 'text',
+                                            options: ans.options || undefined,
+                                          });
+                                        }}
+                                        title="संपादन करा"
+                                      >
+                                        <i className="bi bi-pencil"></i>
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                              {canRequestClarification && (
+                                <td>
+                                  <button
+                                    className="btn btn-sm btn-outline-warning"
+                                    onClick={() => {
+                                      setSelectedQuestions({
+                                        ...selectedQuestions,
+                                        [ans.question_id]: clarification?.reason || '',
+                                      });
+                                      setShowClarificationModal(true);
+                                    }}
+                                    title="स्पष्टीकरण विनंती करा"
+                                  >
+                                    <i className="bi bi-question-circle"></i>
+                                  </button>
+                                </td>
+                              )}
                             </tr>
                           );
                         })}
@@ -607,6 +851,154 @@ function SurveyDetailsContent() {
           <div className="card shadow-sm mb-4">
             <div className="card-body text-center text-muted">
               <p className="mb-0">कोणतेही उत्तरे उपलब्ध नाहीत</p>
+            </div>
+          </div>
+        )}
+
+        {/* Clarification Request Modal */}
+        {showClarificationModal && (
+          <div className="modal show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+            <div className="modal-dialog modal-dialog-centered modal-lg">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">स्पष्टीकरण विनंती करा</h5>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={() => {
+                      setShowClarificationModal(false);
+                      setSelectedQuestions({});
+                    }}
+                    disabled={sendingClarification}
+                  ></button>
+                </div>
+                <div className="modal-body">
+                  <p className="text-muted mb-3">
+                    कृपया स्पष्टीकरण आवश्यक असलेले प्रश्न निवडा आणि प्रत्येक प्रश्नासाठी कारण प्रविष्ट करा.
+                  </p>
+                  {Object.keys(selectedQuestions).length > 0 && (
+                    <div className="alert alert-info mb-3">
+                      <i className="bi bi-info-circle me-2"></i>
+                      <strong>{Object.keys(selectedQuestions).length}</strong> प्रश्न निवडले आहेत. कृपया खाली सबमिट बटणावर क्लिक करा.
+                    </div>
+                  )}
+                  <div className="table-responsive" style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                    <table className="table table-sm">
+                      <thead>
+                        <tr>
+                          <th style={{ width: '5%' }}>ID</th>
+                          <th style={{ width: '40%' }}>प्रश्न</th>
+                          <th style={{ width: '55%' }}>कारण</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {answers.map((ans, ansIdx) => {
+                          const questionKey = ans.question_id;
+                          const isSelected = selectedQuestions.hasOwnProperty(questionKey);
+                          
+                          // Create unique key combining section_id, question_id, and index to avoid duplicates
+                          const uniqueKey = `clarification_${ans.section_id || 0}_${ans.question_id}_${ansIdx}`;
+                          
+                          return (
+                            <tr key={uniqueKey}>
+                              <td>
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedQuestions({
+                                        ...selectedQuestions,
+                                        [questionKey]: clarifications[questionKey]?.reason || '',
+                                      });
+                                    } else {
+                                      const newSelected = { ...selectedQuestions };
+                                      delete newSelected[questionKey];
+                                      setSelectedQuestions(newSelected);
+                                    }
+                                  }}
+                                  disabled={sendingClarification}
+                                />
+                              </td>
+                              <td>
+                                <small>
+                                  {ans.question_marathi || ans.question_english || `Question ${ans.question_id}`}
+                                </small>
+                              </td>
+                              <td>
+                                {isSelected ? (
+                                  <textarea
+                                    className="form-control form-control-sm"
+                                    rows={2}
+                                    value={selectedQuestions[questionKey] || ''}
+                                    onChange={(e) => {
+                                      setSelectedQuestions({
+                                        ...selectedQuestions,
+                                        [questionKey]: e.target.value,
+                                      });
+                                    }}
+                                    placeholder="स्पष्टीकरण आवश्यक असल्याचे कारण प्रविष्ट करा..."
+                                    disabled={sendingClarification}
+                                  />
+                                ) : (
+                                  <span className="text-muted">-</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div className="modal-footer" style={{ borderTop: '2px solid #dee2e6', padding: '15px', backgroundColor: '#f8f9fa' }}>
+                  <div className="d-flex justify-content-between align-items-center w-100">
+                    <div>
+                      {Object.keys(selectedQuestions).length > 0 ? (
+                        <span className="text-success">
+                          <i className="bi bi-check-circle me-1"></i>
+                          <strong>{Object.keys(selectedQuestions).length}</strong> प्रश्न निवडले
+                        </span>
+                      ) : (
+                        <span className="text-muted">कृपया किमान एक प्रश्न निवडा</span>
+                      )}
+                    </div>
+                    <div className="d-flex gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => {
+                          setShowClarificationModal(false);
+                          setSelectedQuestions({});
+                        }}
+                        disabled={sendingClarification}
+                      >
+                        <i className="bi bi-x-circle me-1"></i>
+                        रद्द करा
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-warning btn-lg"
+                        onClick={handleRequestClarification}
+                        disabled={sendingClarification || Object.keys(selectedQuestions).length === 0}
+                        style={{ minWidth: '200px' }}
+                      >
+                        {sendingClarification ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
+                            पाठवत आहे...
+                          </>
+                        ) : (
+                          <>
+                            <i className="bi bi-send-fill me-2"></i>
+                            <strong>स्पष्टीकरण विनंती पाठवा</strong>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}

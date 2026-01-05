@@ -1,0 +1,1 @@
+Access requests page वर तुम्हाला system access साठी केलेल्या requests दिसतात. येथे pending, approved आणि declined requests filter करून बघू शकता. प्रत्येक request मध्ये नाव, phone, selfie, status आणि request time दिसते. तुम्ही request ला approve किंवा decline करू शकता. Request साठी note add करू शकता. Selfie preview करून बघू शकता.

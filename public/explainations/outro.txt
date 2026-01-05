@@ -1,0 +1,2 @@
+Thank you for watching DDRC Survey Portal demo. आम्ही सर्व main features cover केले आहेत. या system मध्ये तुम्ही surveys manage करू शकता, field officers manage करू शकता, access requests handle करू शकता आणि बरेच काही. For more information, please check the API documentation. Demo complete झाला आहे. Thank you!
+

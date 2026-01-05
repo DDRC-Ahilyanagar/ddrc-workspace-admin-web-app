@@ -3,6 +3,9 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { sendOTP, verifyOTP, fetchUserByPhone } from '@/lib/api-client';
+import { getAbsoluteImageUrl } from '@/lib/config';
+
+const LOGO_URL = getAbsoluteImageUrl('/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png');
 
 function OTPContent() {
   const router = useRouter();
@@ -140,7 +143,7 @@ function OTPContent() {
         <div className="login-left-side d-flex flex-column align-items-center justify-content-center animate__animated animate__fadeInLeft">
           <div className="login-branding text-center">
             <img 
-              src="/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png" 
+              src={LOGO_URL} 
               alt="DDRC Logo" 
               className="login-logo mb-5 animate__animated animate__fadeInDown"
               style={{ maxWidth: '450px', width: '100%', height: 'auto' }}
@@ -168,7 +171,7 @@ function OTPContent() {
           <div className="login-mobile-branding">
             <div className="text-center mb-4">
               <img 
-                src="/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png" 
+                src={LOGO_URL} 
                 alt="DDRC Logo" 
                 className="login-mobile-logo mb-3"
               />

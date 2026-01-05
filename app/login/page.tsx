@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { sendOTP } from '@/lib/api-client';
+import { BASE_URL, getAbsoluteImageUrl } from '@/lib/config';
+
+const LOGO_URL = getAbsoluteImageUrl('/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png');
 
 export default function LoginPage() {
   const router = useRouter();
@@ -42,7 +45,7 @@ export default function LoginPage() {
         <div className="login-left-side d-flex flex-column align-items-center justify-content-center animate__animated animate__fadeInLeft">
           <div className="login-branding text-center">
             <img 
-              src="/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png" 
+              src={LOGO_URL} 
               alt="DDRC Logo" 
               className="login-logo mb-5 animate__animated animate__fadeInDown"
               style={{ maxWidth: '450px', width: '100%', height: 'auto' }}
@@ -70,7 +73,7 @@ export default function LoginPage() {
           <div className="login-mobile-branding">
             <div className="text-center mb-4">
               <img 
-                src="/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png" 
+                src={LOGO_URL} 
                 alt="DDRC Logo" 
                 className="login-mobile-logo mb-3"
               />

@@ -43,7 +43,7 @@ import path from 'path';
  *       422:
  *         description: Invalid data
  */
-async function handleSubmit(request: NextRequest, user: any) {
+export async function handleSubmit(request: NextRequest, user: any) {
   try {
     // Robust body parsing for various clients/shells
     const contentType = request.headers.get('content-type') || '';

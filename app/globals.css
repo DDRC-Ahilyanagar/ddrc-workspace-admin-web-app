@@ -830,7 +830,7 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: url('/app_back.jpg') center/cover;
+  background: url('https://surveys.bitnix.store/app_back.jpg') center/cover;
   opacity: 0.1;
   z-index: 0;
 }
@@ -1080,7 +1080,7 @@ body {
     justify-content: flex-start;
     padding-top: 1rem;
     /* Mobile background image - only for login page */
-    background-image: url('/app_back.jpg');
+    background-image: url('https://surveys.bitnix.store/app_back.jpg');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;

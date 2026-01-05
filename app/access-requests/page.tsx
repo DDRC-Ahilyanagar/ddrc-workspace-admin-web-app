@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import AdminLayout from '@/components/AdminLayout';
+import { getAbsoluteImageUrl } from '@/lib/config';
 
 type AccessRequest = {
   id: number;
@@ -34,18 +35,34 @@ export default function AccessRequestsPage() {
     setLoading(true);
     setError('');
     try {
+      console.log('Fetching access requests from API with status:', statusFilter);
       const res = await fetch(`/api/access-requests?status=${statusFilter}`, {
         cache: 'no-store',
         credentials: 'include',
       });
+      console.log('Access Requests API Response Status:', res.status);
       const json = await res.json();
+      console.log('Access Requests API Response:', { 
+        ok: json.ok, 
+        dataCount: json.data?.length || 0, 
+        error: json.error,
+        status: res.status,
+        sampleData: json.data?.[0] 
+      });
+      
       if (json.ok) {
         setRequests(json.data || []);
+        console.log('Access requests set:', json.data?.length || 0, 'requests');
       } else {
-        setError(json.error || 'विनंत्या लोड होत नाहीत');
+        const errorMsg = json.error || 'विनंत्या लोड होत नाहीत';
+        console.error('Access Requests API error:', errorMsg);
+        setError(errorMsg);
+        setRequests([]);
       }
     } catch (err: any) {
-      setError('नेटवर्क त्रुटी');
+      console.error('Failed to fetch access requests:', err);
+      setError('नेटवर्क त्रुटी: ' + (err.message || 'Unknown error'));
+      setRequests([]);
     } finally {
       setLoading(false);
     }
@@ -112,9 +129,9 @@ export default function AccessRequestsPage() {
 
         <div className="card shadow-sm animate__animated animate__fadeInUp">
           <div className="card-body">
-            <div className="d-flex justify-content-between align-items-center mb-3">
+            <div className="table-page-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-2 gap-md-0">
               <h5 className="card-title mb-0">एकूण विनंत्या: {requests.length}</h5>
-              <button className="btn btn-outline-secondary btn-sm" onClick={loadRequests} disabled={loading}>
+              <button className="btn btn-outline-secondary btn-sm w-100 w-md-auto" onClick={loadRequests} disabled={loading}>
                 {loading ? 'रिफ्रेश होत आहे...' : 'रिफ्रेश'}
               </button>
             </div>
@@ -161,7 +178,7 @@ export default function AccessRequestsPage() {
                         <button
                           type="button"
                           className="btn btn-sm btn-outline-info"
-                          onClick={() => setPreviewUrl(request.selfie_url)}
+                          onClick={() => setPreviewUrl(getAbsoluteImageUrl(request.selfie_url))}
                         >
                           पाहा
                         </button>
@@ -224,7 +241,7 @@ export default function AccessRequestsPage() {
                 <button type="button" className="btn-close" onClick={() => setPreviewUrl(null)}></button>
               </div>
               <div className="modal-body text-center">
-                <img src={previewUrl} alt="Selfie" className="img-fluid" style={{ maxHeight: '70vh', objectFit: 'contain' }} />
+                <img src={previewUrl ? getAbsoluteImageUrl(previewUrl) : ''} alt="Selfie" className="img-fluid" style={{ maxHeight: '70vh', objectFit: 'contain' }} />
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setPreviewUrl(null)}>

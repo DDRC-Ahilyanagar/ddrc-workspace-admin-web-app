@@ -1,0 +1,1 @@
+API docs page वर तुम्हाला system च्या सर्व API endpoints ची documentation दिसेल. येथे प्रत्येक API endpoint चे description, parameters, response format आणि examples दिसतात. API testing करण्यासाठी Swagger UI वापरू शकता. Different API categories च्या आधारावर filter करू शकता.

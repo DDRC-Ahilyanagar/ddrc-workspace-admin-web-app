@@ -256,6 +256,32 @@ export async function POST(request: NextRequest) {
       Logger.info('send_otp_survey_verification', { phone });
     }
 
+    // Bypass OTP for System Admin (9999999999) - return success without sending
+    const ADMIN_BYPASS_PHONE = '9999999999';
+    const isAdminBypass = phone === ADMIN_BYPASS_PHONE;
+    
+    // Bypass OTP for Verification Officer (8888888888) - return success without sending
+    const VERIFICATION_OFFICER_BYPASS_PHONE = '8888888888';
+    const isVerificationOfficerBypass = phone === VERIFICATION_OFFICER_BYPASS_PHONE;
+    
+    if (isAdminBypass) {
+      Logger.info('send_otp_admin_bypass', { phone, note: 'Admin user - OTP bypassed' });
+      return NextResponse.json({
+        ok: true,
+        message: 'OTP bypassed for admin user',
+        phone: phone,
+      });
+    }
+    
+    if (isVerificationOfficerBypass) {
+      Logger.info('send_otp_verification_officer_bypass', { phone, note: 'Verification Officer user - OTP bypassed' });
+      return NextResponse.json({
+        ok: true,
+        message: 'OTP bypassed for verification officer user',
+        phone: phone,
+      });
+    }
+    
     // Generate OTP: 6-digit number (100000 to 999999)
     const otp = String(Math.floor(100000 + Math.random() * 900000));
     

@@ -189,19 +189,52 @@ const exportExcel = async (surveyId: number, survey: any, answers: ExportAnswer[
 
   sheet.columns = [
     { header: 'S.No', key: 'idx', width: 6 },
-    { header: 'Section', key: 'section', width: 25 },
     { header: 'Question', key: 'question', width: 70 },
     { header: 'Answer', key: 'answer', width: 70 },
   ];
 
-  sheet.addRow(['', `Survey ID: ${survey.id}`, '', '']);
-  sheet.addRow(['', `Aadhaar: ${survey.aadhar_no || '-'}`, '', '']);
-  sheet.addRow(['', `Holder Name: ${survey.holder_name || '-'}`, '', '']);
+  sheet.addRow(['', `Survey ID: ${survey.id}`, '']);
+  sheet.addRow(['', `Aadhaar: ${survey.aadhar_no || '-'}`, '']);
+  sheet.addRow(['', `Holder Name: ${survey.holder_name || '-'}`, '']);
   sheet.addRow([]);
-  sheet.addRow(['S.No', 'Section', 'Question', 'Answer']);
+  sheet.addRow(['S.No', 'Question', 'Answer']);
 
-  answers.forEach((ans, idx) => {
-    sheet.addRow([idx + 1, ans.sectionName, ans.questionText, ans.answer]);
+  // Group answers by section
+  const answersBySection = new Map<string | null, ExportAnswer[]>();
+  answers.forEach((ans) => {
+    const sectionKey = ans.sectionName || 'Other';
+    if (!answersBySection.has(sectionKey)) {
+      answersBySection.set(sectionKey, []);
+    }
+    answersBySection.get(sectionKey)!.push(ans);
+  });
+
+  let serialNumber = 1;
+  // Sort sections by sectionId if available, otherwise by name
+  const sortedSections = Array.from(answersBySection.entries()).sort((a, b) => {
+    const aId = a[1][0]?.sectionId || 0;
+    const bId = b[1][0]?.sectionId || 0;
+    if (aId !== bId) return aId - bId;
+    return (a[0] || '').localeCompare(b[0] || '');
+  });
+
+  sortedSections.forEach(([sectionName, sectionAnswers]) => {
+    // Add section header row
+    const sectionHeaderRow = sheet.addRow([sectionName, '', '']);
+    sectionHeaderRow.font = { bold: true };
+    sectionHeaderRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' },
+    };
+
+    // Add questions in this section
+    sectionAnswers.forEach((ans) => {
+      sheet.addRow([serialNumber++, ans.questionText, ans.answer]);
+    });
+
+    // Add empty row after section
+    sheet.addRow([]);
   });
 
   const buffer = await workbook.xlsx.writeBuffer();
@@ -220,6 +253,7 @@ const pdfStyles = StyleSheet.create({
   heading: { fontSize: 18, fontWeight: 'bold', marginBottom: 8 },
   infoRow: { marginBottom: 2 },
   sectionTitle: { fontSize: 14, fontWeight: 'bold', marginTop: 12, marginBottom: 6 },
+  sectionHeader: { fontSize: 14, fontWeight: 'bold', marginTop: 12, marginBottom: 8, backgroundColor: '#E0E0E0', padding: 6 },
   answerBlock: { marginBottom: 8 },
   answerQuestion: { fontSize: 12, fontWeight: 'bold' },
   answerText: { marginTop: 2, fontSize: 11 },
@@ -235,6 +269,26 @@ const formatDateTime = (value?: string | null) => {
 const exportPdf = async (surveyId: number, survey: any, answers: ExportAnswer[]) => {
   ensurePdfFonts();
 
+  // Group answers by section
+  const answersBySection = new Map<string | null, ExportAnswer[]>();
+  answers.forEach((ans) => {
+    const sectionKey = ans.sectionName || 'Other';
+    if (!answersBySection.has(sectionKey)) {
+      answersBySection.set(sectionKey, []);
+    }
+    answersBySection.get(sectionKey)!.push(ans);
+  });
+
+  // Sort sections by sectionId if available, otherwise by name
+  const sortedSections = Array.from(answersBySection.entries()).sort((a, b) => {
+    const aId = a[1][0]?.sectionId || 0;
+    const bId = b[1][0]?.sectionId || 0;
+    if (aId !== bId) return aId - bId;
+    return (a[0] || '').localeCompare(b[0] || '');
+  });
+
+  let questionNumber = 1;
+
   const doc = (
     <Document>
       <Page size="A4" style={pdfStyles.page}>
@@ -248,13 +302,17 @@ const exportPdf = async (surveyId: number, survey: any, answers: ExportAnswer[])
         <Text style={pdfStyles.infoRow}>निर्मिती तारीख व वेळ: {formatDateTime(survey.created_at)}</Text>
 
         <Text style={pdfStyles.sectionTitle}>उत्तर</Text>
-        {answers.map((ans, idx) => (
-          <View key={`${ans.sectionName}-${ans.questionId}-${idx}`} style={pdfStyles.answerBlock}>
-            <Text style={pdfStyles.answerQuestion}>
-              {idx + 1}. [{ans.sectionName}] {ans.questionId ? `${ans.questionId}. ` : ''}
-              {ans.questionText}
-            </Text>
-            <Text style={pdfStyles.answerText}>उत्तर: {ans.answer || '-'}</Text>
+        {sortedSections.map(([sectionName, sectionAnswers], sectionIdx) => (
+          <View key={`section-${sectionIdx}`}>
+            <Text style={pdfStyles.sectionHeader}>{sectionName || 'Other'}</Text>
+            {sectionAnswers.map((ans, ansIdx) => (
+              <View key={`${ans.sectionName}-${ans.questionId}-${ansIdx}`} style={pdfStyles.answerBlock}>
+                <Text style={pdfStyles.answerQuestion}>
+                  {questionNumber++}. {ans.questionText}
+                </Text>
+                <Text style={pdfStyles.answerText}>उत्तर: {ans.answer || '-'}</Text>
+              </View>
+            ))}
           </View>
         ))}
       </Page>

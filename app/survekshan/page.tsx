@@ -32,6 +32,8 @@ export default function SurvekshanPage() {
   // User type and filter state
   const [userType, setUserType] = useState('');
   const [filterType, setFilterType] = useState('all');
+  const [surveysData, setSurveysData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Get user type on mount
   useEffect(() => {
@@ -39,12 +41,69 @@ export default function SurvekshanPage() {
     setUserType(storedUserType);
   }, []);
 
-  // Reload DataTable when filter changes
+  // Fetch all surveys data once on mount
   useEffect(() => {
-    if (dtInstanceRef.current && filterType) {
-      dtInstanceRef.current.ajax.reload();
-    }
+    const fetchSurveys = async () => {
+      try {
+        setLoading(true);
+        const userPhone = localStorage.getItem('user_phone') || '';
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+        };
+        if (userPhone) {
+          headers['Authorization'] = `Bearer ${userPhone}`;
+        }
+
+        // Fetch all surveys without pagination for client-side processing
+        const response = await fetch(`/api/admin/surveys?filter=${filterType}&start=0&length=999999&draw=1`, {
+          method: 'GET',
+          headers,
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const json = await response.json();
+        if (json.data && Array.isArray(json.data)) {
+          setSurveysData(json.data);
+        } else {
+          setSurveysData([]);
+        }
+      } catch (error) {
+        console.error('Error fetching surveys:', error);
+        setSurveysData([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSurveys();
   }, [filterType]);
+
+  // Re-initialize DataTable when data changes (after filter change)
+  useEffect(() => {
+    if (surveysData.length >= 0 && !loading && dataTablesLoaded) {
+      // Reset initialization flag to allow re-initialization with new data
+      if (dtInstanceRef.current) {
+        try {
+          dtInstanceRef.current.destroy();
+        } catch (e) {
+          console.warn('Error destroying DataTable:', e);
+        }
+        dtInstanceRef.current = null;
+      }
+      initAttemptedRef.current = false;
+      // Trigger re-initialization
+      const timer = setTimeout(() => {
+        if (tableRef.current && !initAttemptedRef.current) {
+          initializeDataTable();
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [surveysData, loading, dataTablesLoaded]);
 
   /**
    * Setup global handler for DataTable view action button
@@ -99,40 +158,8 @@ export default function SurvekshanPage() {
     try {
       console.log('Creating DataTable instance...');
       dtInstanceRef.current = table.DataTable({
-      // Enable server-side processing for better performance with large datasets
-      serverSide: true,
-      processing: true,
-      
-      // AJAX configuration for fetching survey data
-      ajax: {
-        url: '/api/admin/surveys',
-        type: 'GET',
-        xhrFields: {
-          withCredentials: true
-        },
-        beforeSend: function(xhr: any) {
-          // Send phone as Authorization header for user identification
-          const userPhone = localStorage.getItem('user_phone') || '';
-          if (userPhone) {
-            xhr.setRequestHeader('Authorization', `Bearer ${userPhone}`);
-          }
-        },
-        data: function(d: any) {
-          // Add filter parameter to request
-          const currentFilter = filterType || 'all';
-          d.filter = currentFilter;
-          return d;
-        },
-        error: (xhr: any, error: string, thrown: string) => {
-          console.error('Surveys API request failed:', error, thrown);
-          console.error('Response:', xhr.responseText);
-          console.error('Status:', xhr.status);
-        },
-        dataSrc: (json: any) => {
-          console.log('API response received:', json);
-          return json.data || [];
-        }
-      },
+      // Client-side processing - DataTables handles search, sort, pagination
+      data: surveysData,
       
       // Column definitions with Marathi titles
       columns: [
@@ -143,9 +170,17 @@ export default function SurvekshanPage() {
           render: (data: string) => data || '-'
         },
         { 
-          data: 'user_id', 
-          title: 'वापरकर्ता ID', // User ID
-          render: (data: number) => data || '-'
+          data: null,
+          title: 'वापरकर्ता', // User (Field Officer)
+          orderable: true,
+          render: (data: any, type: string, row: any) => {
+            if (row.user_name || row.user_phone) {
+              const name = row.user_name || `ID: ${row.user_id}`;
+              const phone = row.user_phone ? ` (${row.user_phone})` : '';
+              return name + phone;
+            }
+            return row.user_id ? `ID: ${row.user_id}` : '-';
+          }
         },
         { 
           data: 'answer_count', 
@@ -227,13 +262,13 @@ export default function SurvekshanPage() {
   /**
    * Effect to check if DataTables is loaded and initialize the table
    * Retries up to 10 times with 300ms delay between attempts
-   * Runs when dataTablesLoaded state changes or component mounts
+   * Runs when dataTablesLoaded state changes, data is loaded, or component mounts
    */
   useEffect(() => {
-    console.log('Effect running - dataTablesLoaded:', dataTablesLoaded, 'tableRef:', !!tableRef.current);
+    console.log('Effect running - dataTablesLoaded:', dataTablesLoaded, 'tableRef:', !!tableRef.current, 'loading:', loading, 'dataLength:', surveysData.length);
     
-    if (!tableRef.current) {
-      console.log('Table ref not available yet');
+    if (!tableRef.current || loading) {
+      console.log('Table ref not available yet or still loading data');
       return;
     }
 
@@ -249,7 +284,8 @@ export default function SurvekshanPage() {
         hasJQuery: !!$,
         hasDataTable,
         dataTablesLoaded,
-        retriesLeft: retries
+        retriesLeft: retries,
+        dataReady: !loading && surveysData.length >= 0
       });
 
       if (hasDataTable && !initAttemptedRef.current) {
@@ -268,7 +304,7 @@ export default function SurvekshanPage() {
     return () => {
       clearTimeout(timer);
     };
-  }, [dataTablesLoaded]);
+  }, [dataTablesLoaded, loading, surveysData.length]);
 
   /**
    * Cleanup effect: Destroy DataTable instance on component unmount
@@ -308,21 +344,18 @@ export default function SurvekshanPage() {
       <AdminLayout>
         <div className="container-fluid p-4">
           {/* Page Header */}
-          <div className="d-flex justify-content-between align-items-center mb-4">
+          <div className="survekshan-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3 gap-md-0">
             <h2 className="mb-0">सर्वेक्षण यादी</h2>
             {/* Filter Dropdown */}
-            <div className="d-flex align-items-center gap-3">
+            <div className="survekshan-filter d-flex flex-column flex-md-row align-items-start align-items-md-center gap-2 gap-md-3 w-100 w-md-auto">
               <label className="mb-0 fw-semibold">फिल्टर:</label>
               <select
                 className="form-select form-select-sm"
-                style={{ minWidth: '200px' }}
+                style={{ minWidth: '200px', width: '100%' }}
                 value={filterType}
                 onChange={(e) => {
                   setFilterType(e.target.value);
-                  // Reload DataTable with new filter
-                  if (dtInstanceRef.current) {
-                    dtInstanceRef.current.ajax.reload();
-                  }
+                  // Filter change will trigger data refetch via useEffect
                 }}
               >
                 {userType?.toLowerCase() === 'verification_officer' ? (
@@ -349,31 +382,40 @@ export default function SurvekshanPage() {
           {/* Survey List Table Card */}
           <div className="card shadow-sm">
             <div className="card-body">
-              <div className="table-responsive">
-                {/* 
-                  DataTables will automatically:
-                  - Add search, pagination, and sorting controls
-                  - Populate tbody via server-side AJAX
-                  - Apply Bootstrap 5 styling
-                */}
-                <table ref={tableRef} className="table table-striped align-middle" style={{ width: '100%' }}>
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>आधार क्रमांक</th>
-                      <th>वापरकर्ता ID</th>
-                      <th>उत्तरांची संख्या</th>
-                      <th>स्थिती</th>
-                      <th>तयार केले</th>
-                      <th>अपडेट केले</th>
-                      <th>क्रिया</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {/* DataTables will populate this via server-side processing */}
-                  </tbody>
-                </table>
-              </div>
+              {loading ? (
+                <div className="text-center py-5">
+                  <div className="spinner-border text-primary" role="status">
+                    <span className="visually-hidden">लोड होत आहे...</span>
+                  </div>
+                  <p className="mt-2">डेटा लोड होत आहे...</p>
+                </div>
+              ) : (
+                <div className="table-responsive">
+                  {/* 
+                    DataTables will automatically:
+                    - Add search, pagination, and sorting controls (client-side)
+                    - Populate tbody from the data prop
+                    - Apply Bootstrap 5 styling
+                  */}
+                  <table ref={tableRef} className="table table-striped align-middle" style={{ width: '100%' }}>
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>आधार क्रमांक</th>
+                        <th>वापरकर्ता</th>
+                        <th>उत्तरांची संख्या</th>
+                        <th>स्थिती</th>
+                        <th>तयार केले</th>
+                        <th>अपडेट केले</th>
+                        <th>क्रिया</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* DataTables will populate this from the data prop */}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>

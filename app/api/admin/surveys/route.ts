@@ -81,9 +81,14 @@ export async function GET(req: NextRequest) {
         // 1. Surveys assigned to them (under_review)
         // 2. All completed surveys (for verification)
         // 3. All incomplete surveys
-        if (filterType === 'assigned_to_me' && hasVerificationColumns) {
-          whereClause += ` AND s.assigned_to = ?`;
-          searchParams.push(userId);
+        if (filterType === 'assigned_to_me') {
+          if (hasVerificationColumns) {
+            whereClause += ` AND s.assigned_to = ?`;
+            searchParams.push(userId);
+          } else {
+            // If columns don't exist, show all surveys for verification officer
+            // (can't filter by assignment without the column)
+          }
         } else if (filterType === 'completed') {
           whereClause += ` AND COALESCE(s.no_of_questions_answered, 0) > 0 AND (s.no_of_questions_unanswered = 0 OR s.no_of_questions_unanswered IS NULL)`;
         } else if (filterType === 'incomplete') {
@@ -92,24 +97,39 @@ export async function GET(req: NextRequest) {
         // 'all' shows everything - no additional filter
       } else {
         // Admin filter conditions
-        if (filterType === 'unassigned' && hasVerificationColumns) {
-          whereClause += ` AND (s.source = 'Divyang Self' OR s.source IS NULL) AND (s.assigned_to IS NULL OR s.assigned_to = 0)`;
-        } else if (filterType === 'pending' && hasVerificationColumns) {
-          whereClause += ` AND (s.verification_status = 'pending' OR s.verification_status IS NULL)`;
-        } else if (filterType === 'under_review' && hasVerificationColumns) {
-          whereClause += ` AND s.verification_status = 'under_review'`;
-        } else if (filterType === 'verified' && hasVerificationColumns) {
-          whereClause += ` AND s.verification_status = 'verified'`;
-        } else if (filterType === 'approved' && hasVerificationColumns) {
-          whereClause += ` AND s.admin_approval_status = 'approved'`;
+        if (filterType === 'unassigned') {
+          if (hasVerificationColumns) {
+            whereClause += ` AND (s.source = 'Divyang Self' OR s.source IS NULL) AND (s.assigned_to IS NULL OR s.assigned_to = 0)`;
+          }
+          // If columns don't exist, skip this filter
+        } else if (filterType === 'pending') {
+          if (hasVerificationColumns) {
+            whereClause += ` AND (s.verification_status = 'pending' OR s.verification_status IS NULL)`;
+          }
+          // If columns don't exist, skip this filter
+        } else if (filterType === 'under_review') {
+          if (hasVerificationColumns) {
+            whereClause += ` AND s.verification_status = 'under_review'`;
+          }
+          // If columns don't exist, skip this filter
+        } else if (filterType === 'verified') {
+          if (hasVerificationColumns) {
+            whereClause += ` AND s.verification_status = 'verified'`;
+          }
+          // If columns don't exist, skip this filter
+        } else if (filterType === 'approved') {
+          if (hasVerificationColumns) {
+            whereClause += ` AND s.admin_approval_status = 'approved'`;
+          }
+          // If columns don't exist, skip this filter
         }
         // 'all' shows everything - no additional filter
       }
       
       if (searchValue) {
-        whereClause += ` AND (sa.aadhar_no LIKE ? OR sa.id LIKE ?)`;
+        whereClause += ` AND (sa.aadhar_no LIKE ? OR sa.id LIKE ? OR u.name LIKE ? OR u.contact_number LIKE ?)`;
         const searchPattern = `%${searchValue}%`;
-        searchParams.push(searchPattern, searchPattern);
+        searchParams.push(searchPattern, searchPattern, searchPattern, searchPattern);
       }
       
       // Get total count (before filtering) - count from surveys table joined with survey_aadhar
@@ -145,7 +165,7 @@ export async function GET(req: NextRequest) {
       } else if (orderByColumn === 'aadhar_no') {
         orderByClause = 'sa.aadhar_no';
       } else if (orderByColumn === 'user_id') {
-        orderByClause = 'sa.user_id';
+        orderByClause = 'COALESCE(s.user_id, sa.user_id)';
       } else if (orderByColumn === 'created_at') {
         orderByClause = 'sa.created_at';
       } else if (orderByColumn === 'updated_at') {
@@ -194,7 +214,9 @@ export async function GET(req: NextRequest) {
           `SELECT 
             sa.id,
             sa.aadhar_no,
-            sa.user_id,
+            COALESCE(s.user_id, sa.user_id) AS user_id,
+            u.name AS user_name,
+            u.contact_number AS user_phone,
             sa.created_at,
             sa.updated_at,
             COALESCE(s.no_of_questions_answered, 0) AS answer_count,
@@ -202,9 +224,10 @@ export async function GET(req: NextRequest) {
               WHEN COALESCE(s.no_of_questions_answered, 0) > 0 THEN 'Completed'
               ELSE 'Pending'
             END AS status,
-            s.source${verificationFields ? ',' + verificationFields.trim() : ''}
+            s.source${hasVerificationColumns && verificationFields ? ',' + verificationFields.trim() : ''}
           FROM survey_aadhar sa
-          LEFT JOIN surveys s ON s.aadhaar_id = sa.id${joinClauses}
+          LEFT JOIN surveys s ON s.aadhaar_id = sa.id
+          LEFT JOIN users u ON u.id = COALESCE(s.user_id, sa.user_id)${hasVerificationColumns ? joinClauses : ''}
           WHERE ${whereClause}
           ORDER BY ${orderByClause} ${orderDir}
           LIMIT ? OFFSET ?`,

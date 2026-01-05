@@ -1,0 +1,1 @@
+Officers page वर तुम्ही field officers ची list बघू शकता. येथे प्रत्येक officer चे नाव, phone, email, completed forms, incomplete forms, total forms आणि wallet balance दिसते. Officer ची details expand करून बघू शकता. प्रत्येक officer च्या completed आणि incomplete forms ची list बघू शकता. Officers ला refresh करून latest data बघू शकता.

@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Image from 'next/image';
+import { getAbsoluteImageUrl } from '@/lib/config';
+
+const LOGO_URL = getAbsoluteImageUrl('/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png');
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -410,7 +413,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           <nav className="sidebar-nav">
             <div className="sidebar-logo-container mb-3 d-flex justify-content-center align-items-center animate__animated animate__fadeInDown" style={{ padding: '1rem' }}>
               <img 
-                src="/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png" 
+                src={LOGO_URL} 
                 alt="DDRC Logo" 
                 style={{ maxWidth: '100%', height: 'auto', maxHeight: '80px' }}
               />

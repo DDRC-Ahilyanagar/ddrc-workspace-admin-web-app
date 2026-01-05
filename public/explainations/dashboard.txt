@@ -1,0 +1,1 @@
+Dashboard page वर तुम्हाला survey ची total information दिसेल. येथे total surveys, आजच्या surveys, completed surveys, pending surveys अशा details दिसतात. सोबतच taluka, gender, district, disability यांच्या आधारावर charts देखील दिसतात. तुम्ही different filters वापरून data बघू शकता.

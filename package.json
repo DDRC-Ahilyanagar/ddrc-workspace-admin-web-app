@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 0.0.0.0",
     "dev:network": "next dev -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
@@ -14,7 +14,9 @@
     "prisma:db-push": "prisma db push",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:seed": "node prisma/seed.js",
-    "auto-seed": "node scripts/auto-seed.js"
+    "auto-seed": "node scripts/auto-seed.js",
+    "seed:surveys": "npx tsx seed_surveys.ts",
+    "demo": "npx tsx scripts/demo-runner.ts"
   },
   "dependencies": {
     "@ckeditor/ckeditor5-build-classic": "^41.4.2",
@@ -33,6 +35,7 @@
     "datatables.net-react": "^1.0.1",
     "dotenv": "^17.2.3",
     "exceljs": "^4.4.0",
+    "jsonwebtoken": "^9.0.2",
     "jquery": "^3.7.1",
     "mysql2": "^3.15.3",
     "next": "14.2.33",
@@ -50,11 +53,14 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",
     "@types/node": "^20.19.25",
+    "@types/jsonwebtoken": "^9.0.7",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.33",
+    "playwright": "^1.48.0",
     "tailwindcss": "^4.1.17",
+    "tsx": "^4.19.2",
     "typescript": "^5"
   }
 }

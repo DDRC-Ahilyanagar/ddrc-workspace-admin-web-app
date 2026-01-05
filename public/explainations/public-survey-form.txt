@@ -1,0 +1,1 @@
+Public survey form page वर public users directly survey form fill करू शकतात. येथे सर्व questions दिसतात. प्रत्येक question चे answer fill करा. Required fields properly fill करा. Form submit केल्यानंतर thank you message दिसेल. Survey successfully submit झाल्यानंतर reference number मिळेल.

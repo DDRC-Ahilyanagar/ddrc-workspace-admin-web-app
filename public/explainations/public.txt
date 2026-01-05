@@ -1,0 +1,1 @@
+Public page वर general public साठी information दिसते. येथे system बद्दल basic information, contact details आणि other resources दिसतात. Public users येथून system access करू शकतात.

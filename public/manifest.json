@@ -1,0 +1,28 @@
+{
+  "name": "DDRC Survey Portal",
+  "short_name": "DDRC Portal",
+  "description": "District Disability Rehabilitation Centre (DDRC) Survey Portal - जिल्हा दिव्यांग पुनर्वसन केंद्र, अहिल्यानगर",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#E3F2FD",
+  "theme_color": "#0D47A1",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/ddrc app icon (192 x 192 px) (1024 x 1024 px).png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/ddrc app icon (192 x 192 px) (1024 x 1024 px).png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["health", "government", "social"],
+  "lang": "mr-IN",
+  "dir": "ltr"
+}
+

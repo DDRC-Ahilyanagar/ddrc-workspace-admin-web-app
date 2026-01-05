@@ -42,14 +42,30 @@ export default function OfficersPage() {
   const fetchOfficers = async () => {
     try {
       setLoading(true);
+      console.log('Fetching officers from API...');
       const res = await fetch('/api/admin/officers');
       const json = await res.json();
+      console.log('Officers API Response:', { 
+        ok: json.ok, 
+        dataCount: json.data?.length || 0, 
+        ratePerSurvey: json.ratePerSurvey,
+        error: json.error,
+        sampleData: json.data?.[0] 
+      });
+      
       if (json.ok) {
         setOfficers(json.data || []);
         setRatePerSurvey(json.ratePerSurvey || 0);
+        console.log('Officers set:', json.data?.length || 0, 'officers');
+      } else {
+        console.error('Officers API error:', json.error);
+        setOfficers([]);
+        setRatePerSurvey(0);
       }
     } catch (error) {
       console.error('Failed to fetch officers:', error);
+      setOfficers([]);
+      setRatePerSurvey(0);
     } finally {
       setLoading(false);
     }
@@ -80,10 +96,10 @@ export default function OfficersPage() {
   return (
     <AdminLayout>
       <div className="container-fluid">
-        <div className="d-flex justify-content-between align-items-center mb-4">
+        <div className="table-page-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3 gap-md-0">
           <h1 className="h3 mb-0">Field Officers</h1>
           <button
-            className="btn btn-primary"
+            className="btn btn-primary w-100 w-md-auto"
             onClick={fetchOfficers}
             disabled={loading}
           >
@@ -104,12 +120,20 @@ export default function OfficersPage() {
             <div className="spinner-border text-primary" role="status">
               <span className="visually-hidden">Loading...</span>
             </div>
+            <p className="mt-2 text-muted">Loading officers...</p>
           </div>
         ) : officers.length === 0 ? (
           <div className="card">
             <div className="card-body text-center py-5">
               <i className="bi bi-person-x" style={{ fontSize: '3rem', color: '#ccc' }}></i>
               <p className="mt-3 text-muted">No field officers found</p>
+              <p className="text-muted small">Please check:</p>
+              <ul className="text-muted small text-start" style={{ maxWidth: '400px', margin: '0 auto' }}>
+                <li>Database has users with <code>user_type = 'field_officer'</code></li>
+                <li>Users have <code>is_active = 1</code></li>
+                <li>Check browser console for API errors</li>
+                <li>Check server logs for Prisma/database errors</li>
+              </ul>
             </div>
           </div>
         ) : (

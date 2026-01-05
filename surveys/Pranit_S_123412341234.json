@@ -1,0 +1,179 @@
+{
+  "user_id": 1,
+  "aadhaar_id": 79,
+  "aadhaar_number": "123412341234",
+  "holder_name": "Pranit S",
+  "submitted_at": "2026-01-02T07:48:29.896Z",
+  "answers": [
+    {
+      "question_id": 1,
+      "section_id": 1,
+      "answer": "Pranit S"
+    },
+    {
+      "question_id": 2,
+      "section_id": 1,
+      "answer": "1989-05-27"
+    },
+    {
+      "question_id": 3,
+      "section_id": 1,
+      "answer": "36 वर्षे"
+    },
+    {
+      "question_id": 4,
+      "section_id": 1,
+      "answer": "पुरुष"
+    },
+    {
+      "question_id": 5,
+      "section_id": 1,
+      "answer": "विवाहित"
+    },
+    {
+      "question_id": 6,
+      "section_id": 1,
+      "answer": "4546545645"
+    },
+    {
+      "question_id": 7,
+      "section_id": 1,
+      "answer": "asd@asd.com"
+    },
+    {
+      "question_id": 8,
+      "section_id": 1,
+      "answer": "sadjjkasdh"
+    },
+    {
+      "question_id": 9,
+      "section_id": 1,
+      "answer": "4564564564"
+    },
+    {
+      "question_id": 10,
+      "section_id": 1,
+      "answer": "sadsad"
+    },
+    {
+      "question_id": 11,
+      "section_id": 1,
+      "answer": "5"
+    },
+    {
+      "question_id": 12,
+      "section_id": 1,
+      "answer": "अनुसूचित जाती (SC)"
+    },
+    {
+      "question_id": 188,
+      "section_id": 1,
+      "answer": "महार"
+    },
+    {
+      "question_id": 13,
+      "section_id": 1,
+      "answer": "A+"
+    },
+    {
+      "question_id": 180,
+      "section_id": 1,
+      "answer": "http://localhost:3000/uploads/3ae4f282-6557-443d-9180-3e6283078e02.jpg"
+    },
+    {
+      "question_id": 189,
+      "section_id": 1,
+      "answer": "होय"
+    },
+    {
+      "question_id": 190,
+      "section_id": 1,
+      "answer": "होय"
+    },
+    {
+      "question_id": 191,
+      "section_id": 1,
+      "answer": "होय"
+    },
+    {
+      "question_id": 192,
+      "section_id": 1,
+      "answer": "होय"
+    },
+    {
+      "question_id": 193,
+      "section_id": 1,
+      "answer": "होय"
+    },
+    {
+      "question_id": 194,
+      "section_id": 1,
+      "answer": "होय"
+    },
+    {
+      "question_id": 66,
+      "section_id": 5,
+      "answer": "होय"
+    },
+    {
+      "question_id": 69,
+      "section_id": 5,
+      "answer": "Blindness"
+    },
+    {
+      "question_id": 70,
+      "section_id": 5,
+      "answer": "50"
+    },
+    {
+      "question_id": 43,
+      "section_id": 3,
+      "answer": "saddsa"
+    },
+    {
+      "question_id": 44,
+      "section_id": 3,
+      "answer": "assd"
+    },
+    {
+      "question_id": 45,
+      "section_id": 3,
+      "answer": "sasd"
+    },
+    {
+      "question_id": 46,
+      "section_id": 3,
+      "answer": "Ahilyanagar"
+    },
+    {
+      "question_id": 47,
+      "section_id": 3,
+      "answer": "Akole"
+    },
+    {
+      "question_id": 48,
+      "section_id": 3,
+      "answer": "Akole"
+    },
+    {
+      "question_id": 49,
+      "section_id": 3,
+      "answer": "Mhaladevi"
+    },
+    {
+      "question_id": 50,
+      "section_id": 3,
+      "answer": "Akole"
+    },
+    {
+      "question_id": 51,
+      "section_id": 3,
+      "answer": "411052"
+    },
+    {
+      "question_id": 52,
+      "section_id": 3,
+      "answer": "Devthan"
+    }
+  ]
+}

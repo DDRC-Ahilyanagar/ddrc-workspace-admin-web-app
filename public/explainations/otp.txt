@@ -1,0 +1,1 @@
+OTP verification page वर तुमचा mobile number आणि नाव दिसेल. तुमच्या mobile वर मिळालेला 6 digit OTP येथे enter करा. OTP enter केल्यानंतर automatically verify होईल. जर OTP मिळाला नसेल तर OTP resend button वर click करा. Verification successful झाल्यानंतर तुम्ही dashboard वर जाल.

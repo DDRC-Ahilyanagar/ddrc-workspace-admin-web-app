@@ -1,0 +1,15 @@
+# Requirements for TTS audio generation script
+# Install with: pip install -r scripts/requirements-tts.txt
+
+# Google Text-to-Speech library (supports Marathi, free, but limited voice options)
+gtts==2.5.1
+
+# Azure Cognitive Services Speech SDK (supports voice selection including male voices)
+# Install with: pip install azure-cognitiveservices-speech
+# Note: Requires Azure subscription and API key
+# azure-cognitiveservices-speech==1.32.1
+
+# Alternative: If you want to use local TTS (no internet required)
+# Note: pyttsx3 may not have good Marathi support
+# pyttsx3==2.90
+

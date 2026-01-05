@@ -19,23 +19,45 @@ export async function GET(request: NextRequest) {
 
     try {
       // Get all field officers (users with userType = 'field_officer')
-      const officers = await prisma.user.findMany({
-        where: {
-          userType: 'field_officer',
-          isActive: true,
-        },
-        select: {
-          id: true,
-          name: true,
-          contactNumber: true,
-          email: true,
-          lastLogin: true,
-          createdAt: true,
-        },
-        orderBy: {
-          name: 'asc',
-        },
-      });
+      let officers;
+      try {
+        officers = await prisma.user.findMany({
+          where: {
+            userType: 'field_officer',
+            isActive: true,
+          },
+          select: {
+            id: true,
+            name: true,
+            contactNumber: true,
+            email: true,
+            lastLogin: true,
+            createdAt: true,
+          },
+          orderBy: {
+            name: 'asc',
+          },
+        });
+        console.log('Prisma query result:', { count: officers.length, officers: officers.map(o => ({ id: o.id, name: o.name })) });
+      } catch (prismaError: any) {
+        console.error('Prisma query error:', prismaError);
+        // Fallback: Use raw SQL query if Prisma fails
+        const [rawOfficers]: any = await conn.query(
+          `SELECT id, name, contact_number, email, last_login, created_at 
+           FROM users 
+           WHERE user_type = 'field_officer' AND is_active = 1 
+           ORDER BY name ASC`
+        );
+        officers = Array.isArray(rawOfficers) ? rawOfficers.map((o: any) => ({
+          id: BigInt(o.id),
+          name: o.name,
+          contactNumber: o.contact_number,
+          email: o.email,
+          lastLogin: o.last_login,
+          createdAt: o.created_at,
+        })) : [];
+        console.log('Raw SQL query result:', { count: officers.length });
+      }
 
       // Get rate per survey from app_settings
       const [rateRows] = await conn.query(
@@ -49,7 +71,9 @@ export async function GET(request: NextRequest) {
       // Get statistics for each officer
       const officersWithStats = await Promise.all(
         officers.map(async (officer: any) => {
-          const userId = Number(officer.id);
+          // Handle BigInt conversion properly
+          const userId = typeof officer.id === 'bigint' ? Number(officer.id) : Number(officer.id);
+          console.log('Processing officer:', { id: userId, name: officer.name });
 
           // Get completed surveys (where noOfQuestionsUnanswered = 0)
           const [completedRows] = await conn.query(

@@ -1,0 +1,1 @@
+Sections page वर तुम्ही survey चे different sections manage करू शकता. येथे नवीन section add करू शकता, existing sections edit करू शकता किंवा delete करू शकता. प्रत्येक section मध्ये questions असतात. Section select केल्यानंतर त्या section चे questions बघू शकता आणि answers fill करू शकता. Aadhaar card info OCR वापरून automatically fill करू शकता.

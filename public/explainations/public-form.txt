@@ -1,0 +1,1 @@
+Public form page वर public users त्यांचा Aadhaar card upload करू शकतात आणि survey form fill करू शकतात. येथे Aadhaar front आणि back images upload करा. OCR वरून automatically information fill होईल. Personal information आणि address details fill करा. Form submit केल्यानंतर confirmation message दिसेल.

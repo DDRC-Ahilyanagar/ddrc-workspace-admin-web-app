@@ -1,0 +1,1 @@
+Login page वर तुम्ही तुमचा 10 digit mobile number enter करा. Mobile number enter केल्यानंतर OTP send button वर click करा. तुमच्या mobile वर OTP send होईल. OTP मिळाल्यानंतर OTP verification page वर जाऊन तो enter करा.

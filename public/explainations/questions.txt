@@ -1,0 +1,1 @@
+Questions page वर तुम्ही survey चे सर्व questions manage करू शकता. येथे नवीन question add करू शकता, existing questions edit करू शकता किंवा delete करू शकता. प्रत्येक question साठी question type, options, valid input, max length अशी settings set करू शकता. Section च्या आधारावर questions filter करू शकता. Questions ला order च्या आधारावर sort करू शकता.

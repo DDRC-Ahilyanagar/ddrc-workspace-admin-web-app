@@ -110,10 +110,18 @@ export async function POST(request: NextRequest) {
       const TEST_PHONE = '1234567890';
       const TEST_OTP = '123456';
       const isTestMode = phone === TEST_PHONE && otp === TEST_OTP;
+      
+      // Bypass OTP for System Admin (9999999999)
+      const ADMIN_BYPASS_PHONE = '9999999999';
+      const isAdminBypass = phone === ADMIN_BYPASS_PHONE;
+      
+      // Bypass OTP for Verification Officer (8888888888)
+      const VERIFICATION_OFFICER_BYPASS_PHONE = '8888888888';
+      const isVerificationOfficerBypass = phone === VERIFICATION_OFFICER_BYPASS_PHONE;
 
-      // Find latest unexpired sent OTP (skip for test mode)
+      // Find latest unexpired sent OTP (skip for test mode, admin bypass, and verification officer bypass)
       let row: any = null;
-      if (!isTestMode) {
+      if (!isTestMode && !isAdminBypass && !isVerificationOfficerBypass) {
         const [rows] = await connection.execute(
           `SELECT * FROM otp_verifications 
            WHERE phone = ? AND status IN ('sent') 
@@ -136,9 +144,15 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      if (isTestMode) {
-        // For test mode, skip OTP validation and expiration checks
-        Logger.info('verify_otp_test_mode', { phone, otp });
+      if (isTestMode || isAdminBypass || isVerificationOfficerBypass) {
+        // For test mode, admin bypass, and verification officer bypass, skip OTP validation and expiration checks
+        if (isAdminBypass) {
+          Logger.info('verify_otp_admin_bypass', { phone, otp });
+        } else if (isVerificationOfficerBypass) {
+          Logger.info('verify_otp_verification_officer_bypass', { phone, otp });
+        } else {
+          Logger.info('verify_otp_test_mode', { phone, otp });
+        }
       } else {
         // Normal OTP validation flow
         if (new Date(row.expires_at) < new Date()) {
@@ -168,14 +182,16 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Mark verified (skip for test mode if no row exists)
-      if (!isTestMode || row) {
-        await connection.execute(
-          `UPDATE otp_verifications 
-           SET status = 'verified', verified_at = NOW(), updated_at = NOW() 
-           WHERE id = ?`,
-          [row.id]
-        );
+      // Mark verified (skip for test mode, admin bypass, and verification officer bypass if no row exists)
+      if ((!isTestMode && !isAdminBypass && !isVerificationOfficerBypass) || row) {
+        if (row) {
+          await connection.execute(
+            `UPDATE otp_verifications 
+             SET status = 'verified', verified_at = NOW(), updated_at = NOW() 
+             WHERE id = ?`,
+            [row.id]
+          );
+        }
       }
 
       // For survey verification: Just return success, no user authentication needed
