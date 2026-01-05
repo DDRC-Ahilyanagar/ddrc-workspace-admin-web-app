@@ -920,6 +920,21 @@ body {
   margin-bottom: 2.5rem !important;
 }
 
+.login-card-wrapper .btn-link {
+  color: var(--primary-100);
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.login-card-wrapper .btn-link:hover {
+  color: var(--primary-200);
+  transform: translateX(-3px);
+}
+
+.login-card-wrapper .btn-link i {
+  font-size: 1.125rem;
+}
+
 .login-card-wrapper .form-label {
   font-size: 1.25rem;
   font-weight: 600;

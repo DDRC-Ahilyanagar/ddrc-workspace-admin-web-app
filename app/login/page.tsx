@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { sendOTP, fetchUserByPhone } from '@/lib/api-client';
 import { BASE_URL, getAbsoluteImageUrl } from '@/lib/config';
 
@@ -118,7 +119,14 @@ export default function LoginPage() {
           <div className="login-card-wrapper">
             <div className="card shadow-lg border-0">
               <div className="card-body">
-                <h3 className="card-title text-center">लॉगिन</h3>
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <Link href="/" className="btn btn-link text-decoration-none p-0">
+                    <i className="bi bi-arrow-left me-2"></i>
+                    <span>Back to Home</span>
+                  </Link>
+                  <h3 className="card-title mb-0">लॉगिन</h3>
+                  <div style={{ width: '100px' }}></div> {/* Spacer for centering */}
+                </div>
                 <form onSubmit={handleSubmit}>
                   <div className="mb-4">
                     <label className="form-label fw-semibold">मोबाईल क्रमांक (10 अंक)</label>
