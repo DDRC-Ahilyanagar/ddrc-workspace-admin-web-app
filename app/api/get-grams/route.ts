@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbQuery } from '@/lib/db';
 
+// Force dynamic rendering since we use searchParams
+export const dynamic = 'force-dynamic';
+
 /**
  * @swagger
  * /api/get-grams:

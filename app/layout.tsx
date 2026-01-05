@@ -14,6 +14,7 @@ const workSans = Work_Sans({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://ddrc-ahilyanagar.in'),
   title: "DDRC Survey Portal - District Disability Rehabilitation Centre, Ahilyanagar",
   description: "District Disability Rehabilitation Centre (DDRC) Survey Portal - जिल्हा दिव्यांग पुनर्वसन केंद्र, अहिल्यानगर. Ministry of Social Justice & Empowerment, Govt. of India approved.",
   keywords: ["DDRC", "Disability Rehabilitation", "Ahilyanagar", "Survey Portal", "दिव्यांग पुनर्वसन"],
