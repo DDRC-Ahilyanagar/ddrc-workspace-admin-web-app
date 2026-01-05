@@ -43,43 +43,45 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   useEffect(() => {
     setMounted(true);
     const loggedIn = localStorage.getItem('logged_in');
-    if (!loggedIn) {
+    if (!loggedIn || loggedIn !== 'true') {
       router.push('/login');
-    } else {
-      setUserName(localStorage.getItem('user_name') || '');
-      const phone = localStorage.getItem('user_phone') || '';
-      setUserPhone(phone);
-      
-      // Get user_type from localStorage first (for immediate render)
-      const storedUserType = localStorage.getItem('user_type') || '';
-      setUserType(storedUserType);
-      
-      // Always fetch user_type from API to ensure it's current
-      if (phone) {
-        const fetchUserType = async () => {
-          try {
-            const response = await fetch('/api/app/dashboard', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'include',
-              body: JSON.stringify({ phone }),
-            });
-            const data = await response.json();
-            if (data.ok && data.user) {
-              // Get user_type from the response
-              const fetchedUserType = (data.user.user_type || '').toString().trim().toLowerCase();
-              if (fetchedUserType) {
-                console.log('Fetched user_type from API:', fetchedUserType);
-                setUserType(fetchedUserType);
-                localStorage.setItem('user_type', fetchedUserType);
-              }
+      return; // Exit early - don't proceed with any API calls
+    }
+    
+    // Only proceed if user is logged in
+    setUserName(localStorage.getItem('user_name') || '');
+    const phone = localStorage.getItem('user_phone') || '';
+    setUserPhone(phone);
+    
+    // Get user_type from localStorage first (for immediate render)
+    const storedUserType = localStorage.getItem('user_type') || '';
+    setUserType(storedUserType);
+    
+    // Always fetch user_type from API to ensure it's current
+    if (phone) {
+      const fetchUserType = async () => {
+        try {
+          const response = await fetch('/api/app/dashboard', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ phone }),
+          });
+          const data = await response.json();
+          if (data.ok && data.user) {
+            // Get user_type from the response
+            const fetchedUserType = (data.user.user_type || '').toString().trim().toLowerCase();
+            if (fetchedUserType) {
+              console.log('Fetched user_type from API:', fetchedUserType);
+              setUserType(fetchedUserType);
+              localStorage.setItem('user_type', fetchedUserType);
             }
-          } catch (err) {
-            console.error('Failed to fetch user type:', err);
           }
-        };
-        fetchUserType();
-      }
+        } catch (err) {
+          console.error('Failed to fetch user type:', err);
+        }
+      };
+      fetchUserType();
     }
 
     // Handle window resize to adjust sidebar on mobile/desktop switch
@@ -253,6 +255,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   };
 
   // Different menu items based on user type
+  // Don't render anything if not logged in
+  if (typeof window !== 'undefined') {
+    const loggedIn = localStorage.getItem('logged_in');
+    if (!loggedIn || loggedIn !== 'true') {
+      return null; // Don't render if not logged in - prevents all API calls
+    }
+  }
+
   const isVerificationOfficer = userType?.toLowerCase().trim() === 'verification_officer';
   
   const adminMenuItems = [
