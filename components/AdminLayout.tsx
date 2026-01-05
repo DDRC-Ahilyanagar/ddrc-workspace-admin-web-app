@@ -27,6 +27,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  // Language state - load from localStorage or default to 'mr' (Marathi)
+  const [language, setLanguage] = useState<'en' | 'mr'>(() => {
+    if (typeof window !== 'undefined') {
+      const storedLang = localStorage.getItem('app_language');
+      return (storedLang === 'en' || storedLang === 'mr') ? storedLang : 'mr';
+    }
+    return 'mr';
+  });
   const notifRef = useRef<HTMLDivElement | null>(null);
   const sidebarRef = useRef<HTMLElement | null>(null);
   const router = useRouter();
@@ -94,8 +102,15 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   // Fetch pending access requests count - runs silently in background
   // Only fetch for admin users, skip for verification officers
+  // IMPORTANT: Only fetch when user is logged in
   useEffect(() => {
     if (!mounted) return;
+    
+    // Check if user is logged in first
+    const loggedIn = localStorage.getItem('logged_in');
+    if (!loggedIn || loggedIn !== 'true') {
+      return; // Don't fetch if not logged in
+    }
     
     // Skip fetching access requests for verification officers
     // Check both state and localStorage for user type
@@ -103,6 +118,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     const currentUserType = (userType || storedUserType)?.toLowerCase().trim();
     if (currentUserType === 'verification_officer') {
       return; // Don't fetch access requests for verification officers
+    }
+    
+    // Only fetch for admin users
+    if (currentUserType !== 'admin' && currentUserType !== 'administrator') {
+      return; // Don't fetch if not admin
     }
 
     let isMounted = true;
@@ -195,6 +215,15 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   const toggleNotifications = () => {
     setShowNotifications((prev) => !prev);
+  };
+
+  // Toggle language and save to localStorage
+  const toggleLanguage = () => {
+    const newLanguage = language === 'en' ? 'mr' : 'en';
+    setLanguage(newLanguage);
+    localStorage.setItem('app_language', newLanguage);
+    // Optionally reload the page to apply language changes
+    // window.location.reload();
   };
 
   useEffect(() => {
@@ -371,6 +400,19 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               )}
             </div>
             )}
+            
+            {/* Language Switch Button */}
+            <button
+              className="btn btn-link text-white me-3"
+              onClick={toggleLanguage}
+              title={language === 'en' ? 'Switch to Marathi' : 'Switch to English'}
+              style={{ textDecoration: 'none', padding: '0.5rem' }}
+            >
+              <i className="bi bi-translate" style={{ fontSize: '1.25rem' }}></i>
+              <span className="ms-1" style={{ fontSize: '0.875rem' }}>
+                {language === 'en' ? 'MR' : 'EN'}
+              </span>
+            </button>
             
             <div className="user-info me-3">
               <span className="text-white">{userName || 'User'}</span>
