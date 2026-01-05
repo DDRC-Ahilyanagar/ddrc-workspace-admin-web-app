@@ -336,7 +336,17 @@ export default function DashboardPage() {
                     <Bar
                       data={{
                         labels: stats.breakdowns.disability.map(d => {
-                          const name = String(d.name || '');
+                          // Safely extract name - handle both string and object cases
+                          let name = '';
+                          if (typeof d.name === 'string') {
+                            name = d.name;
+                          } else if (d.name && typeof d.name === 'object') {
+                            // If name is an object, try to extract a string value
+                            const nameObj = d.name as any;
+                            name = nameObj.label_marathi || nameObj.label_english || nameObj.label || nameObj.name || JSON.stringify(d.name);
+                          } else {
+                            name = String(d.name || 'निर्दिष्ट नाही');
+                          }
                           return name.length > 30 ? name.substring(0, 30) + '...' : name;
                         }).filter(Boolean),
                         datasets: [{
@@ -364,8 +374,16 @@ export default function DashboardPage() {
                           bodyFont: { size: 13 },
                           callbacks: {
                             title: function(context) {
-                              const fullName = stats.breakdowns?.disability?.[context[0].dataIndex]?.name || '';
-                              return fullName;
+                              const item = stats.breakdowns?.disability?.[context[0].dataIndex];
+                              if (!item) return '';
+                              // Safely extract name - handle both string and object cases
+                              if (typeof item.name === 'string') {
+                                return item.name;
+                              } else if (item.name && typeof item.name === 'object') {
+                                const nameObj = item.name as any;
+                                return nameObj.label_marathi || nameObj.label_english || nameObj.label || nameObj.name || 'निर्दिष्ट नाही';
+                              }
+                              return String(item.name || 'निर्दिष्ट नाही');
                             },
                             label: function(context) {
                               return `संख्या: ${context.parsed.x}`;
