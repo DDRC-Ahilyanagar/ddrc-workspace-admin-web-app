@@ -37,6 +37,14 @@ export default function LandingPage() {
   const downloadSectionRef = useRef<HTMLDivElement>(null);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
+  // Language state - load from localStorage or default to 'mr' (Marathi)
+  const [language, setLanguage] = useState<'en' | 'mr'>(() => {
+    if (typeof window !== 'undefined') {
+      const storedLang = localStorage.getItem('app_language');
+      return (storedLang === 'en' || storedLang === 'mr') ? storedLang : 'mr';
+    }
+    return 'mr';
+  });
 
   // Check if user is coming from login page and needs to scroll
   useEffect(() => {
@@ -92,6 +100,15 @@ export default function LandingPage() {
     }
   };
 
+  // Toggle language and save to localStorage
+  const toggleLanguage = () => {
+    const newLanguage = language === 'en' ? 'mr' : 'en';
+    setLanguage(newLanguage);
+    localStorage.setItem('app_language', newLanguage);
+    // Optionally reload the page to apply language changes
+    // window.location.reload();
+  };
+
   return (
     <div className="landing-page">
       {/* Navigation Bar */}
@@ -106,6 +123,18 @@ export default function LandingPage() {
               </div>
             </div>
             <div className="navbar-actions">
+              {/* Language Switch Button */}
+              <button
+                className="btn btn-link text-primary me-2"
+                onClick={toggleLanguage}
+                title={language === 'en' ? 'Switch to Marathi' : 'Switch to English'}
+                style={{ textDecoration: 'none', padding: '0.5rem' }}
+              >
+                <i className="bi bi-translate" style={{ fontSize: '1.125rem' }}></i>
+                <span className="ms-1" style={{ fontSize: '0.875rem' }}>
+                  {language === 'en' ? 'MR' : 'EN'}
+                </span>
+              </button>
               <Link href="/public" className="btn btn-outline-primary btn-sm me-2">
                 Public Survey
               </Link>
@@ -644,7 +673,7 @@ export default function LandingPage() {
           </div>
           <div className="footer-bottom">
             <p>&copy; {new Date().getFullYear()} DDRC Ahilyanagar. All rights reserved.</p>
-          </div>
+        </div>
         </div>
       </footer>
     </div>
