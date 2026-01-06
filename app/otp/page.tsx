@@ -23,6 +23,11 @@ function OTPContent() {
   const [nameLoading, setNameLoading] = useState(false);
   const [nameError, setNameError] = useState('');
   const [userType, setUserType] = useState('');
+  const [isTestUser, setIsTestUser] = useState(false);
+  const [testOTP, setTestOTP] = useState('');
+
+  // Test field officer phone number
+  const TEST_FIELD_OFFICER_PHONE = '7777777777';
 
   useEffect(() => {
     const storedName = localStorage.getItem('user_name') || '';
@@ -34,6 +39,24 @@ function OTPContent() {
       setPhone(storedPhone);
     }
   }, [phoneParam]);
+
+  useEffect(() => {
+    // Check if this is the test field officer phone
+    const isTestPhone = phone === TEST_FIELD_OFFICER_PHONE;
+    setIsTestUser(isTestPhone);
+    
+    // Generate random OTP for test user
+    if (isTestPhone && !testOTP) {
+      const randomOTP = String(Math.floor(100000 + Math.random() * 900000));
+      setTestOTP(randomOTP);
+      setOtp(randomOTP); // Auto-fill OTP
+    } else if (!isTestPhone) {
+      setTestOTP('');
+      if (otp === testOTP) {
+        setOtp(''); // Clear OTP if switching away from test user
+      }
+    }
+  }, [phone]);
 
   useEffect(() => {
     let active = true;
@@ -296,6 +319,12 @@ function OTPContent() {
                     maxLength={6}
                     placeholder="000000"
                   />
+                  {isTestUser && (
+                    <div className="alert alert-info mt-2 mb-0" role="alert" style={{ fontSize: '0.875rem', padding: '0.5rem 0.75rem' }}>
+                      <i className="bi bi-info-circle me-2"></i>
+                      <strong>Testing Purpose:</strong> This is a default login credential for testing purpose. OTP has been auto-filled.
+                    </div>
+                  )}
                 </div>
 
                 {error && (

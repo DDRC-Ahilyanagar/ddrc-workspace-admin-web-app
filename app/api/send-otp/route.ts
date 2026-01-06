@@ -264,6 +264,10 @@ export async function POST(request: NextRequest) {
     const VERIFICATION_OFFICER_BYPASS_PHONE = '8888888888';
     const isVerificationOfficerBypass = phone === VERIFICATION_OFFICER_BYPASS_PHONE;
     
+    // Test Field Officer (7777777777) - generate and return OTP for testing
+    const TEST_FIELD_OFFICER_PHONE = '7777777777';
+    const isTestFieldOfficer = phone === TEST_FIELD_OFFICER_PHONE;
+    
     if (isAdminBypass) {
       Logger.info('send_otp_admin_bypass', { phone, note: 'Admin user - OTP bypassed' });
       return NextResponse.json({
@@ -280,6 +284,56 @@ export async function POST(request: NextRequest) {
         message: 'OTP bypassed for verification officer user',
         phone: phone,
       });
+    }
+    
+    // For test field officer, generate OTP and return it in response
+    if (isTestFieldOfficer) {
+      const testOTP = String(Math.floor(100000 + Math.random() * 900000));
+      const expiresAt = new Date();
+      expiresAt.setMinutes(expiresAt.getMinutes() + CONFIG.OTP_EXPIRY_MINUTES);
+      
+      let connection;
+      try {
+        connection = await Promise.race([
+          pool.getConnection(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Database connection timeout')), 25000)
+          )
+        ]) as any;
+        
+        await connection.beginTransaction();
+        const [result] = await connection.execute(
+          `INSERT INTO otp_verifications (phone, otp, expires_at, status, created_at, updated_at) 
+           VALUES (?, ?, ?, 'sent', NOW(), NOW())`,
+          [phone, testOTP, expiresAt]
+        );
+        await connection.commit();
+        const otpId = (result as any).insertId;
+        
+        Logger.info('send_otp_test_field_officer', { phone, otp: testOTP, otp_id: otpId });
+        
+        return NextResponse.json({
+          ok: true,
+          otp_id: otpId,
+          otp: testOTP, // Return OTP for testing
+          message: 'Test field officer OTP generated',
+          phone: phone,
+        });
+      } catch (dbError: any) {
+        if (connection) {
+          try {
+            await connection.rollback();
+          } catch (rollbackError) {
+            Logger.error('send_otp_test_rollback_failed', { error: (rollbackError as any).message });
+          }
+          connection.release();
+        }
+        Logger.error('send_otp_test_field_officer_db_error', { error: dbError.message, phone });
+        return NextResponse.json(
+          { ok: false, error: 'Failed to generate test OTP' },
+          { status: 500 }
+        );
+      }
     }
     
     // Generate OTP: 6-digit number (100000 to 999999)

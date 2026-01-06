@@ -517,6 +517,31 @@ async function main() {
 
   console.log('✅ Seeded admin user with ID:', adminUser.id.toString());
 
+  // Seed test field officer user
+  const fieldOfficerPhone = process.env.SEED_FIELD_OFFICER_PHONE || '7777777777';
+  const fieldOfficerName = process.env.SEED_FIELD_OFFICER_NAME || 'Test Field Officer';
+  
+  const fieldOfficerUser = await prisma.user.upsert({
+    where: { contactNumber: fieldOfficerPhone },
+    update: {
+      name: fieldOfficerName,
+      userType: UserType.field_officer,
+      status: UserStatus.active,
+      isActive: true,
+      otpVerifiedAt: new Date(),
+    },
+    create: {
+      name: fieldOfficerName,
+      contactNumber: fieldOfficerPhone,
+      userType: UserType.field_officer,
+      status: UserStatus.active,
+      isActive: true,
+    },
+  });
+
+  console.log('✅ Seeded field officer user with ID:', fieldOfficerUser.id.toString());
+  console.log(`   Phone: ${fieldOfficerPhone}, Name: ${fieldOfficerName}`);
+
   if (process.env.SEED_SAMPLE_ACCESS_REQUEST === 'true') {
     const sample = await prisma.accessRequest.upsert({
       where: { phone: adminPhone },

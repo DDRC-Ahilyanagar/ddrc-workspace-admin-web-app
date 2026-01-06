@@ -118,10 +118,14 @@ export async function POST(request: NextRequest) {
       // Bypass OTP for Verification Officer (8888888888)
       const VERIFICATION_OFFICER_BYPASS_PHONE = '8888888888';
       const isVerificationOfficerBypass = phone === VERIFICATION_OFFICER_BYPASS_PHONE;
+      
+      // Test Field Officer (7777777777) - accept any OTP if it matches the one in database
+      const TEST_FIELD_OFFICER_PHONE = '7777777777';
+      const isTestFieldOfficer = phone === TEST_FIELD_OFFICER_PHONE;
 
-      // Find latest unexpired sent OTP (skip for test mode, admin bypass, and verification officer bypass)
+      // Find latest unexpired sent OTP (skip for test mode, admin bypass, verification officer bypass, and test field officer)
       let row: any = null;
-      if (!isTestMode && !isAdminBypass && !isVerificationOfficerBypass) {
+      if (!isTestMode && !isAdminBypass && !isVerificationOfficerBypass && !isTestFieldOfficer) {
         const [rows] = await connection.execute(
           `SELECT * FROM otp_verifications 
            WHERE phone = ? AND status IN ('sent') 
@@ -144,7 +148,64 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      if (isTestMode || isAdminBypass || isVerificationOfficerBypass) {
+      // For test field officer, find the OTP in database and verify it
+      if (isTestFieldOfficer) {
+        const [otpRows] = await connection.execute(
+          `SELECT * FROM otp_verifications 
+           WHERE phone = ? AND status IN ('sent') 
+           ORDER BY id DESC LIMIT 1`,
+          [phone]
+        );
+        const otpRow = Array.isArray(otpRows) && otpRows.length > 0 ? otpRows[0] as any : null;
+        
+        if (!otpRow) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'otp_not_found',
+              message: 'ओटीपी सापडला नाही. कृपया पुन्हा विनंती करा.',
+            },
+            { status: 404 }
+          );
+        }
+        
+        if (new Date(otpRow.expires_at) < new Date()) {
+          await connection.execute(
+            `UPDATE otp_verifications SET status = 'expired', updated_at = NOW() WHERE id = ?`,
+            [otpRow.id]
+          );
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'otp_expired',
+              message: 'ओटीपीची वेळ संपली. कृपया नव्याने ओटीपी मागवा.',
+            },
+            { status: 410 }
+          );
+        }
+        
+        if (otpRow.otp !== otp) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'otp_invalid',
+              message: 'ओटीपी अयोग्य आहे. पुन्हा प्रयत्न करा.',
+            },
+            { status: 401 }
+          );
+        }
+        
+        // Mark as verified
+        await connection.execute(
+          `UPDATE otp_verifications 
+           SET status = 'verified', verified_at = NOW(), updated_at = NOW() 
+           WHERE id = ?`,
+          [otpRow.id]
+        );
+        
+        row = otpRow; // Set row for later use
+        Logger.info('verify_otp_test_field_officer', { phone, otp });
+      } else if (isTestMode || isAdminBypass || isVerificationOfficerBypass) {
         // For test mode, admin bypass, and verification officer bypass, skip OTP validation and expiration checks
         if (isAdminBypass) {
           Logger.info('verify_otp_admin_bypass', { phone, otp });
@@ -183,7 +244,8 @@ export async function POST(request: NextRequest) {
       }
 
       // Mark verified (skip for test mode, admin bypass, and verification officer bypass if no row exists)
-      if ((!isTestMode && !isAdminBypass && !isVerificationOfficerBypass) || row) {
+      // Test field officer is already marked verified above
+      if ((!isTestMode && !isAdminBypass && !isVerificationOfficerBypass && !isTestFieldOfficer) || (row && !isTestFieldOfficer)) {
         if (row) {
           await connection.execute(
             `UPDATE otp_verifications 
