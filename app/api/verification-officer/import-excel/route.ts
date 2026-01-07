@@ -154,8 +154,18 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
               [row.aadhaar, row.name]
             );
 
-            const aadharId = aadharResult.insertId || 
-              (await conn.query(`SELECT id FROM survey_aadhar WHERE aadhaar_number = ? LIMIT 1`, [row.aadhaar]))[0]?.[0]?.id;
+            let aadharId = aadharResult.insertId;
+            
+            // If insertId is not available, query for existing record
+            if (!aadharId) {
+              const [existingRows]: any = await conn.query(
+                `SELECT id FROM survey_aadhar WHERE aadhaar_number = ? LIMIT 1`,
+                [row.aadhaar]
+              );
+              if (Array.isArray(existingRows) && existingRows.length > 0) {
+                aadharId = existingRows[0]?.id;
+              }
+            }
 
             if (!aadharId) {
               errors.push(`Failed to create/update Aadhaar record for ${row.name}`);
