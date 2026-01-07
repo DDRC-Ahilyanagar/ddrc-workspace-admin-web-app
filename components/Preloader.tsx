@@ -42,7 +42,21 @@ export default function Preloader() {
       }
       
       // Exclude /api/access-requests?status=pending (with or without additional params)
-      return urlString.includes('/api/access-requests') && urlString.includes('status=pending');
+      if (urlString.includes('/api/access-requests') && urlString.includes('status=pending')) {
+        return true;
+      }
+      
+      // Exclude location tracking polling endpoints that run frequently
+      // These should not trigger the preloader as they're background updates
+      // Check for both relative and absolute URLs
+      const locationEndpoints = ['/api/location/online-status', '/api/location/latest'];
+      for (const endpoint of locationEndpoints) {
+        if (urlString.includes(endpoint)) {
+          return true;
+        }
+      }
+      
+      return false;
     };
     
     window.fetch = async (...args: any[]) => {

@@ -32,6 +32,7 @@ function PublicSurveyFormContent() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState(false);
+  const [fieldOfficer, setFieldOfficer] = useState<{ name: string; phone: string } | null>(null);
 
   useEffect(() => {
     if (!aadharId) {
@@ -168,10 +169,51 @@ function PublicSurveyFormContent() {
   };
 
   const handleAnswerChange = (questionId: number, value: string) => {
-    setAnswers((prev) => ({
-      ...prev,
-      [questionId]: value,
-    }));
+    setAnswers((prev) => {
+      const newAnswers = { ...prev, [questionId]: value };
+      
+      // Check if village question was answered and fetch field officer
+      const question = sections.flatMap(s => s.questions).find(q => q.id === questionId);
+      if (question && (question.question?.toLowerCase().includes('गाव') || question.question?.toLowerCase().includes('village'))) {
+        // Village was updated, fetch field officer
+        fetchFieldOfficer(value, newAnswers);
+      }
+      
+      return newAnswers;
+    });
+  };
+
+  const fetchFieldOfficer = async (village: string, currentAnswers: Record<number, string>) => {
+    if (!village || village.trim().length === 0) {
+      setFieldOfficer(null);
+      return;
+    }
+
+    try {
+      // Get taluka from answers if available
+      const talukaQuestion = sections
+        .flatMap(s => s.questions)
+        .find(q => q.question?.toLowerCase().includes('तालुका') || q.question?.toLowerCase().includes('taluka'));
+      const taluka = talukaQuestion ? currentAnswers[talukaQuestion.id] : '';
+
+      const params = new URLSearchParams({ village });
+      if (taluka) params.append('taluka', taluka);
+
+      const response = await fetch(`/api/field-officer-by-village?${params.toString()}`);
+      const data = await response.json();
+
+      if (data.ok && data.officer) {
+        setFieldOfficer({
+          name: data.officer.name,
+          phone: data.officer.phone || '',
+        });
+      } else {
+        setFieldOfficer(null);
+      }
+    } catch (err) {
+      console.error('Error fetching field officer:', err);
+      setFieldOfficer(null);
+    }
   };
 
   const validateCurrentSection = (): boolean => {
@@ -302,6 +344,21 @@ function PublicSurveyFormContent() {
                 {error && (
                   <div className="alert alert-danger" role="alert">
                     {error}
+                  </div>
+                )}
+
+                {fieldOfficer && (
+                  <div className="alert alert-info d-flex align-items-center" role="alert">
+                    <i className="bi bi-person-check me-2" style={{ fontSize: '1.5rem' }}></i>
+                    <div>
+                      <strong>संबंधित अधिकारी:</strong> {fieldOfficer.name}
+                      {fieldOfficer.phone && (
+                        <span className="ms-2">
+                          <i className="bi bi-telephone me-1"></i>
+                          {fieldOfficer.phone}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )}
 

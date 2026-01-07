@@ -19,7 +19,7 @@
 
         - name: Clean install workspace dependencies
           run: |
-            rm -rf node_modules package-lock.json ~/.npm
+            rm -rf node_modules package-lock.json
             npm install
 
         - name: Build
@@ -42,7 +42,7 @@
             command_timeout: 300s
             debug: true
             source: ".next/**,package.json,package-lock.json,public/**,lib/**,app/**,middleware.ts,next.config.mjs,tsconfig.json,storage/**,prisma/**"
-            target: "/var/www/surveys"
+            target: "/var/www/surveys.ddrcnagar.in"
 
         - name: Install Dependencies on Server
           uses: appleboy/ssh-action@v1.2.0
@@ -55,7 +55,7 @@
             command_timeout: 900s
             debug: true
             script: |
-              cd /var/www/surveys
+              cd /var/www/surveys.ddrcnagar.in
               echo "Cleaning old dependencies..."
               rm -rf node_modules package-lock.json ~/.npm
               echo "Installing production dependencies (this may take a few minutes)..."
@@ -73,7 +73,7 @@
             command_timeout: 300s
             debug: true
             script: |
-              cd /var/www/surveys
+              cd /var/www/surveys.ddrcnagar.in
               # Ensure storage directory exists
               mkdir -p storage/logs
               echo "Running database seed..."
@@ -90,8 +90,10 @@
             command_timeout: 120s
             debug: true
             script: |
-              cd /var/www/surveys
+              cd /var/www/surveys.ddrcnagar.in
               echo "Restarting PM2..."
-              pm2 restart surveys || pm2 start npm --name "surveys" -- start
+              export NODE_ENV=production
+              export PORT=3000
+              pm2 restart surveys-ddrc || pm2 start npm --name "surveys-ddrc" -- start
               pm2 save
               echo "PM2 restarted successfully"

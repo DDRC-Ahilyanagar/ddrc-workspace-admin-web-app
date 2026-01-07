@@ -273,10 +273,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     { path: '/access-requests', label: 'प्रवेश विनंत्या', icon: 'bi-person-plus' },
     { path: '/officers', label: 'Field Officers', icon: 'bi-people' },
     { path: '/admin/rate', label: 'दर (Field officer)', icon: 'bi-cash-coin' },
+    { path: '/admin/location-tracking', label: 'Location Tracking', icon: 'bi-geo-alt' },
   ];
 
   const verificationOfficerMenuItems = [
     { path: '/survekshan', label: 'सर्वेक्षण', icon: 'bi-clipboard-check' },
+    { path: '/verification-officer/excel-import', label: 'Excel Import/Export', icon: 'bi-file-earmark-excel' },
   ];
 
   // Default to admin menu items if userType is not set or empty

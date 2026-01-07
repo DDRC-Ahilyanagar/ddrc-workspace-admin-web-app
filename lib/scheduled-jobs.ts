@@ -49,8 +49,52 @@ export function initializeScheduledJobs() {
     timezone: 'Asia/Kolkata', // Indian Standard Time
   });
 
+  // Schedule survey auto-assignment every 5 minutes
+  // Cron format: */5 * * * * means every 5 minutes
+  cron.schedule('*/5 * * * *', async () => {
+    Logger.info('AUTO_ASSIGN_SURVEYS_JOB_STARTED', { timestamp: new Date().toISOString() });
+    
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.API_BASE_URL || 'http://localhost:3000';
+      const apiToken = process.env.AUTO_ASSIGN_API_TOKEN || '';
+      
+      const url = `${baseUrl}/api/admin/auto-assign-surveys`;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiToken ? { 'Authorization': `Bearer ${apiToken}` } : {}),
+        },
+      });
+
+      const result = await response.json();
+      
+      if (result.ok) {
+        Logger.info('AUTO_ASSIGN_SURVEYS_JOB_SUCCESS', {
+          timestamp: new Date().toISOString(),
+          assigned: result.assigned || 0,
+          checked: result.checked || 0,
+        });
+      } else {
+        Logger.error('AUTO_ASSIGN_SURVEYS_JOB_FAILED', {
+          timestamp: new Date().toISOString(),
+          error: result.error,
+        });
+      }
+    } catch (error: any) {
+      Logger.error('AUTO_ASSIGN_SURVEYS_JOB_ERROR', {
+        timestamp: new Date().toISOString(),
+        error: error?.message || String(error),
+      });
+    }
+  }, {
+    timezone: 'Asia/Kolkata', // Indian Standard Time
+  });
+
   Logger.info('SCHEDULED_JOBS_INITIALIZED', {
     daily_stats_email: 'Scheduled at 8:00 PM IST daily',
+    auto_assign_surveys: 'Scheduled every 5 minutes',
   });
 }
 

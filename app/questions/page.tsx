@@ -50,6 +50,7 @@ export default function QuestionsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleteReason, setDeleteReason] = useState<string>('');
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   // One-time init and first load only (guarded against React StrictMode double-invoke)
   const didInitRef = useRef(false);
@@ -286,6 +287,33 @@ export default function QuestionsPage() {
     setShowModal(true);
   };
 
+  const handleGeneratePDF = async () => {
+    try {
+      setGeneratingPdf(true);
+      const res = await fetch('/api/admin/generate-questions-pdf');
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to generate PDF');
+      }
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `questions-report-${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (e: any) {
+      console.error('Failed to generate PDF:', e);
+      alert('Failed to generate PDF: ' + (e.message || 'Unknown error'));
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
+
   // Prepare DataTables columns
   const columns = [
     { data: 'question_id', title: 'ID', width: '80px' },
@@ -366,9 +394,27 @@ export default function QuestionsPage() {
         <div className="container-fluid p-4">
         <div className="table-page-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3 gap-md-0">
           <h2 className="mb-0">सर्वेक्षण प्रश्नावली</h2>
-          <button className="btn btn-primary w-100 w-md-auto" onClick={handleNew}>
-            <i className="bi bi-plus-circle me-2"></i>Add Question
-          </button>
+          <div className="d-flex gap-2 w-100 w-md-auto">
+            <button 
+              className="btn btn-success w-100 w-md-auto" 
+              onClick={handleGeneratePDF}
+              disabled={generatingPdf || loading}
+            >
+              {generatingPdf ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-file-pdf me-2"></i>Generate PDF
+                </>
+              )}
+            </button>
+            <button className="btn btn-primary w-100 w-md-auto" onClick={handleNew}>
+              <i className="bi bi-plus-circle me-2"></i>Add Question
+            </button>
+          </div>
         </div>
 
         <div className="card shadow-sm">

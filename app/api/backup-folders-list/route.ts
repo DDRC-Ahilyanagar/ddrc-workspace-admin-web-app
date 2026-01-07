@@ -17,12 +17,29 @@ const checkApiKey = (request: NextRequest): boolean => {
   return providedKey === API_KEY;
 };
 
+// Handle OPTIONS for CORS preflight
+export const OPTIONS = async () => {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
+    },
+  });
+};
+
 export const GET = async (request: NextRequest) => {
   // Optional API key check
   if (!checkApiKey(request)) {
     return NextResponse.json(
       { ok: false, error: 'Unauthorized' },
-      { status: 401 }
+      { 
+        status: 401,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        },
+      }
     );
   }
   try {
@@ -34,6 +51,10 @@ export const GET = async (request: NextRequest) => {
         ok: true,
         folders: [],
         message: 'Media backups directory not found',
+      }, {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        },
       });
     }
 
@@ -96,6 +117,12 @@ export const GET = async (request: NextRequest) => {
     return NextResponse.json({
       ok: true,
       folders,
+    }, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
+      },
     });
   } catch (error: any) {
     console.error('Error reading backup folders:', error);
@@ -104,7 +131,12 @@ export const GET = async (request: NextRequest) => {
         ok: false,
         error: error.message || 'Failed to read backup folders',
       },
-      { status: 500 }
+      { 
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        },
+      }
     );
   }
 };
