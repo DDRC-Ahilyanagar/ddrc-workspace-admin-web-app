@@ -1,99 +1,105 @@
-  name: Deploy to VPS
+name: Deploy to VPS
 
-  on:
-    push:
-      branches: [ main, master ]
+on:
+  push:
+    branches: [ main, master ]
 
-  jobs:
-    deploy:
-      runs-on: ubuntu-latest
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
 
-      steps:
-        - name: Checkout
-          uses: actions/checkout@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-        - name: Setup Node
-          uses: actions/setup-node@v4
-          with:
-            node-version: '20'
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-        - name: Clean install workspace dependencies
-          run: |
-            rm -rf node_modules package-lock.json
-            npm install
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
 
-        - name: Build
-          run: npm run build
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-${{ hashFiles('**/*.js', '**/*.ts', '**/*.tsx') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-
 
-        - name: Test Server Connectivity
-          run: |
-            echo "Testing connection to ${{ secrets.VPS_HOST }}:${VPS_PORT:-22}"
-            timeout 10 bash -c "echo > /dev/tcp/${{ secrets.VPS_HOST }}/${VPS_PORT:-22}" 2>/dev/null && echo "Port is open" || echo "Port is closed or unreachable"
-          continue-on-error: true
+      - name: Install dependencies
+        run: npm ci
 
-        - name: Upload to Server
-          uses: appleboy/scp-action@v0.1.7
-          with:
-            host: ${{ secrets.VPS_HOST }}
-            username: ${{ secrets.VPS_USER }}
-            key: ${{ secrets.VPS_KEY }}
-            port: ${{ secrets.VPS_PORT || 22 }}
-            timeout: 300s
-            command_timeout: 300s
-            debug: true
-            source: ".next/**,package.json,package-lock.json,public/**,lib/**,app/**,middleware.ts,next.config.mjs,tsconfig.json,storage/**,prisma/**"
-            target: "/var/www/surveys.ddrcnagar.in"
+      - name: Build
+        run: npm run build
 
-        - name: Install Dependencies on Server
-          uses: appleboy/ssh-action@v1.2.0
-          with:
-            host: ${{ secrets.VPS_HOST }}
-            username: ${{ secrets.VPS_USER }}
-            key: ${{ secrets.VPS_KEY }}
-            port: ${{ secrets.VPS_PORT || 22 }}
-            timeout: 900s
-            command_timeout: 900s
-            debug: true
-            script: |
-              cd /var/www/surveys.ddrcnagar.in
-              echo "Cleaning old dependencies..."
-              rm -rf node_modules package-lock.json ~/.npm
-              echo "Installing production dependencies (this may take a few minutes)..."
-              npm install --production --no-audit --no-fund --prefer-offline || npm install --production --no-audit --no-fund
-              echo "Dependencies installed successfully"
+      - name: Test Server Connectivity
+        run: |
+          echo "Testing connection to ${{ secrets.VPS_HOST }}:${VPS_PORT:-22}"
+          timeout 10 bash -c "echo > /dev/tcp/${{ secrets.VPS_HOST }}/${VPS_PORT:-22}" 2>/dev/null && echo "Port is open" || echo "Port is closed or unreachable"
+        continue-on-error: true
 
-        - name: Setup Storage and Seed Database
-          uses: appleboy/ssh-action@v1.2.0
-          with:
-            host: ${{ secrets.VPS_HOST }}
-            username: ${{ secrets.VPS_USER }}
-            key: ${{ secrets.VPS_KEY }}
-            port: ${{ secrets.VPS_PORT || 22 }}
-            timeout: 300s
-            command_timeout: 300s
-            debug: true
-            script: |
-              cd /var/www/surveys.ddrcnagar.in
-              # Ensure storage directory exists
-              mkdir -p storage/logs
-              echo "Running database seed..."
-              npm run prisma:seed || echo "Seed script completed (may have skipped if already seeded)"
+      - name: Upload to Server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          timeout: 300s
+          command_timeout: 300s
+          debug: true
+          source: ".next/**,package.json,package-lock.json,public/**,lib/**,app/**,middleware.ts,next.config.mjs,tsconfig.json,storage/**,prisma/**"
+          target: "/var/www/surveys.ddrcnagar.in"
 
-        - name: Restart PM2
-          uses: appleboy/ssh-action@v1.2.0
-          with:
-            host: ${{ secrets.VPS_HOST }}
-            username: ${{ secrets.VPS_USER }}
-            key: ${{ secrets.VPS_KEY }}
-            port: ${{ secrets.VPS_PORT || 22 }}
-            timeout: 120s
-            command_timeout: 120s
-            debug: true
-            script: |
-              cd /var/www/surveys.ddrcnagar.in
-              echo "Restarting PM2..."
-              export NODE_ENV=production
-              export PORT=3000
-              pm2 restart surveys-ddrc || pm2 start npm --name "surveys-ddrc" -- start
-              pm2 save
-              echo "PM2 restarted successfully"
+      - name: Install Dependencies on Server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          timeout: 900s
+          command_timeout: 900s
+          debug: true
+          script: |
+            cd /var/www/surveys.ddrcnagar.in
+            npm ci --omit=dev --no-audit --no-fund
+
+      - name: Setup Storage and Seed Database
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          timeout: 300s
+          command_timeout: 300s
+          debug: true
+          script: |
+            cd /var/www/surveys.ddrcnagar.in
+            mkdir -p storage/logs
+            npm run prisma:seed || true
+
+      - name: Restart PM2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          timeout: 120s
+          command_timeout: 120s
+          debug: true
+          script: |
+            cd /var/www/surveys.ddrcnagar.in
+            export NODE_ENV=production
+            export PORT=3000
+            pm2 restart surveys-ddrc || pm2 start npm --name "surveys-ddrc" -- start
+            pm2 save
