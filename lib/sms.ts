@@ -7,13 +7,16 @@ const SMS_CONFIG = {
 };
 
 function getDLTTemplate(): string {
-  const template = process.env.SMS_OTP_TEMPLATE;
-  if (!template) {
-    throw new Error('SMS_OTP_TEMPLATE environment variable is required for DLT compliance');
-  }
+  // Default template with {#var#} placeholder
+  const DEFAULT_OTP_TEMPLATE = 'Dear User, Your OTP to login at DDRC, Nagar is {#var#} Please do not share this with anyone. For Queries contact. 9022147060. VIKHE PATIL FOUNDATION';
+  
+  const template = process.env.SMS_OTP_TEMPLATE || DEFAULT_OTP_TEMPLATE;
+  
   if (!template.includes('{#var#}')) {
-    throw new Error('SMS_OTP_TEMPLATE must contain {#var#} placeholder for DLT compliance');
+    console.warn('[SMS] WARNING: Template does not contain {#var#} placeholder, using default template');
+    return DEFAULT_OTP_TEMPLATE;
   }
+  
   return template;
 }
 
