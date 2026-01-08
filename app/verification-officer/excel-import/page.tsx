@@ -50,7 +50,7 @@ export default function ExcelImportPage() {
     try {
       const response = await fetch('/api/verification-officer/export-template');
       if (!response.ok) {
-        throw new Error('Failed to download template');
+        throw new Error('Template download unsuccessful. Please try again.');
       }
 
       const blob = await response.blob();
@@ -63,13 +63,13 @@ export default function ExcelImportPage() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (err: any) {
-      setError('Failed to download template: ' + err.message);
+      setError('Template download unsuccessful: ' + err.message + '. Please try again.');
     }
   };
 
   const handleUpload = async () => {
     if (!file) {
-      setError('Please select a file');
+      setError('Please select an Excel file to upload.');
       return;
     }
 
@@ -96,10 +96,10 @@ export default function ExcelImportPage() {
           data: data.data,
         });
       } else {
-        setError(data.error || 'Failed to import Excel file');
+        setError(data.error || 'Excel file import unsuccessful. Please verify the file format and try again.');
       }
     } catch (err: any) {
-      setError('Upload failed: ' + err.message);
+      setError('File upload unsuccessful: ' + err.message + '. Please try again.');
     } finally {
       setUploading(false);
     }
@@ -231,5 +231,7 @@ export default function ExcelImportPage() {
     </AdminLayout>
   );
 }
+
+
 
 

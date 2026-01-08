@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbQuery } from '@/lib/db';
-import { sendSMS, getOTPMessage } from '@/lib/sms';
+import { sendSMS, buildDLTMessage } from '@/lib/sms';
 import { Logger } from '@/lib/logger';
 import { CONFIG } from '@/lib/config';
 import { validatePhone, validateRequest } from '@/lib/validation';
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
     } catch (dbError: any) {
       Logger.error('send_otp_db_import_failed', { error: dbError.message, stack: dbError.stack });
       return NextResponse.json(
-        { ok: false, error: 'Database connection failed' },
+        { ok: false, error: 'Database connection unsuccessful. Please try again later.' },
         { status: 500 }
       );
     }
@@ -130,8 +130,8 @@ export async function POST(request: NextRequest) {
         Logger.error('send_otp_db_connection_failed', { error: connError.message, phone });
         return NextResponse.json(
           { ok: false, error: connError.message?.includes('timeout') 
-            ? 'Database connection timeout. Please try again.' 
-            : 'Database connection failed. Please try again.' },
+            ? 'Database connection timeout. Please try again after a moment.' 
+            : 'Database connection unsuccessful. Please try again later.' },
           { status: 500 }
         );
       }
@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
           {
             ok: false,
             error: 'user_not_active',
-            message: 'आपले खाते अजून मंजूर झालेले नाही. कृपया प्रशासकाशी संपर्क साधा.',
+            message: 'आपले खाते अजून मंजूर झालेले नाही. कृपया प्रशासकाशी संपर्क साधा किंवा थोड्या वेळाने पुन्हा प्रयत्न करा.',
           },
           { status: 403 }
         );
@@ -330,7 +330,7 @@ export async function POST(request: NextRequest) {
         }
         Logger.error('send_otp_test_field_officer_db_error', { error: dbError.message, phone });
         return NextResponse.json(
-          { ok: false, error: 'Failed to generate test OTP' },
+          { ok: false, error: 'Unable to generate test OTP. Please try again later.' },
           { status: 500 }
         );
       }
@@ -343,7 +343,7 @@ export async function POST(request: NextRequest) {
     if (!/^\d{6}$/.test(otp)) {
       Logger.error('send_otp_invalid_otp', { otp, phone });
       return NextResponse.json(
-        { ok: false, error: 'Failed to generate valid OTP' },
+        { ok: false, error: 'Unable to generate valid OTP. Please try again later.' },
         { status: 500 }
       );
     }
@@ -366,8 +366,8 @@ export async function POST(request: NextRequest) {
       Logger.error('send_otp_db_connection_failed_otp', { error: connError.message, phone });
       return NextResponse.json(
         { ok: false, error: connError.message?.includes('timeout')
-          ? 'Database connection timeout. Please try again.'
-          : 'Database connection failed. Please try again.' },
+          ? 'Database connection timeout. Please try again after a moment.'
+          : 'Database connection unsuccessful. Please try again later.' },
         { status: 500 }
       );
     }
@@ -389,7 +389,7 @@ export async function POST(request: NextRequest) {
       if (!cleanOtp || cleanOtp.length !== 6) {
         Logger.error('send_otp_clean_otp_failed', { otp, cleanOtp, phone });
         return NextResponse.json(
-          { ok: false, error: 'Invalid OTP format' },
+          { ok: false, error: 'Invalid OTP format. Please try again.' },
           { status: 500 }
         );
       }
@@ -428,30 +428,42 @@ export async function POST(request: NextRequest) {
         // Production: Send actual SMS
         let message: string;
         try {
-          message = getOTPMessage(cleanOtp);
+          message = buildDLTMessage(cleanOtp);
           Logger.info('send_otp_message_generated', { phone, otp: cleanOtp, messageLength: message.length });
         } catch (msgError: any) {
           Logger.error('send_otp_message_failed', { error: msgError.message, otp: cleanOtp, phone });
           return NextResponse.json(
-            { ok: false, error: `Failed to generate SMS message: ${msgError.message}` },
+            { ok: false, error: `Unable to generate SMS message: ${msgError.message}. Please try again later.` },
             { status: 500 }
           );
         }
         
-        // Send SMS (non-blocking - don't wait for it to complete)
-        sendSMS(phone, message).then((smsResult) => {
-          Logger.info('send_otp_sms_completed', { phone, otp_id: otpId, resp: smsResult });
-        }).catch((err) => {
-          Logger.error('send_otp_sms_failed', { phone, otp_id: otpId, error: err.message });
-        });
-        
-        // Return immediately - SMS will be sent in background
+        // Send SMS and wait for response to diagnose issues
         Logger.info('send_otp', { phone, otp_id: otpId, otp: cleanOtp, messageLength: message.length });
-
+        
+        let smsResult;
+        try {
+          smsResult = await sendSMS(phone, message);
+          Logger.info('send_otp_sms_completed', { phone, otp_id: otpId, resp: smsResult });
+        } catch (err: any) {
+          Logger.error('send_otp_sms_failed', { phone, otp_id: otpId, error: err.message, stack: err.stack });
+          smsResult = { ok: false, error: err.message || 'SMS sending unsuccessful. Please try again later.' };
+        }
+        
+        // Return with actual SMS status
         return NextResponse.json({ 
           ok: true, 
           otp_id: otpId, 
-          sms: { ok: true, queued: true, message: 'SMS queued for sending' }
+          sms: {
+            ok: smsResult.ok || false,
+            queued: smsResult.ok || false,
+            message: smsResult.ok 
+              ? 'SMS sent successfully' 
+              : smsResult.error || `SMS sending unsuccessful: ${smsResult.responseCode || 'Unknown error'}. Please try again.`,
+            responseCode: smsResult.responseCode,
+            status: smsResult.status,
+            raw: smsResult.raw ? (typeof smsResult.raw === 'string' ? smsResult.raw.substring(0, 200) : String(smsResult.raw).substring(0, 200)) : undefined
+          }
         });
       }
     } catch (dbError: any) {
@@ -483,12 +495,12 @@ export async function POST(request: NextRequest) {
     });
     
     // Return a user-friendly error message
-    const errorMessage = error.message || 'An unexpected error occurred';
+    const errorMessage = error.message || 'An unexpected error occurred. Please try again later.';
     return NextResponse.json(
       { 
         ok: false, 
         error: errorMessage.includes('timeout') || errorMessage.includes('ECONNREFUSED') 
-          ? 'Database connection timeout. Please try again.' 
+          ? 'Database connection timeout. Please try again after a moment.' 
           : errorMessage
       },
       { status: 500 }

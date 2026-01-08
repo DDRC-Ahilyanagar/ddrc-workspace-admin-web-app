@@ -141,7 +141,7 @@ export default function DashboardPage() {
       const data = await response.json();
 
       if (!data.ok) {
-        throw new Error(data.error || 'Failed to generate and email reports');
+        throw new Error(data.error || 'Unable to generate and email reports. Please try again later.');
       }
 
       // Show success toast message
@@ -149,7 +149,7 @@ export default function DashboardPage() {
       const successMessage = `Reports generated successfully! Emailed to ${summary.emails_sent || 0} admin user(s). Total files: ${summary.total_files || 0} (PDF + Excel).${summary.emails_failed > 0 ? ` Note: ${summary.emails_failed} email(s) failed to send.` : ''}`;
       setToastMessage({ type: 'success', message: successMessage });
     } catch (err: any) {
-      const errorMsg = err.message || 'Failed to generate and email reports';
+      const errorMsg = err.message || 'Unable to generate and email reports. Please try again later.';
       setExportError(errorMsg);
       setToastMessage({ type: 'error', message: errorMsg });
       console.error('Export error:', err);
@@ -192,9 +192,9 @@ export default function DashboardPage() {
           setStats(json.data);
           if (Array.isArray(json.data?.sections)) setSections(json.data.sections);
         }
-        else setError(json.error || 'स्टॅट्स लोड होत नाहीत');
+        else setError(json.error || 'सांख्यिकी माहिती लोड करण्यात अयशस्वी. कृपया पुन्हा प्रयत्न करा.');
       } catch (e: any) {
-        setError('नेटवर्क त्रुटी');
+        setError('नेटवर्क कनेक्शन त्रुटी. कृपया आपले इंटरनेट कनेक्शन तपासा आणि पुन्हा प्रयत्न करा.');
       } finally {
         setLoading(false);
       }
