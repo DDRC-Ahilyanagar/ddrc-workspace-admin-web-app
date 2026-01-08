@@ -1,19 +1,51 @@
 import nodemailer from 'nodemailer';
 import { getDbPool } from './db';
+import fs from 'fs';
 
-// Email configuration from environment variables
-const emailConfig = {
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER || '',
-    pass: process.env.SMTP_PASSWORD || '',
-  },
-};
+// Email configuration for Hostinger shared hosting
+// Using port 465 with SSL (secure: true) as recommended by Hostinger
+function getEmailConfig() {
+  const smtpUser = process.env.SMTP_USER || 'support@ddrcnagar.in';
+  const smtpPassword = process.env.SMTP_PASSWORD || 'Uegshle@1989!';
+  const smtpHost = process.env.SMTP_HOST || 'smtp.hostinger.com';
+  const smtpPort = parseInt(process.env.SMTP_PORT || '465');
+  const smtpSecure = process.env.SMTP_SECURE !== 'false'; // Default to true for port 465
+
+  const config: any = {
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpSecure, // true for 465 (SSL), false for 587 (STARTTLS)
+    auth: {
+      user: smtpUser,
+      pass: smtpPassword,
+    },
+    // For Hostinger, we need to handle self-signed certificates
+    tls: {
+      rejectUnauthorized: false, // Allow self-signed certificates
+    },
+    // Additional options for better compatibility
+    connectionTimeout: 30000, // 30 seconds
+    greetingTimeout: 30000,
+    socketTimeout: 30000,
+  };
+
+  return config;
+}
+
+// Create transporter function to ensure fresh config each time
+function createTransporter() {
+  const config = getEmailConfig();
+  return nodemailer.createTransport(config);
+}
 
 // Create reusable transporter
-const transporter = nodemailer.createTransport(emailConfig);
+const transporter = createTransporter();
+
+export interface EmailAttachment {
+  filename: string;
+  path: string;
+  contentType?: string;
+}
 
 export interface EmailLogData {
   recipientType: 'admin' | 'field_officer';
@@ -21,6 +53,7 @@ export interface EmailLogData {
   recipientUserId?: number | null;
   emailSubject: string;
   emailBody: string;
+  attachments?: EmailAttachment[];
 }
 
 /**
@@ -46,15 +79,39 @@ export async function sendEmailAndLog(data: EmailLogData): Promise<{ success: bo
     );
     logId = logResult?.insertId || null;
 
+    // Prepare attachments if provided
+    const attachments = data.attachments?.map((att) => {
+      // Check if file exists
+      if (!fs.existsSync(att.path)) {
+        console.warn(`[email-service] Attachment file not found: ${att.path}`);
+        return null;
+      }
+      return {
+        filename: att.filename,
+        path: att.path,
+        contentType: att.contentType,
+      };
+    }).filter(Boolean) || [];
+
+    // Get fresh config to ensure credentials are up to date
+    const config = getEmailConfig();
+    
+    // Create a fresh transporter for each email to ensure credentials are current
+    const emailTransporter = createTransporter();
+
     // Send email
-    const mailOptions = {
-      from: `"DDRC Survey System" <${emailConfig.auth.user}>`,
+    const mailOptions: any = {
+      from: `"DDRC Survey System" <${config.auth.user}>`,
       to: data.recipientEmail,
       subject: data.emailSubject,
       html: data.emailBody,
     };
 
-    const info = await transporter.sendMail(mailOptions);
+    if (attachments.length > 0) {
+      mailOptions.attachments = attachments;
+    }
+
+    const info = await emailTransporter.sendMail(mailOptions);
 
     // Update log entry to 'sent'
     if (logId) {
@@ -106,13 +163,15 @@ export async function sendEmailAndLog(data: EmailLogData): Promise<{ success: bo
 /**
  * Verify email configuration
  */
-export async function verifyEmailConfig(): Promise<boolean> {
+export async function verifyEmailConfig(): Promise<{ success: boolean; error?: string }> {
   try {
-    await transporter.verify();
-    return true;
-  } catch (error) {
-    console.error('Email configuration verification failed:', error);
-    return false;
+    const testTransporter = createTransporter();
+    await testTransporter.verify();
+    return { success: true };
+  } catch (error: any) {
+    const errorMessage = error?.message || String(error);
+    console.error('[email-service] Email configuration verification failed:', errorMessage);
+    return { success: false, error: errorMessage };
   }
 }
 

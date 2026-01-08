@@ -107,6 +107,9 @@ export default function DashboardPage() {
   const [sections, setSections] = useState<string[]>([]);
   const [chartFilter, setChartFilter] = useState<'taluka' | 'gender' | 'disability' | 'udid' | 'fieldOfficers'>('taluka');
   const [userType, setUserType] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
+  const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Check if user is verification officer and redirect
   useEffect(() => {
@@ -120,6 +123,39 @@ export default function DashboardPage() {
 
   const handleStartSurvey = () => {
     router.push('/survekshan');
+  };
+
+  const handleExportReports = async () => {
+    setExporting(true);
+    setExportError('');
+    
+    try {
+      // Generate reports and email them to admin users
+      const response = await fetch('/api/admin/download-all-reports', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (!data.ok) {
+        throw new Error(data.error || 'Failed to generate and email reports');
+      }
+
+      // Show success toast message
+      const summary = data.summary || {};
+      const successMessage = `Reports generated successfully! Emailed to ${summary.emails_sent || 0} admin user(s). Total files: ${summary.total_files || 0} (PDF + Excel).${summary.emails_failed > 0 ? ` Note: ${summary.emails_failed} email(s) failed to send.` : ''}`;
+      setToastMessage({ type: 'success', message: successMessage });
+    } catch (err: any) {
+      const errorMsg = err.message || 'Failed to generate and email reports';
+      setExportError(errorMsg);
+      setToastMessage({ type: 'error', message: errorMsg });
+      console.error('Export error:', err);
+    } finally {
+      setExporting(false);
+    }
   };
 
   useEffect(() => {
@@ -166,6 +202,16 @@ export default function DashboardPage() {
     load();
   }, []);
 
+  // Auto-hide toast after 5 seconds
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => {
+        setToastMessage(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
   const StatCard = ({ title, value, subtitle, delay = '0s' }: { title: string; value: string | number; subtitle?: string; delay?: string }) => (
     <div className="col-12 col-sm-6 col-lg-4 col-xxl-3">
       <div className="card h-100 animate__animated animate__fadeInUp" style={{ animationDelay: delay }}>
@@ -184,10 +230,60 @@ export default function DashboardPage() {
   return (
     <AdminLayout>
       <div className="container-fluid">
-        <h1 className="title mb-4 animate__animated animate__fadeInDown">डॅशबोर्ड</h1>
+        <div className="d-flex justify-content-between align-items-center mb-4">
+          <h1 className="title mb-0 animate__animated animate__fadeInDown">डॅशबोर्ड</h1>
+          <button
+            className="btn btn-primary"
+            onClick={handleExportReports}
+            disabled={exporting || loading}
+            style={{ minWidth: '180px' }}
+          >
+            {exporting ? (
+              <>
+                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                Generating & Emailing...
+              </>
+            ) : (
+              <>
+                <i className="bi bi-envelope-paper me-2"></i>
+                Generate & Email Reports
+              </>
+            )}
+          </button>
+        </div>
 
         {error && (
           <div className="alert alert-danger mb-3">{error}</div>
+        )}
+
+        {/* Toast Notification */}
+        {toastMessage && (
+          <div
+            className={`toast align-items-center text-white ${toastMessage.type === 'success' ? 'bg-success' : 'bg-danger'} border-0 position-fixed top-0 end-0 m-3 show`}
+            role="alert"
+            aria-live="assertive"
+            aria-atomic="true"
+            style={{ 
+              zIndex: 9999, 
+              minWidth: '350px',
+              maxWidth: '500px',
+              animation: 'slideInRight 0.3s ease-out',
+            }}
+          >
+            <div className="d-flex">
+              <div className="toast-body">
+                {toastMessage.type === 'success' && <i className="bi bi-check-circle me-2"></i>}
+                {toastMessage.type === 'error' && <i className="bi bi-exclamation-circle me-2"></i>}
+                {toastMessage.message}
+              </div>
+              <button
+                type="button"
+                className="btn-close btn-close-white me-2 m-auto"
+                onClick={() => setToastMessage(null)}
+                aria-label="Close"
+              ></button>
+            </div>
+          </div>
         )}
 
         <div className="row g-3 mb-4">

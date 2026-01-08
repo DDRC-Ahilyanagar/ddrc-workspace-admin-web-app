@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { sendEmailAndLog } from '@/lib/email-service';
 import { Logger } from '@/lib/logger';
+import path from 'path';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +31,8 @@ export async function POST(request: NextRequest) {
          WHERE user_type = 'admin' 
            AND email IS NOT NULL 
            AND email != '' 
-           AND (status = 'active' OR is_active = 1)
+           AND email LIKE '%@%'
+           AND (status = 'active' OR is_active = 1 OR status IS NULL)
          ORDER BY id`
       );
       const admins = Array.isArray(adminRows) ? adminRows : [];
@@ -88,15 +90,72 @@ export async function POST(request: NextRequest) {
         day: 'numeric',
       });
 
-      // Send email to each admin with all stats
+      // Generate all filtered reports first
+      Logger.info('DAILY_STATS_GENERATING_REPORTS', { timestamp: new Date().toISOString() });
+      let reportFiles: Array<{ type: string; value: string; pdfPath: string; excelPath: string }> = [];
+      
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.API_BASE_URL || 'http://localhost:3000';
+        const apiToken = process.env.DAILY_STATS_API_TOKEN || '';
+        
+        // Call export-reports endpoint with API token for internal authentication
+        const reportUrl = new URL('/api/admin/export-reports', baseUrl);
+        const reportResponse = await fetch(reportUrl.toString(), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(apiToken ? { 'Authorization': `Bearer ${apiToken}` } : {}),
+          },
+        });
+
+        if (reportResponse.ok) {
+          const reportData = await reportResponse.json();
+          if (reportData.ok && Array.isArray(reportData.files)) {
+            reportFiles = reportData.files;
+            Logger.info('DAILY_STATS_REPORTS_GENERATED', {
+              count: reportFiles.length,
+              files: reportFiles.map(f => ({ type: f.type, value: f.value })),
+            });
+          }
+        } else {
+          const errorText = await reportResponse.text().catch(() => 'Unknown error');
+          Logger.error('DAILY_STATS_REPORTS_GENERATION_FAILED', {
+            status: reportResponse.status,
+            error: errorText,
+          });
+        }
+      } catch (reportError: any) {
+        Logger.error('DAILY_STATS_REPORTS_GENERATION_ERROR', {
+          error: reportError?.message || String(reportError),
+          stack: reportError?.stack,
+        });
+        // Continue with email sending even if report generation fails
+      }
+
+      // Prepare attachments for admin emails
+      const attachments = reportFiles.flatMap((file) => [
+        {
+          filename: path.basename(file.pdfPath),
+          path: file.pdfPath,
+          contentType: 'application/pdf',
+        },
+        {
+          filename: path.basename(file.excelPath),
+          path: file.excelPath,
+          contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        },
+      ]);
+
+      // Send email to each admin with all stats and reports
       const adminEmailPromises = admins.map(async (admin: any) => {
-        const adminEmailBody = generateAdminEmailBody(stats, officers, dateStr);
+        const adminEmailBody = generateAdminEmailBody(stats, officers, dateStr, reportFiles.length);
         return sendEmailAndLog({
           recipientType: 'admin',
           recipientEmail: admin.email,
           recipientUserId: admin.id,
           emailSubject: `DDRC Survey Daily Report - ${dateStr}`,
           emailBody: adminEmailBody,
+          attachments: attachments.length > 0 ? attachments : undefined,
         });
       });
 
@@ -153,7 +212,7 @@ export async function POST(request: NextRequest) {
 /**
  * Generate HTML email body for admin
  */
-function generateAdminEmailBody(stats: any, officers: any[], dateStr: string): string {
+function generateAdminEmailBody(stats: any, officers: any[], dateStr: string, reportCount: number = 0): string {
   const totalSurveys = Number(stats.total_surveys || 0);
   const completedSurveys = Number(stats.completed_surveys || 0);
   const pendingSurveys = Number(stats.pending_surveys || 0);
@@ -230,6 +289,26 @@ function generateAdminEmailBody(stats: any, officers: any[], dateStr: string): s
             </div>
           </div>
           ${officersTable}
+          ${reportCount > 0 ? `
+            <div style="margin-top: 30px; padding: 15px; background: #e3f2fd; border-left: 4px solid #2196F3; border-radius: 4px;">
+              <h3 style="color: #1976D2; margin-top: 0;">📎 Attached Reports</h3>
+              <p style="margin: 10px 0; color: #333;">
+                This email includes ${reportCount} filtered report files (PDF and Excel formats):
+              </p>
+              <ul style="color: #555; line-height: 1.8;">
+                <li>Source-wise reports (Field Officer App & Public URL)</li>
+                <li>Taluka-wise reports</li>
+                <li>Disability-wise reports</li>
+                <li>District-wise reports</li>
+                <li>Gender-wise reports</li>
+                <li>Field Officer-wise reports</li>
+                <li>UDID status-wise reports</li>
+              </ul>
+              <p style="margin: 10px 0 0 0; color: #666; font-size: 13px;">
+                All files are named with the format: <strong>FilterType-Value-YYYY-MM-DD.pdf/xlsx</strong>
+              </p>
+            </div>
+          ` : ''}
           <p style="margin-top: 30px; color: #666; font-size: 14px;">
             This is an automated daily report from the DDRC Survey System.
           </p>

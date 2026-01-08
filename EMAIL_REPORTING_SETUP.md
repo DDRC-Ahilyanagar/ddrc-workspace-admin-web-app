@@ -47,11 +47,11 @@ This adds an optional `email` column to the `access_requests` table for field of
 Add these to your `.env` file:
 
 ```env
-# SMTP Configuration (Hostinger)
+# SMTP Configuration (Hostinger Shared Hosting)
 SMTP_HOST=smtp.hostinger.com
 SMTP_PORT=587
-SMTP_SECURE=false # STARTTLS
-SMTP_USER=noreply@bitnix.store
+SMTP_SECURE=false # STARTTLS (use true for port 465)
+SMTP_USER=support@ddrcnagar.in
 SMTP_PASSWORD=Uegshle@1989!
 
 # Optional: API Token for scheduled job authentication

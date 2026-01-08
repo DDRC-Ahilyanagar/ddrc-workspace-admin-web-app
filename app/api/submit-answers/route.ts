@@ -110,16 +110,23 @@ export async function handleSubmit(request: NextRequest, user: any) {
     const campId = Number.isFinite(campIdRaw) ? campIdRaw : 0;
     
     // Get source from body, or determine from user context
-    let source = body.source || '';
-    // If source not provided and user is authenticated, use user's name for field officers
-    if (!source && user) {
+    // For authenticated field officers, always use their name as source
+    let source = '';
+    if (user) {
       // Check if user is a field officer
       const userType = (user.user_type || '').toLowerCase();
       if (userType === 'field_officer' || userType === 'field officer') {
-        source = user.name || '';
+        // Field officers always use their name as source
+        source = user.name || `Field Officer ${user.id}`;
+      } else {
+        // For other authenticated users, use body source if provided
+        source = body.source || '';
       }
+    } else {
+      // For unauthenticated (public) submissions, use body source or default
+      source = body.source || '';
     }
-    // Default to "Divyang Self" if no source provided and no authenticated user
+    // Default to "Divyang Self" if no source provided (public submissions)
     if (!source) {
       source = 'Divyang Self';
     }

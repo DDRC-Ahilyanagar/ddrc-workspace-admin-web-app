@@ -26,6 +26,30 @@ export function initializeScheduledJobs() {
         },
       });
 
+      // Check if response is OK and is JSON
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        Logger.error('DAILY_STATS_EMAIL_JOB_FAILED', {
+          timestamp: new Date().toISOString(),
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText.substring(0, 200), // Limit error text length
+        });
+        return;
+      }
+
+      // Check content type before parsing JSON
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await response.text().catch(() => 'Unknown error');
+        Logger.error('DAILY_STATS_EMAIL_JOB_INVALID_RESPONSE', {
+          timestamp: new Date().toISOString(),
+          contentType,
+          response: text.substring(0, 200), // Limit response text length
+        });
+        return;
+      }
+
       const result = await response.json();
       
       if (result.ok) {
@@ -43,6 +67,7 @@ export function initializeScheduledJobs() {
       Logger.error('DAILY_STATS_EMAIL_JOB_ERROR', {
         timestamp: new Date().toISOString(),
         error: error?.message || String(error),
+        stack: error?.stack,
       });
     }
   }, {
@@ -68,6 +93,30 @@ export function initializeScheduledJobs() {
         },
       });
 
+      // Check if response is OK and is JSON
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        Logger.error('AUTO_ASSIGN_SURVEYS_JOB_FAILED', {
+          timestamp: new Date().toISOString(),
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText.substring(0, 200), // Limit error text length
+        });
+        return;
+      }
+
+      // Check content type before parsing JSON
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await response.text().catch(() => 'Unknown error');
+        Logger.error('AUTO_ASSIGN_SURVEYS_JOB_INVALID_RESPONSE', {
+          timestamp: new Date().toISOString(),
+          contentType,
+          response: text.substring(0, 200), // Limit response text length
+        });
+        return;
+      }
+
       const result = await response.json();
       
       if (result.ok) {
@@ -86,6 +135,7 @@ export function initializeScheduledJobs() {
       Logger.error('AUTO_ASSIGN_SURVEYS_JOB_ERROR', {
         timestamp: new Date().toISOString(),
         error: error?.message || String(error),
+        stack: error?.stack,
       });
     }
   }, {

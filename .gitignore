@@ -25,6 +25,8 @@
 *.pem
 public/uploads/
 storage/logs/
+storage/reports/
+public/pdfs/
 
 # debug
 npm-debug.log*

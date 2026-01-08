@@ -18,13 +18,22 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: NextRequest) {
   try {
     // Optional: Add API token check for security
+    // Only require token if it's set in environment
     const authHeader = request.headers.get('authorization');
     const apiToken = process.env.AUTO_ASSIGN_API_TOKEN || '';
-    if (apiToken && authHeader !== `Bearer ${apiToken}`) {
-      return NextResponse.json(
-        { ok: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
+    
+    // If API token is configured, require it; otherwise allow without auth (for internal calls)
+    if (apiToken && apiToken.trim() !== '') {
+      if (!authHeader || authHeader !== `Bearer ${apiToken}`) {
+        Logger.warn('AUTO_ASSIGN_UNAUTHORIZED', {
+          hasHeader: !!authHeader,
+          hasToken: !!apiToken,
+        });
+        return NextResponse.json(
+          { ok: false, error: 'Unauthorized: Valid API token required' },
+          { status: 401 }
+        );
+      }
     }
 
     const pool = getDbPool();
@@ -36,7 +45,7 @@ export async function POST(request: NextRequest) {
       const [villageQuestionRows]: any = await conn.query(`
         SELECT id FROM questions 
         WHERE (question LIKE '%गाव%' OR question LIKE '%village%' OR question LIKE '%ग्राम%')
-        AND is_active = 1
+        AND (status = 'Active' OR status IS NULL)
         ORDER BY id ASC
         LIMIT 1
       `);

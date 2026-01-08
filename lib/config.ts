@@ -6,7 +6,7 @@ const normalizeBase = (value?: string | null) => {
 };
 
 // Base URL for the application
-export const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://surveys.bitnix.store';
+export const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://surveys.ddrcnagar.in';
 
 // Helper function to convert relative image paths to absolute URLs
 export const getAbsoluteImageUrl = (path: string | null | undefined): string => {
