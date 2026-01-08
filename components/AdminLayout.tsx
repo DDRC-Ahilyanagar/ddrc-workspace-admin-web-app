@@ -264,6 +264,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   }
 
   const isVerificationOfficer = userType?.toLowerCase().trim() === 'verification_officer';
+  const isAuthorizedAdmin = userPhone === '7768068585' && userType?.toLowerCase().trim() === 'admin';
   
   const adminMenuItems = [
     { path: '/dashboard', label: 'डॅशबोर्ड', icon: 'bi-speedometer2' },
@@ -274,6 +275,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     { path: '/officers', label: 'Field Officers', icon: 'bi-people' },
     { path: '/admin/rate', label: 'दर (Field officer)', icon: 'bi-cash-coin' },
     { path: '/admin/location-tracking', label: 'Location Tracking', icon: 'bi-geo-alt' },
+    // Only show media backup for authorized admin
+    ...(isAuthorizedAdmin ? [{ path: '/admin/media-backup', label: 'Media Backup', icon: 'bi-images' }] : []),
   ];
 
   const verificationOfficerMenuItems = [
