@@ -1341,14 +1341,40 @@ export default function PublicFormPage() {
                         className="form-control form-control-lg"
                         value={aadharNo}
                         onChange={(e) => {
-                          const value = e.target.value;
-                          setAadharNo(value);
-                          // Check for existing survey when 12 digits are entered
+                          // Format Aadhaar number with hyphens as user types
+                          let value = e.target.value;
+                          // Remove all non-digits
                           const digits = value.replace(/\D/g, '');
-                          if (digits.length === 12) {
-                            checkExistingSurvey(digits);
+                          
+                          // Limit to 12 digits only (not 14)
+                          const limitedDigits = digits.slice(0, 12);
+                          
+                          // Format with hyphens: XXXX-XXXX-XXXX
+                          let formatted = '';
+                          if (limitedDigits.length > 0) {
+                            formatted = limitedDigits.slice(0, 4);
+                            if (limitedDigits.length > 4) {
+                              formatted += '-' + limitedDigits.slice(4, 8);
+                            }
+                            if (limitedDigits.length > 8) {
+                              formatted += '-' + limitedDigits.slice(8, 12);
+                            }
+                          }
+                          
+                          setAadharNo(formatted);
+                          
+                          // Check for existing survey when 12 digits are entered
+                          if (limitedDigits.length === 12) {
+                            checkExistingSurvey(limitedDigits);
                           } else {
                             setExistingSurveyData(null);
+                          }
+                        }}
+                        onKeyUp={(e) => {
+                          // Ensure formatting is applied on keyup as well (for better UX)
+                          const digits = aadharNo.replace(/\D/g, '');
+                          if (digits.length === 12) {
+                            checkExistingSurvey(digits);
                           }
                         }}
                         placeholder="1234-5678-9012"
@@ -1363,7 +1389,7 @@ export default function PublicFormPage() {
                         </button>
                       )}
                     </div>
-                    <small className="form-text text-muted d-block mt-1">12 अंकी आधार क्रमांक प्रविष्ट करा</small>
+                    <small className="form-text text-muted d-block mt-1">12 अंकी आधार क्रमांक प्रविष्ट करा (स्वयंचलित स्वरूप: 1234-5678-9012)</small>
                     {existingSurveyData && (
                       <div className="alert alert-warning mt-2" role="alert">
                         <strong>⚠️ सर्वेक्षण आधीच अस्तित्वात आहे!</strong>
