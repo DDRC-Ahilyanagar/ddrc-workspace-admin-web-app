@@ -25,6 +25,10 @@ export const Logger = {
     writeLog('INFO', message, context);
     console.log(`[INFO] ${message}`, context);
   },
+  warn: (message: string, context: any = {}) => {
+    writeLog('WARN', message, context);
+    console.warn(`[WARN] ${message}`, context);
+  },
   error: (message: string, context: any = {}) => {
     writeLog('ERROR', message, context);
     console.error(`[ERROR] ${message}`, context);
