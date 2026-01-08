@@ -1,25 +1,47 @@
-// Default template with {#var#} placeholder
-const DEFAULT_OTP_TEMPLATE = 'Dear User, Your OTP to login at DDRC, Nagar is {#var#} Please do not share this with anyone. For Queries contact. 9022147060. VIKHE PATIL FOUNDATION ';
-
-// Get template from env or use default
-const envTemplate = process.env.SMS_OTP_TEMPLATE;
-let finalTemplate = envTemplate || DEFAULT_OTP_TEMPLATE;
-
-// If env template doesn't contain {#var#}, use default
-if (envTemplate && !envTemplate.includes('{#var#}')) {
-  console.warn('[SMS] WARNING: SMS_OTP_TEMPLATE from env does not contain {#var#}, using default template');
-  console.warn('[SMS] Env template:', envTemplate);
-  finalTemplate = DEFAULT_OTP_TEMPLATE;
-}
-
 const SMS_CONFIG = {
   url: process.env.SMS_URL || 'https://msg.icloudsms.com/rest/services/sendSMS/sendGroupSms',
   authKey: process.env.SMS_AUTH_KEY || '7e717a70bd48264130d89f149c798bc4',
-  senderId: process.env.SMS_SENDER_ID || 'DRCVK',
+  senderId: process.env.SMS_SENDER_ID || 'DDRCVK',
   routeId: process.env.SMS_ROUTE_ID || '1',
   contentType: process.env.SMS_CONTENT_TYPE || 'english',
-  otpTemplate: finalTemplate,
 };
+
+function getDLTTemplate(): string {
+  const template = process.env.SMS_OTP_TEMPLATE;
+  if (!template) {
+    throw new Error('SMS_OTP_TEMPLATE environment variable is required for DLT compliance');
+  }
+  if (!template.includes('{#var#}')) {
+    throw new Error('SMS_OTP_TEMPLATE must contain {#var#} placeholder for DLT compliance');
+  }
+  return template;
+}
+
+export function buildDLTMessage(otp: string): string {
+  if (!otp || typeof otp !== 'string') {
+    throw new Error('OTP must be a non-empty string');
+  }
+  
+  const cleanOtp = otp.replace(/\D/g, '');
+  if (!cleanOtp || cleanOtp.length === 0) {
+    throw new Error('OTP must contain at least one digit');
+  }
+  
+  const template = getDLTTemplate();
+  const message = template.replace('{#var#}', cleanOtp);
+  
+  const isProduction = process.env.NODE_ENV === 'production';
+  const logPreview = isProduction 
+    ? message.replace(cleanOtp, '****').substring(0, 50)
+    : message.substring(0, 50);
+  
+  console.log('[SMS] DLT Message built:', {
+    length: message.length,
+    preview: logPreview,
+  });
+  
+  return message;
+}
 
 export async function sendSMS(mobile: string, message: string): Promise<{ ok: boolean; raw?: any; status?: number; error?: string; responseCode?: string }> {
   try {
@@ -34,9 +56,13 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
 
     const url = `${SMS_CONFIG.url}?${params.toString()}`;
     
-    // Log the actual message being sent (for debugging)
-    console.log('[SMS] Message to send:', message);
-    console.log('[SMS] Full URL:', url.substring(0, 200) + '...'); // Log partial URL for debugging
+    const isProduction = process.env.NODE_ENV === 'production';
+    const logMessage = isProduction 
+      ? message.replace(/\d{4,}/g, '****').substring(0, 50) + '...'
+      : message.substring(0, 100) + '...';
+    
+    console.log('[SMS] Message to send:', logMessage);
+    console.log('[SMS] Full URL:', url.substring(0, 200) + '...');
     
     // Log the URL and parameters for debugging (without exposing sensitive data)
     console.log('[SMS] Sending SMS:', {
@@ -81,15 +107,31 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
     const isSuccess = httpCode >= 200 && httpCode < 300 && 
                       (responseCode === '2001' || responseCode === '3001' || responseCode === '200' || responseCode === undefined);
     
-    if (!isSuccess && responseCode) {
-      const errorMessages: Record<string, string> = {
-        '3002': 'Invalid senderId (DRCVK) - may not be approved/registered',
-        '3003': 'Invalid routeId',
-        '3004': 'Invalid mobile number format',
-        '3005': 'Insufficient SMS balance',
-        '3006': 'DLT template not approved',
-      };
-      console.error('[SMS] Error Code:', responseCode, errorMessages[responseCode] || 'Unknown error');
+    const errorMessages: Record<string, string> = {
+      '3002': 'Invalid senderId (DDRCVK) - may not be approved/registered',
+      '3003': 'Invalid routeId',
+      '3004': 'Invalid mobile number format',
+      '3005': 'Insufficient SMS balance',
+      '3006': 'DLT template not approved',
+    };
+    
+    let errorMessage: string | undefined;
+    if (!isSuccess) {
+      if (responseCode && errorMessages[responseCode]) {
+        errorMessage = errorMessages[responseCode];
+      } else if (httpCode < 200 || httpCode >= 300) {
+        errorMessage = `HTTP Error: ${httpCode}`;
+      } else if (responseCode) {
+        errorMessage = `SMS Service Error: ${responseCode}`;
+      } else {
+        errorMessage = 'SMS sending failed - unknown error';
+      }
+      console.error('[SMS] Error:', {
+        httpCode,
+        responseCode,
+        errorMessage,
+        raw: raw.substring(0, 200),
+      });
     }
 
     console.log('[SMS] Response:', {
@@ -97,6 +139,7 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
       responseCode,
       raw: raw.substring(0, 200), // Log first 200 chars
       success: isSuccess,
+      error: errorMessage,
     });
 
     return {
@@ -104,6 +147,7 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
       raw,
       status: httpCode,
       responseCode,
+      error: errorMessage,
     };
   } catch (error: any) {
     console.error('[SMS] Error:', {
@@ -121,27 +165,4 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
   }
 }
 
-export function getOTPMessage(otp: string): string {
-  // Validate OTP input
-  if (!otp || typeof otp !== 'string') {
-    console.error('[SMS] ERROR: Invalid OTP passed to getOTPMessage:', otp);
-    throw new Error('OTP must be a non-empty string');
-  }
-  
-  // Clean OTP: remove any non-digit characters and ensure it's only digits
-  const cleanOtp = otp.replace(/\D/g, '');
-  if (!cleanOtp || cleanOtp.length === 0) {
-    console.error('[SMS] ERROR: OTP contains no digits:', otp);
-    throw new Error('OTP must contain at least one digit');
-  }
-  
-  // Directly concatenate OTP into the message
-  const message = `Dear User, Your OTP to login at DDRC, Nagar is ${cleanOtp} Please do not share this with anyone. For Queries contact. 9022147060. VIKHE PATIL FOUNDATION `;
-  
-  console.log('[SMS] OTP:', cleanOtp);
-  console.log('[SMS] Final message:', message);
-  console.log('[SMS] Message length:', message.length);
-  
-  return message;
-}
 
