@@ -308,17 +308,17 @@ export async function POST(request: NextRequest) {
       
       const userData = Array.isArray(userCheck) && (userCheck as any[]).length > 0 ? (userCheck as any[])[0] : null;
       
-      // For test mode, create a dummy user data if not found
+      // For test mode or admin bypass, create a dummy user data if not found
       let finalUserData = userData;
-      if (!userData && isTestMode) {
-        Logger.info('verify_otp_test_mode_user_not_found', { phone });
-        // Create a test user object for test mode
+      if (!userData && (isTestMode || isAdminBypass)) {
+        Logger.info('verify_otp_dummy_user_created', { phone, isTestMode, isAdminBypass });
+        // Create a dummy user object for test mode or Play Store review
         finalUserData = {
-          id: 999999,
-          name: 'Test User',
-          contact_number: TEST_PHONE,
+          id: isAdminBypass ? 999999 : 999999,
+          name: isAdminBypass ? 'Play Store Reviewer' : 'Test User',
+          contact_number: isAdminBypass ? ADMIN_BYPASS_PHONE : TEST_PHONE,
           passkey: null,
-          user_type: 'field_officer',
+          user_type: isAdminBypass ? 'field_officer' : 'field_officer',
           status: 'active',
           is_active: 1,
           related_type: 'field_officer'

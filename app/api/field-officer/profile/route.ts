@@ -80,6 +80,66 @@ export async function POST(request: NextRequest) {
         [validatedUserId]
       );
 
+      // Validate phone number is not already taken by another active user
+      if (phone) {
+        const [phoneCheck]: any = await conn.query(
+          `SELECT id, status, is_active 
+           FROM users 
+           WHERE contact_number = ? AND id != ? 
+           LIMIT 1`,
+          [phone, validatedUserId]
+        );
+        
+        if (Array.isArray(phoneCheck) && phoneCheck.length > 0) {
+          const phoneUser = phoneCheck[0];
+          const phoneUserStatus = (phoneUser.status || '').toLowerCase().trim();
+          const phoneUserIsActive = Number(phoneUser.is_active) === 1;
+          
+          if (phoneUserStatus === 'active' && phoneUserIsActive) {
+            conn.release();
+            Logger.info('field_officer_profile_phone_taken', { phone, user_id: validatedUserId, existing_user_id: phoneUser.id });
+            return NextResponse.json(
+              {
+                ok: false,
+                error: 'phone_already_exists',
+                message: 'या मोबाईल क्रमांकासह आधीच खाते नोंदणीकृत आहे.',
+              },
+              { status: 409 }
+            );
+          }
+        }
+      }
+
+      // Validate email is not already taken by another active user
+      if (email && email.trim() !== '') {
+        const [emailCheck]: any = await conn.query(
+          `SELECT id, status, is_active, contact_number 
+           FROM users 
+           WHERE email = ? AND email IS NOT NULL AND email != '' AND id != ? 
+           LIMIT 1`,
+          [email.toLowerCase().trim(), validatedUserId]
+        );
+        
+        if (Array.isArray(emailCheck) && emailCheck.length > 0) {
+          const emailUser = emailCheck[0];
+          const emailUserStatus = (emailUser.status || '').toLowerCase().trim();
+          const emailUserIsActive = Number(emailUser.is_active) === 1;
+          
+          if (emailUserStatus === 'active' && emailUserIsActive) {
+            conn.release();
+            Logger.info('field_officer_profile_email_taken', { email, user_id: validatedUserId, existing_user_id: emailUser.id });
+            return NextResponse.json(
+              {
+                ok: false,
+                error: 'email_already_exists',
+                message: 'या ईमेल आयडीसह आधीच खाते नोंदणीकृत आहे.',
+              },
+              { status: 409 }
+            );
+          }
+        }
+      }
+
       // Update users table
       const updateUsersFields: string[] = [];
       const updateUsersValues: any[] = [];

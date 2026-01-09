@@ -140,13 +140,18 @@ export async function POST(request: NextRequest) {
       }
       
       try {
-        // Fetch user once so we can show precise error messages
+        // Get name and email from request body if available (from onboarding step 2)
+        const name = (body.name || '').toString().trim() || 'Field Officer';
+        const email = (body.email || '').toString().trim() || null;
+        
+        // Fetch user by phone number
         const [userCheck] = await existConn.execute(
           `SELECT 
              u.id, 
              u.user_type, 
              u.status, 
              u.is_active, 
+             u.email,
              ut.user_type AS related_type
            FROM users u
            LEFT JOIN user_types ut ON ut.id = u.user_type_id
@@ -160,6 +165,66 @@ export async function POST(request: NextRequest) {
         const existingStatus = existingUser ? (existingUser.status || '').toLowerCase().trim() : '';
         const existingIsActive = existingUser ? Number(existingUser.is_active) : 0;
         
+        // Check if an active/approved user already exists with this phone number
+        if (userExists && existingStatus === 'active' && existingIsActive === 1) {
+          existConn.release();
+          Logger.info('send_otp_rejected_active_user_exists', { phone, user_id: existingUser.id });
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'user_already_exists',
+              message: 'या मोबाईल क्रमांकासह आधीच खाते नोंदणीकृत आहे. कृपया लॉगिन करा.',
+            },
+            { status: 409 }
+          );
+        }
+        
+        // Check if email is provided and if an active user exists with this email
+        if (email && email.includes('@')) {
+          const [emailCheck] = await existConn.execute(
+            `SELECT id, status, is_active, contact_number 
+             FROM users 
+             WHERE email = ? AND email IS NOT NULL AND email != ''
+             LIMIT 1`,
+            [email.toLowerCase()]
+          );
+          
+          const emailUserExists = Array.isArray(emailCheck) && (emailCheck as any[]).length > 0;
+          if (emailUserExists) {
+            const emailUser = (emailCheck as any[])[0];
+            const emailUserStatus = (emailUser.status || '').toLowerCase().trim();
+            const emailUserIsActive = Number(emailUser.is_active) === 1;
+            
+            // If active user exists with this email, reject signup
+            if (emailUserStatus === 'active' && emailUserIsActive) {
+              existConn.release();
+              Logger.info('send_otp_rejected_email_exists', { email, user_id: emailUser.id });
+              return NextResponse.json(
+                {
+                  ok: false,
+                  error: 'email_already_exists',
+                  message: 'या ईमेल आयडीसह आधीच खाते नोंदणीकृत आहे. कृपया लॉगिन करा.',
+                },
+                { status: 409 }
+              );
+            }
+            
+            // If email exists but phone is different, also reject (email should be unique per user)
+            if (emailUser.contact_number && emailUser.contact_number !== phone) {
+              existConn.release();
+              Logger.info('send_otp_rejected_email_different_phone', { email, existing_phone: emailUser.contact_number, new_phone: phone });
+              return NextResponse.json(
+                {
+                  ok: false,
+                  error: 'email_already_exists',
+                  message: 'या ईमेल आयडीसह आधीच खाते नोंदणीकृत आहे. कृपया लॉगिन करा.',
+                },
+                { status: 409 }
+              );
+            }
+          }
+        }
+        
         // If user doesn't exist or exists with empty/pending status, handle onboarding
         const isMobileOnboarding = !isWebRequest && role === 'field_officer';
         const needsOnboardingSetup = !userExists || (existingStatus === '' || existingStatus === 'pending');
@@ -167,7 +232,7 @@ export async function POST(request: NextRequest) {
         if (isMobileOnboarding && needsOnboardingSetup) {
           if (!userExists) {
             // Create new user
-            Logger.info('send_otp_creating_user_for_onboarding', { phone, role });
+            Logger.info('send_otp_creating_user_for_onboarding', { phone, email, role });
             
             // Get field officer user type ID
             const [foType]: any = await existConn.execute(
@@ -175,19 +240,32 @@ export async function POST(request: NextRequest) {
             );
             const fieldOfficerTypeId = Array.isArray(foType) && foType.length > 0 ? foType[0]?.id ?? null : null;
             
-            // Get name from request body if available (from onboarding step 2)
-            const name = (body.name || '').toString().trim() || 'Field Officer';
-            const email = (body.email || '').toString().trim() || null;
-            
             // Create user with pending status (will be activated after profile completion)
             const DEFAULT_MOBILE_ROLE = 'field_officer';
             try {
               await existConn.execute(
                 `INSERT INTO users (name, contact_number, email, user_type, user_type_id, status, is_active, created_at, updated_at)
                  VALUES (?, ?, ?, ?, ?, 'pending', 0, NOW(), NOW())`,
-                [name, phone, email, DEFAULT_MOBILE_ROLE, fieldOfficerTypeId]
+                [name, phone, email || null, DEFAULT_MOBILE_ROLE, fieldOfficerTypeId]
               );
             } catch (insertError: any) {
+              // Check if it's a duplicate key error
+              if (insertError.code === 'ER_DUP_ENTRY') {
+                existConn.release();
+                const duplicateField = insertError.message.includes('contact_number') ? 'phone' : 'email';
+                Logger.info('send_otp_rejected_duplicate_key', { phone, email, duplicateField });
+                return NextResponse.json(
+                  {
+                    ok: false,
+                    error: duplicateField === 'phone' ? 'user_already_exists' : 'email_already_exists',
+                    message: duplicateField === 'phone' 
+                      ? 'या मोबाईल क्रमांकासह आधीच खाते नोंदणीकृत आहे. कृपया लॉगिन करा.'
+                      : 'या ईमेल आयडीसह आधीच खाते नोंदणीकृत आहे. कृपया लॉगिन करा.',
+                  },
+                  { status: 409 }
+                );
+              }
+              
               Logger.error('send_otp_user_insert_failed', { 
                 phone, 
                 name, 
