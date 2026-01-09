@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import AdminLayout from '@/components/AdminLayout';
 
 interface Form {
@@ -158,15 +159,27 @@ export default function OfficersPage() {
                       const isExpanded = expandedRows.has(officer.id);
                       return (
                         <React.Fragment key={officer.id}>
-                          <tr style={{ cursor: 'pointer' }} onClick={() => toggleRow(officer.id)}>
+                          <tr>
                             <td>
                               <i
                                 className={`bi bi-chevron-${isExpanded ? 'down' : 'right'}`}
-                                style={{ fontSize: '0.8rem' }}
+                                style={{ fontSize: '0.8rem', cursor: 'pointer' }}
+                                onClick={() => toggleRow(officer.id)}
                               ></i>
                             </td>
                             <td>
-                              <strong>{officer.name}</strong>
+                              <Link 
+                                href={`/officers/${officer.id}`}
+                                style={{ textDecoration: 'none', color: 'inherit' }}
+                              >
+                                <strong 
+                                  style={{ cursor: 'pointer', color: '#0d6efd' }}
+                                  onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
+                                  onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
+                                >
+                                  {officer.name}
+                                </strong>
+                              </Link>
                               {officer.email && (
                                 <div className="text-muted small">{officer.email}</div>
                               )}
