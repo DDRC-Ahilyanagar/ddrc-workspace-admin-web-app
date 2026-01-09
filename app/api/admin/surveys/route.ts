@@ -44,11 +44,12 @@ export async function GET(req: NextRequest) {
         'id',           // 0 - ID
         'aadhar_no',    // 1 - आधार क्रमांक
         'user_id',      // 2 - वापरकर्ता ID
-        'answer_count', // 3 - उत्तरांची संख्या
-        'status',       // 4 - स्थिती
-        'created_at',   // 5 - तयार केले
-        'updated_at',   // 6 - अपडेट केले
-        null,           // 7 - क्रिया (not sortable)
+        'source',       // 3 - स्रोत (Source)
+        'answer_count', // 4 - उत्तरांची संख्या
+        'status',       // 5 - स्थिती
+        'created_at',   // 6 - तयार केले
+        'updated_at',   // 7 - अपडेट केले
+        null,           // 8 - क्रिया (not sortable)
       ];
       const orderByColumn = columns[orderColumnIndex] || 'id';
       
@@ -166,6 +167,8 @@ export async function GET(req: NextRequest) {
         orderByClause = 'sa.aadhar_no';
       } else if (orderByColumn === 'user_id') {
         orderByClause = 'COALESCE(s.user_id, sa.user_id)';
+      } else if (orderByColumn === 'source') {
+        orderByClause = 'COALESCE(s.source, \'Divyang Self\')';
       } else if (orderByColumn === 'created_at') {
         orderByClause = 'sa.created_at';
       } else if (orderByColumn === 'updated_at') {

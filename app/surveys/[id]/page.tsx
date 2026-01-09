@@ -146,12 +146,6 @@ function SurveyDetailsContent() {
   const formatAnswer = (answer: Answer): string => {
     if (!answer.answer) return '-';
     
-    // If it's an image URL, normalize and return it
-    const normalized = normalizeImagePath(answer.answer);
-    if (normalized.startsWith('http') || normalized.startsWith('/')) {
-      return normalized;
-    }
-    
     // If it's an array (for multi-select), join it
     try {
       const parsed = JSON.parse(answer.answer);
@@ -160,15 +154,43 @@ function SurveyDetailsContent() {
       }
     } catch {}
     
-    return answer.answer;
+    // Check if it's actually an image path before normalizing
+    const answerStr = answer.answer.trim();
+    
+    // Only normalize if it looks like an image path
+    if (answerStr.includes('uploads') || 
+        answerStr.startsWith('/uploads') ||
+        answerStr.startsWith('uploads/') ||
+        answerStr.match(/\.(jpg|jpeg|png|gif|webp|pdf)$/i) ||
+        answerStr.match(/^[a-f0-9-]{36}$/i) || // UUID format
+        answerStr.startsWith('http://') ||
+        answerStr.startsWith('https://') ||
+        answerStr.startsWith('/') && (answerStr.includes('.') || answerStr.includes('uploads'))) {
+      return normalizeImagePath(answerStr);
+    }
+    
+    // Otherwise return as plain text
+    return answerStr;
   };
 
   const isImageAnswer = (answer: string): boolean => {
     if (!answer) return false;
-    const normalized = normalizeImagePath(answer);
-    return normalized.startsWith('http') || normalized.startsWith('/') || 
-           normalized.includes('uploads') || 
-           /\.(jpg|jpeg|png|gif|webp|pdf)$/i.test(normalized);
+    
+    const answerStr = answer.trim();
+    
+    // Only treat as image if it clearly looks like an image path/URL
+    return (
+      answerStr.includes('uploads') ||
+      answerStr.startsWith('/uploads') ||
+      answerStr.startsWith('uploads/') ||
+      answerStr.match(/\.(jpg|jpeg|png|gif|webp|pdf)$/i) !== null ||
+      (answerStr.match(/^[a-f0-9-]{36}$/i) !== null) || // UUID format (likely image filename)
+      (answerStr.startsWith('http://') || answerStr.startsWith('https://')) && 
+        (answerStr.includes('.jpg') || answerStr.includes('.jpeg') || 
+         answerStr.includes('.png') || answerStr.includes('.gif') || 
+         answerStr.includes('.webp') || answerStr.includes('.pdf') ||
+         answerStr.includes('uploads'))
+    );
   };
 
   const handleExport = async (format: 'xlsx' | 'pdf') => {

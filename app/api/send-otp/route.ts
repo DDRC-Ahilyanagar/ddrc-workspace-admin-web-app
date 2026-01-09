@@ -117,6 +117,9 @@ export async function POST(request: NextRequest) {
       // CRITICAL: Approval check MUST happen BEFORE any OTP generation or SMS sending
       // This prevents wasting OTPs and SMS costs on unapproved users
       // ============================================================================
+      // Determine if this is a web request early
+      const isWebRequest = source === 'web';
+      
       let existConn;
       try {
         // Add timeout wrapper to fail fast if connection takes too long
@@ -152,8 +155,103 @@ export async function POST(request: NextRequest) {
           [phone]
         );
 
-        if (!Array.isArray(userCheck) || (userCheck as any[]).length === 0) {
+        const userExists = Array.isArray(userCheck) && (userCheck as any[]).length > 0;
+        const existingUser = userExists ? (userCheck as any[])[0] : null;
+        const existingStatus = existingUser ? (existingUser.status || '').toLowerCase().trim() : '';
+        const existingIsActive = existingUser ? Number(existingUser.is_active) : 0;
+        
+        // If user doesn't exist or exists with empty/pending status, handle onboarding
+        const isMobileOnboarding = !isWebRequest && role === 'field_officer';
+        const needsOnboardingSetup = !userExists || (existingStatus === '' || existingStatus === 'pending');
+        
+        if (isMobileOnboarding && needsOnboardingSetup) {
+          if (!userExists) {
+            // Create new user
+            Logger.info('send_otp_creating_user_for_onboarding', { phone, role });
+            
+            // Get field officer user type ID
+            const [foType]: any = await existConn.execute(
+              `SELECT id FROM user_types WHERE LOWER(user_type) IN ('field officer', 'field_officer') LIMIT 1`
+            );
+            const fieldOfficerTypeId = Array.isArray(foType) && foType.length > 0 ? foType[0]?.id ?? null : null;
+            
+            // Get name from request body if available (from onboarding step 2)
+            const name = (body.name || '').toString().trim() || 'Field Officer';
+            const email = (body.email || '').toString().trim() || null;
+            
+            // Create user with pending status (will be activated after profile completion)
+            const DEFAULT_MOBILE_ROLE = 'field_officer';
+            try {
+              await existConn.execute(
+                `INSERT INTO users (name, contact_number, email, user_type, user_type_id, status, is_active, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, 'pending', 0, NOW(), NOW())`,
+                [name, phone, email, DEFAULT_MOBILE_ROLE, fieldOfficerTypeId]
+              );
+            } catch (insertError: any) {
+              Logger.error('send_otp_user_insert_failed', { 
+                phone, 
+                name, 
+                email, 
+                fieldOfficerTypeId,
+                error: insertError.message,
+                code: insertError.code,
+                errno: insertError.errno,
+                sqlState: insertError.sqlState,
+                stack: insertError.stack 
+              });
+              existConn.release();
+              return NextResponse.json(
+                {
+                  ok: false,
+                  error: 'user_creation_failed',
+                  message: 'वापरकर्ता तयार करण्यात अडचण. कृपया पुन्हा प्रयत्न करा.',
+                },
+                { status: 500 }
+              );
+            }
+            
+            Logger.info('send_otp_user_created_for_onboarding', { phone, name, email });
+            
+            // Fetch the newly created user
+            const [newUserCheck] = await existConn.execute(
+              `SELECT 
+                 u.id, 
+                 u.user_type, 
+                 u.status, 
+                 u.is_active, 
+                 ut.user_type AS related_type
+               FROM users u
+               LEFT JOIN user_types ut ON ut.id = u.user_type_id
+               WHERE u.contact_number = ?
+               LIMIT 1`,
+              [phone]
+            );
+            
+            if (Array.isArray(newUserCheck) && newUserCheck.length > 0) {
+              userData = newUserCheck[0];
+              // Allow OTP for newly created pending users during onboarding
+              Logger.info('send_otp_allowing_otp_for_new_user', { phone, user_id: userData.id });
+            } else {
+              Logger.error('send_otp_user_creation_failed', { phone });
+              existConn.release();
+              return NextResponse.json(
+                {
+                  ok: false,
+                  error: 'user_creation_failed',
+                  message: 'वापरकर्ता तयार करण्यात अडचण. कृपया पुन्हा प्रयत्न करा.',
+                },
+                { status: 500 }
+              );
+            }
+          } else {
+            // User exists but has empty/pending status - use existing user for onboarding
+            Logger.info('send_otp_using_existing_user_for_onboarding', { phone, existingStatus });
+            userData = existingUser;
+          }
+        } else if (!userExists) {
+          // For web or other sources, return error as before
           Logger.info('send_otp_rejected_user_not_found', { phone });
+          existConn.release();
           return NextResponse.json(
             {
               ok: false,
@@ -162,20 +260,38 @@ export async function POST(request: NextRequest) {
             },
             { status: 404 }
           );
+        } else {
+          userData = existingUser;
         }
-
-        userData = (userCheck as any[])[0];
       } finally {
-        existConn.release();
+        if (existConn) {
+          existConn.release();
+        }
+      }
+
+      // Ensure userData exists before accessing its properties
+      if (!userData) {
+        Logger.error('send_otp_user_data_null', { phone });
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'user_not_found',
+            message: 'वापरकर्ता नोंदणीकृत नाही. कृपया प्रवेश विनंती पाठवा.',
+          },
+          { status: 404 }
+        );
       }
 
       const status = (userData.status || '').toLowerCase().trim();
       const statusAllowsOtp = status === 'active' || status === 'approved';
+      const isPending = status === 'pending' || status === ''; // Allow empty status for newly created users
       const hasActiveFlag = Number(userData.is_active) === 1;
 
-      // If user exists but is not approved/active, return error IMMEDIATELY
-      // NO OTP will be generated, NO SMS will be sent
-      if (!statusAllowsOtp || !hasActiveFlag) {
+      // Allow OTP for pending/empty status users during mobile onboarding (they're in the process of completing profile)
+      // For other cases, require active/approved status
+      const allowOtpForOnboarding = isPending && !isWebRequest && role === 'field_officer';
+      
+      if (!allowOtpForOnboarding && (!statusAllowsOtp || !hasActiveFlag)) {
         Logger.info('send_otp_rejected_user_not_approved', { 
           phone, 
           status: userData.status, 
@@ -197,7 +313,7 @@ export async function POST(request: NextRequest) {
       // ============================================================================
 
       // Determine allowed user types based on source
-      const isWebRequest = source === 'web';
+      // isWebRequest is already defined earlier in the function
       const userType = normalizeRole(userData.user_type);
       const relatedType = normalizeRole(userData.related_type);
       effectiveRole = userType || relatedType;
@@ -374,6 +490,14 @@ export async function POST(request: NextRequest) {
     
     try {
       await connection.beginTransaction();
+      
+      // Mark old OTPs as expired when sending a new one
+      await connection.execute(
+        `UPDATE otp_verifications 
+         SET status = 'expired', updated_at = NOW() 
+         WHERE phone = ? AND status = 'sent'`,
+        [phone]
+      );
       
       const [result] = await connection.execute(
         `INSERT INTO otp_verifications (phone, otp, expires_at, status, created_at, updated_at) 

@@ -126,9 +126,18 @@ export async function POST(request: NextRequest) {
       // Find latest unexpired sent OTP (skip for test mode, admin bypass, verification officer bypass, and test field officer)
       let row: any = null;
       if (!isTestMode && !isAdminBypass && !isVerificationOfficerBypass && !isTestFieldOfficer) {
+        // First, mark expired OTPs as expired
+        await connection.execute(
+          `UPDATE otp_verifications 
+           SET status = 'expired', updated_at = NOW() 
+           WHERE phone = ? AND status = 'sent' AND expires_at < NOW()`,
+          [phone]
+        );
+
+        // Then find the latest non-expired sent OTP
         const [rows] = await connection.execute(
           `SELECT * FROM otp_verifications 
-           WHERE phone = ? AND status IN ('sent') 
+           WHERE phone = ? AND status IN ('sent') AND expires_at >= NOW()
            ORDER BY id DESC LIMIT 1`,
           [phone]
         );
@@ -137,11 +146,12 @@ export async function POST(request: NextRequest) {
 
         if (!row) {
           // No matching OTP in the DB – treat it as a stale request
+          Logger.info('verify_otp_not_found_or_expired', { phone });
           return NextResponse.json(
             {
               ok: false,
               error: 'otp_not_found',
-              message: 'ओटीपी सापडला नाही. कृपया पुन्हा विनंती करा.',
+              message: 'ओटीपी सापडला नाही किंवा वेळ संपली. कृपया नव्याने ओटीपी मागवा.',
             },
             { status: 404 }
           );
@@ -216,11 +226,21 @@ export async function POST(request: NextRequest) {
         }
       } else {
         // Normal OTP validation flow
-        if (new Date(row.expires_at) < new Date()) {
+        // Double-check expiry (in case of race condition or timezone issues)
+        const expiresAt = new Date(row.expires_at);
+        const now = new Date();
+        if (expiresAt < now) {
           await connection.execute(
             `UPDATE otp_verifications SET status = 'expired', updated_at = NOW() WHERE id = ?`,
             [row.id]
           );
+          Logger.info('verify_otp_expired', { 
+            phone, 
+            otp_id: row.id, 
+            expires_at: row.expires_at, 
+            now: now.toISOString(),
+            diff_minutes: Math.round((now.getTime() - expiresAt.getTime()) / 60000)
+          });
           return NextResponse.json(
             {
               ok: false,
@@ -270,12 +290,18 @@ export async function POST(request: NextRequest) {
 
       // First, get the user's actual role from the database so that mobile/web
       // clients cannot spoof their role via request payloads.
+      // For mobile onboarding, also allow pending users and empty status
+      const isMobileOnboarding = !isWebRequest && role === 'field_officer';
+      const statusCondition = isMobileOnboarding 
+        ? `(COALESCE(u.status, '') = 'active' OR COALESCE(u.is_active, 0) = 1 OR COALESCE(u.status, '') = 'pending' OR COALESCE(u.status, '') = '')`
+        : `(COALESCE(u.status, '') = 'active' OR COALESCE(u.is_active, 0) = 1)`;
+      
       const [userCheck] = await connection.execute(
         `SELECT u.id, u.name, u.contact_number, u.passkey, u.user_type, u.status, u.is_active, ut.user_type AS related_type
          FROM users u
          LEFT JOIN user_types ut ON ut.id = u.user_type_id
          WHERE u.contact_number = ?
-           AND (COALESCE(u.status, '') = 'active' OR COALESCE(u.is_active, 0) = 1)
+           AND ${statusCondition}
          LIMIT 1`,
         [phone]
       );
@@ -363,11 +389,14 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      Logger.info('verify_otp_ok', { phone, user_id: finalUserData.id, has_passkey: !!finalUserData.passkey, isTestMode, effectiveRole });
+      // Convert BigInt id to Number for JSON serialization
+      const userId = Number(finalUserData.id);
+      
+      Logger.info('verify_otp_ok', { phone, user_id: userId, has_passkey: !!finalUserData.passkey, isTestMode, effectiveRole });
       const response = NextResponse.json({ 
         ok: true, 
         user: {
-          id: finalUserData.id,
+          id: userId, // Convert BigInt to Number for JSON compatibility
           name: finalUserData.name,
           phone: finalUserData.contact_number,
           passkey: finalUserData.passkey ? String(finalUserData.passkey) : null,

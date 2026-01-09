@@ -83,6 +83,7 @@ model User {
   surveys      Survey[]
   surveyAadhar SurveyAadhar[]
   surveyFiles  SurveyFile[]
+  fieldOfficerProfile FieldOfficerProfile? @relation("FieldOfficerProfile")
 
   @@unique([email])
   @@unique([contactNumber])
@@ -104,10 +105,48 @@ model OtpVerification {
   @@map("otp_verifications")
 }
 
+model EmailOtpVerification {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  email      String    @db.VarChar(255)
+  otp        String    @db.VarChar(10)
+  status     OtpStatus @default(sent)
+  expiresAt  DateTime? @map("expires_at")
+  verifiedAt DateTime? @map("verified_at")
+  createdAt  DateTime? @default(now()) @map("created_at")
+
+  @@index([email], map: "idx_email")
+  @@index([email, status], map: "idx_email_status")
+  @@map("email_otp_verifications")
+}
+
+model FieldOfficerProfile {
+  id                  BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  userId              BigInt    @unique @map("user_id") @db.UnsignedBigInt
+  profilePhoto        String?   @map("profile_photo") @db.Text
+  taluka              String?   @db.VarChar(255)
+  primaryGaav         String?   @map("primary_gaav") @db.VarChar(255)
+  additionalGaavs     Json?     @map("additional_gaavs")
+  accountHolderName   String?   @map("account_holder_name") @db.VarChar(255)
+  accountNumber       String?   @map("account_number") @db.VarChar(50)
+  bankName            String?   @map("bank_name") @db.VarChar(255)
+  ifscCode            String?   @map("ifsc_code") @db.VarChar(20)
+  upiId               String?   @map("upi_id") @db.VarChar(255)
+  qrCode              String?   @map("qr_code") @db.Text
+  profileComplete     Boolean   @default(false) @map("profile_complete")
+  createdAt           DateTime? @default(now()) @map("created_at")
+  updatedAt           DateTime? @default(now()) @updatedAt @map("updated_at")
+
+  user User @relation("FieldOfficerProfile", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_user_id")
+  @@map("field_officer_profiles")
+}
+
 model AccessRequest {
   id        Int                 @id @default(autoincrement()) @db.UnsignedInt
   name      String              @db.VarChar(150)
   phone     String              @db.VarChar(20)
+  email     String?             @db.VarChar(255)
   selfieUrl String              @map("selfie_url") @db.VarChar(255)
   status    AccessRequestStatus @default(pending)
   adminNote String?             @map("admin_note") @db.Text

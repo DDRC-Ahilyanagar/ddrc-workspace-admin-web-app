@@ -70,36 +70,69 @@ export async function POST(request: NextRequest) {
 
     const pool = getDbPool();
 
+    // Check if there's an existing pending request for this phone
     const [existing]: any = await pool.query(
       'SELECT id FROM access_requests WHERE phone = ? AND status = "pending" LIMIT 1',
       [phone]
     );
 
+    let requestId: number;
+    let isUpdate = false;
+
     if (Array.isArray(existing) && existing.length > 0) {
+      // Update existing pending request instead of blocking
       const first = existing[0];
-      Logger.info('ACCESS_REQUEST_DUPLICATE', { phone, existing_id: first.id });
-      return NextResponse.json(
-        { ok: false, error: 'या मोबाईल क्रमांकाची विनंती आधीपासून प्रलंबित आहे' },
-        { status: 409 }
+      requestId = first.id;
+      isUpdate = true;
+      
+      Logger.info('ACCESS_REQUEST_UPDATING_EXISTING', { phone, existing_id: requestId });
+      
+      // Update the existing request with new data
+      await pool.query(
+        `UPDATE access_requests 
+         SET name = ?, selfie_url = ?, email = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [name, relativeUrl, email || null, requestId]
       );
+      
+      Logger.info('ACCESS_REQUEST_UPDATED', {
+        id: requestId,
+        name,
+        phone,
+        selfie_url: relativeUrl,
+      });
+    } else {
+      // Create new request
+      const [result]: any = await pool.query(
+        `INSERT INTO access_requests (name, phone, selfie_url, status, email)
+         VALUES (?, ?, ?, 'pending', ?)`,
+        [name, phone, relativeUrl, email || null]
+      );
+      
+      requestId = result?.insertId;
+      isUpdate = false;
+      
+      Logger.info('ACCESS_REQUEST_CREATED', {
+        id: requestId,
+        name,
+        phone,
+        selfie_url: relativeUrl,
+      });
     }
 
-    const [result]: any = await pool.query(
-      `INSERT INTO access_requests (name, phone, selfie_url, status, email)
-       VALUES (?, ?, ?, 'pending', ?)`,
-      [name, phone, relativeUrl, email || null]
-    );
-
     const duration = Date.now() - startTime;
-    Logger.info('ACCESS_REQUEST_CREATED', {
-      id: result?.insertId,
-      name,
-      phone,
-      selfie_url: relativeUrl,
+    Logger.info('ACCESS_REQUEST_COMPLETED', {
+      id: requestId,
+      isUpdate,
       duration_ms: duration,
     });
 
-    return NextResponse.json({ ok: true, id: result?.insertId, selfie_url: relativeUrl });
+    return NextResponse.json({ 
+      ok: true, 
+      id: requestId, 
+      selfie_url: relativeUrl,
+      updated: isUpdate 
+    });
   } catch (error: any) {
     const duration = Date.now() - startTime;
     Logger.error('ACCESS_REQUEST_CREATE_ERROR', { 

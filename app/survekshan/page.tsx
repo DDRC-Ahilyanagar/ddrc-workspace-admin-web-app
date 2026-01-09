@@ -183,6 +183,21 @@ export default function SurvekshanPage() {
           }
         },
         { 
+          data: 'source', 
+          title: 'स्रोत', // Source
+          render: (data: string) => {
+            if (!data) return '-';
+            // Translate common source values to Marathi
+            const sourceMap: { [key: string]: string } = {
+              'Divyang Self': 'दिव्यांग स्वतः',
+              'Field Officer App': 'फील्ड ऑफिसर अॅप',
+              'Public URL': 'सार्वजनिक URL',
+              'Mobile App': 'मोबाइल अॅप',
+            };
+            return sourceMap[data] || data;
+          }
+        },
+        { 
           data: 'answer_count', 
           title: 'उत्तरांची संख्या', // Number of Answers
           render: (data: number) => data || 0
@@ -403,6 +418,7 @@ export default function SurvekshanPage() {
                         <th>ID</th>
                         <th>आधार क्रमांक</th>
                         <th>वापरकर्ता</th>
+                        <th>स्रोत</th>
                         <th>उत्तरांची संख्या</th>
                         <th>स्थिती</th>
                         <th>तयार केले</th>

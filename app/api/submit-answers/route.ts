@@ -4,6 +4,7 @@ import { Logger } from '@/lib/logger';
 import { requireAuth, verifyAuth } from '@/lib/auth';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { autoAssignSurveys } from '@/lib/auto-assign-surveys';
 
 /**
  * @swagger
@@ -589,6 +590,64 @@ export async function handleSubmit(request: NextRequest, user: any) {
         // The JSON file is already saved
       }
 
+      // Extract taluka and district from answers and update survey_aadhar if needed
+      // Question 47 = सध्याचा ता. (Current Taluka)
+      // Question 48 = सध्याचा जि. (Current District)
+      try {
+        let taluka: string | null = null;
+        let district: string | null = null;
+        
+        // Find taluka and district from answers
+        const talukaAnswer = normalizedItems.find(item => item.question_id === 47);
+        const districtAnswer = normalizedItems.find(item => item.question_id === 48);
+        
+        if (talukaAnswer && talukaAnswer.answer) {
+          taluka = String(talukaAnswer.answer).trim();
+          if (taluka === '' || taluka === '--') taluka = null;
+        }
+        
+        if (districtAnswer && districtAnswer.answer) {
+          district = String(districtAnswer.answer).trim();
+          if (district === '' || district === '--') district = null;
+        }
+        
+        // Update survey_aadhar with taluka/district if we found them and they're not already set
+        if (taluka || district) {
+          const updateFields: string[] = [];
+          const updateValues: any[] = [];
+          
+          if (taluka) {
+            updateFields.push('taluka = COALESCE(?, taluka)');
+            updateValues.push(taluka);
+          }
+          
+          if (district) {
+            updateFields.push('district = COALESCE(?, district)');
+            updateValues.push(district);
+          }
+          
+          if (updateFields.length > 0) {
+            updateValues.push(aadhaarId);
+            await connection.execute(
+              `UPDATE survey_aadhar SET ${updateFields.join(', ')}, updated_at = NOW() WHERE id = ?`,
+              updateValues
+            );
+            
+            Logger.info('submit_answers_updated_survey_aadhar', {
+              aadhaar_id: aadhaarId,
+              taluka,
+              district,
+            });
+          }
+        }
+      } catch (updateError: any) {
+        // Don't fail the entire request if taluka/district update fails
+        Logger.info('submit_answers_taluka_district_update_failed', {
+          error: updateError?.message,
+          aadhaar_id: aadhaarId,
+        });
+      }
+
       Logger.info('submit_answers', { 
         aadhaar_id: aadhaarId, 
         survey_id: surveyId,
@@ -597,6 +656,19 @@ export async function handleSubmit(request: NextRequest, user: any) {
         unanswered: unansweredCount,
         json_path: relativePath
       });
+
+      // Immediately trigger auto-assignment for public form submissions
+      // (source = 'Divyang Self' and user_id = 1)
+      if (source === 'Divyang Self' && userId === 1 && surveyId) {
+        // Call auto-assignment asynchronously (fire and forget) so it doesn't delay the response
+        autoAssignSurveys(surveyId).catch((error) => {
+          Logger.error('IMMEDIATE_AUTO_ASSIGN_FAILED', {
+            survey_id: surveyId,
+            error: error?.message || String(error)
+          });
+        });
+      }
+
       // Store success response to return after connection release
       earlyReturnResponse = NextResponse.json({ 
         ok: true, 
