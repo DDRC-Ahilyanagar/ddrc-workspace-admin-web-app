@@ -87,7 +87,7 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
       };
     }
 
-    // Step 2: Find unassigned surveys (source = 'Divyang Self' and user_id = 1)
+    // Step 2: Find unassigned surveys (source = 'Divyang Self' or 'Excel Import' and user_id = 1)
     // If surveyId is provided, only get that specific survey
     let query = `
       SELECT 
@@ -98,7 +98,7 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
         s.source,
         s.created_at
       FROM surveys s
-      WHERE (s.source = 'Divyang Self' OR s.source IS NULL)
+      WHERE (s.source = 'Divyang Self' OR s.source = 'Excel Import' OR s.source IS NULL)
       AND (s.user_id = 1 OR s.user_id IS NULL)
       AND s.survey_json IS NOT NULL
       AND s.survey_json != ''

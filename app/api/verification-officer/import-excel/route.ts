@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';
 import ExcelJS from 'exceljs';
 import { requireAuth } from '@/lib/auth';
+import { autoAssignSurveys } from '@/lib/auto-assign-surveys';
 
 export const dynamic = 'force-dynamic';
 
@@ -262,11 +263,7 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
             ? Number(surveyCheck[0].user_id) 
             : null;
 
-          // Assign survey to field officer based on village/GAV
-          // Only assign if survey is not already assigned to a field officer (user_id = 1 means system/unassigned)
-          let assignedOfficerId: number | null = null;
-          
-          // Extract village from answers (look for village question)
+          // Extract village from answers (look for village question) for logging
           let village: string | null = null;
           for (const [questionId, answerValue] of row.answers.entries()) {
             const questionInfo = questionMap.get(questionId);
@@ -283,92 +280,50 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
             }
           }
 
-          // If village found and survey is not already assigned, find matching field officer
-          if (village && village.length > 0 && (!currentUserId || currentUserId === 1)) {
-            const villageLower = village.toLowerCase().trim();
-            
-            // Find field officers whose primary_gaav or additional_gaavs matches
-            // Get all field officers and check their villages
-            const [allOfficers]: any = await conn.query(`
-              SELECT u.id, u.name, fop.primary_gaav, fop.additional_gaavs
-              FROM users u
-              INNER JOIN field_officer_profiles fop ON fop.user_id = u.id
-              WHERE u.user_type = 'field_officer'
-              AND u.status = 'active'
-              AND u.is_active = 1
-              ORDER BY u.id ASC
-            `);
-
-            let matchingOfficer: any = null;
-            
-            if (Array.isArray(allOfficers)) {
-              for (const officer of allOfficers) {
-                const primaryGaav = (officer.primary_gaav || '').toLowerCase().trim();
-                
-                // Check primary_gaav
-                if (primaryGaav === villageLower || 
-                    primaryGaav.includes(villageLower) ||
-                    villageLower.includes(primaryGaav)) {
-                  matchingOfficer = officer;
-                  break;
-                }
-                
-                // Check additional_gaavs (JSON array)
-                if (officer.additional_gaavs) {
-                  try {
-                    const additionalGaavs = typeof officer.additional_gaavs === 'string'
-                      ? JSON.parse(officer.additional_gaavs)
-                      : officer.additional_gaavs;
-                    
-                    if (Array.isArray(additionalGaavs)) {
-                      for (const gaav of additionalGaavs) {
-                        const gaavLower = String(gaav || '').toLowerCase().trim();
-                        if (gaavLower === villageLower ||
-                            gaavLower.includes(villageLower) ||
-                            villageLower.includes(gaavLower)) {
-                          matchingOfficer = officer;
-                          break;
-                        }
-                      }
-                    }
-                  } catch (e) {
-                    // Skip invalid JSON
-                  }
-                }
-                
-                if (matchingOfficer) break;
-              }
-            }
-
-            if (matchingOfficer) {
-              assignedOfficerId = Number(matchingOfficer.id);
-              
-              // Update survey with assigned field officer
-              await conn.query(
-                `UPDATE surveys 
-                 SET user_id = ?,
-                     source = COALESCE(source, 'Excel Import'),
-                     updated_at = NOW()
-                 WHERE id = ?`,
-                [assignedOfficerId, surveyId]
-              );
-
-              Logger.info('EXCEL_IMPORT_SURVEY_ASSIGNED', {
-                surveyId,
-                officerId: assignedOfficerId,
-                officerName: matchingOfficer.name,
-                village: village,
-              });
-            } else {
-              // No matching officer found - keep survey unassigned (user_id = 1 for system)
-              Logger.info('EXCEL_IMPORT_NO_MATCHING_OFFICER', {
-                surveyId,
-                village: village,
-              });
-            }
+          // Note: Auto-assignment will be called after transaction commit
+          // This ensures data consistency and uses the shared auto-assignment logic
+          let assignedOfficerId: number | null = null;
+          
+          // If survey is already assigned, use existing assignment
+          if (currentUserId && currentUserId !== 1) {
+            assignedOfficerId = currentUserId;
+            Logger.info('EXCEL_IMPORT_SURVEY_ALREADY_ASSIGNED', {
+              surveyId,
+              existingOfficerId: currentUserId,
+            });
           }
 
           await conn.commit();
+
+          // Call auto-assignment after transaction is committed
+          // This ensures data consistency and uses the shared auto-assignment logic
+          if (surveyId && (!currentUserId || currentUserId === 1)) {
+            // Call auto-assign asynchronously (fire and forget) so it doesn't delay the import
+            autoAssignSurveys(surveyId).then((assignResult) => {
+              if (assignResult.ok && assignResult.assigned > 0 && assignResult.details.length > 0) {
+                assignedOfficerId = assignResult.details[0].officer_id;
+                Logger.info('EXCEL_IMPORT_SURVEY_AUTO_ASSIGNED', {
+                  surveyId,
+                  officerId: assignedOfficerId,
+                  village: village,
+                  assignmentDetails: assignResult.details[0],
+                });
+              } else {
+                Logger.info('EXCEL_IMPORT_NO_MATCHING_OFFICER', {
+                  surveyId,
+                  village: village,
+                  assignResult: assignResult.message,
+                });
+              }
+            }).catch((assignError: any) => {
+              // Log error but don't fail the import
+              Logger.error('EXCEL_IMPORT_AUTO_ASSIGN_ERROR', {
+                surveyId,
+                error: assignError.message,
+                village: village,
+              });
+            });
+          }
 
           processedRows.push({
             aadharId,
