@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Logger } from '@/lib/logger';
+import { convertFileToWebP, getWebPExtension } from '@/lib/image-utils';
 
 /**
  * @swagger
@@ -89,12 +90,15 @@ export async function POST(request: NextRequest) {
     const savedFiles: { url: string; path: string; filename: string; size: number }[] = [];
 
     for (const file of files) {
-      const fileExtension = file.name.split('.').pop() || 'jpg';
+      // Convert to WebP
+      const webpBuffer = await convertFileToWebP(file, 85);
+
       const uniqueId = randomUUID();
-      const fileName = `${uniqueId}.${fileExtension}`;
+      const fileName = `${uniqueId}.${getWebPExtension()}`;
       const filePath = join(uploadsDir, fileName);
-      const bytes = await file.arrayBuffer();
-      await writeFile(filePath, Buffer.from(bytes));
+
+      await writeFile(filePath, webpBuffer);
+
       // Always use relative path to avoid localhost issues
       // Frontend/API will convert to absolute URL when needed using getAbsoluteImageUrl
       const relativePath = `/uploads/${fileName}`;
@@ -102,7 +106,7 @@ export async function POST(request: NextRequest) {
         url: relativePath, // Return relative path as url for backward compatibility
         path: relativePath, // Primary path (relative)
         filename: fileName,
-        size: file.size,
+        size: webpBuffer.length, // Use WebP size
       });
     }
 

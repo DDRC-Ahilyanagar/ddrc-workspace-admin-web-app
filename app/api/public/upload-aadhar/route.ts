@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { mkdir, writeFile, rename } from 'fs/promises';
 import { join } from 'path';
 import { Logger } from '@/lib/logger';
+import { convertFileToWebP, getWebPExtension } from '@/lib/image-utils';
 
 /**
  * Upload Aadhar images for public form
@@ -51,20 +52,20 @@ export async function POST(request: NextRequest) {
     const targetDir = join(baseDir, folderName);
     await mkdir(targetDir, { recursive: true });
 
-    // Save front image
-    const frontBytes = await frontImage.arrayBuffer();
-    const frontFilePath = join(targetDir, 'front.jpg');
-    await writeFile(frontFilePath, Buffer.from(frontBytes));
+    // Convert and save front image as WebP
+    const frontWebP = await convertFileToWebP(frontImage, 85);
+    const frontFilePath = join(targetDir, `front.${getWebPExtension()}`);
+    await writeFile(frontFilePath, frontWebP);
 
-    // Save back image
-    const backBytes = await backImage.arrayBuffer();
-    const backFilePath = join(targetDir, 'back.jpg');
-    await writeFile(backFilePath, Buffer.from(backBytes));
+    // Convert and save back image as WebP
+    const backWebP = await convertFileToWebP(backImage, 85);
+    const backFilePath = join(targetDir, `back.${getWebPExtension()}`);
+    await writeFile(backFilePath, backWebP);
 
     // Always return relative paths (not full URLs) to avoid localhost issues
     // The frontend/API will convert to absolute URLs when needed using getAbsoluteImageUrl
-    const frontPath = `/uploads/${folderName}/front.jpg`;
-    const backPath = `/uploads/${folderName}/back.jpg`;
+    const frontPath = `/uploads/${folderName}/front.${getWebPExtension()}`;
+    const backPath = `/uploads/${folderName}/back.${getWebPExtension()}`;
 
     Logger.info('PUBLIC_AADHAR_UPLOAD_SUCCESS', {
       folderName,
