@@ -76,7 +76,8 @@ export async function uploadImage(file: File): Promise<string | null> {
     }
 
     const data = await response.json();
-    return data.url || data.path || null;
+    // Prefer path over url, as path is always relative and won't have localhost issues
+    return data.path || data.url || null;
   } catch (error) {
     console.error('Image upload failed:', error);
     return null;

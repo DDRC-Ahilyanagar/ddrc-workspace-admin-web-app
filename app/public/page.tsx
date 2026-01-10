@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { apiCall, getQuestions, submitAnswers, uploadImage } from '@/lib/api-client';
+import { getAbsoluteImageUrl } from '@/lib/config';
 
 interface Question {
   id: number;
@@ -672,16 +673,28 @@ export default function PublicFormPage() {
   };
 
   const handleFileUpload = async (questionId: number, file: File) => {
+    // Create immediate preview URL for instant feedback
+    const previewUrl = URL.createObjectURL(file);
+    
+    // Set preview immediately so user can see the image
+    handleAnswerChange(questionId, previewUrl);
+    
+    // Now upload the file in the background
     setLoading(true);
     try {
       const uploadedUrl = await uploadImage(file);
       if (uploadedUrl) {
+        // Replace preview URL with actual uploaded URL
         handleAnswerChange(questionId, uploadedUrl);
+        // Clean up the preview URL to free memory
+        URL.revokeObjectURL(previewUrl);
       } else {
         setError('प्रतिमा अपलोड करण्यात अडचण आली. कृपया पुन्हा प्रयत्न करा.');
+        // Keep preview URL if upload fails
       }
     } catch (err: any) {
       setError('प्रतिमा अपलोड करण्यात अडचण: ' + err.message);
+      // Keep preview URL if upload fails
     } finally {
       setLoading(false);
     }
@@ -1046,13 +1059,20 @@ export default function PublicFormPage() {
             {currentAnswer && (
               <div className="mt-3">
                 <img
-                  src={currentAnswer}
+                  src={currentAnswer.startsWith('blob:') ? currentAnswer : getAbsoluteImageUrl(currentAnswer)}
                   alt="Uploaded"
                   className="img-fluid rounded shadow-sm"
                   style={{ maxHeight: '200px', maxWidth: '100%', border: '2px solid #dee2e6' }}
+                  onError={(e) => {
+                    // If image fails to load, try to use the answer as-is (might be a blob URL)
+                    const target = e.target as HTMLImageElement;
+                    if (!target.src.startsWith('blob:')) {
+                      target.src = currentAnswer;
+                    }
+                  }}
                 />
                 <p className="text-success small mt-2 mb-0">
-                  ✓ प्रतिमा अपलोड झाली
+                  {currentAnswer.startsWith('blob:') ? '⏳ अपलोड होत आहे...' : '✓ प्रतिमा अपलोड झाली'}
                 </p>
               </div>
             )}

@@ -53,32 +53,34 @@ export async function POST(request: NextRequest) {
 
     // Save front image
     const frontBytes = await frontImage.arrayBuffer();
-    const frontPath = join(targetDir, 'front.jpg');
-    await writeFile(frontPath, Buffer.from(frontBytes));
+    const frontFilePath = join(targetDir, 'front.jpg');
+    await writeFile(frontFilePath, Buffer.from(frontBytes));
 
     // Save back image
     const backBytes = await backImage.arrayBuffer();
-    const backPath = join(targetDir, 'back.jpg');
-    await writeFile(backPath, Buffer.from(backBytes));
+    const backFilePath = join(targetDir, 'back.jpg');
+    await writeFile(backFilePath, Buffer.from(backBytes));
 
-    // Generate public URLs
-    const origin = `${request.nextUrl.protocol}//${request.nextUrl.host}`;
-    const frontUrl = `${origin}/uploads/${folderName}/front.jpg`;
-    const backUrl = `${origin}/uploads/${folderName}/back.jpg`;
+    // Always return relative paths (not full URLs) to avoid localhost issues
+    // The frontend/API will convert to absolute URLs when needed using getAbsoluteImageUrl
+    const frontPath = `/uploads/${folderName}/front.jpg`;
+    const backPath = `/uploads/${folderName}/back.jpg`;
 
     Logger.info('PUBLIC_AADHAR_UPLOAD_SUCCESS', {
       folderName,
       divyangName: safeName,
       aadharNo: digits,
+      frontPath,
+      backPath,
     });
 
     return NextResponse.json({
       ok: true,
       folder: folderName,
-      front_image: frontUrl,
-      back_image: backUrl,
-      front_path: `/uploads/${folderName}/front.jpg`,
-      back_path: `/uploads/${folderName}/back.jpg`,
+      front_image: frontPath, // Return relative path, not full URL
+      back_image: backPath, // Return relative path, not full URL
+      front_path: frontPath,
+      back_path: backPath,
     });
   } catch (error: any) {
     Logger.error('PUBLIC_AADHAR_UPLOAD_ERROR', { error: error.message });

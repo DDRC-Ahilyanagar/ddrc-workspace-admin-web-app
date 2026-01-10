@@ -89,38 +89,85 @@ export async function POST(request: NextRequest) {
       // Ensure folder exists
       await fs.mkdir(targetDir, { recursive: true });
 
-      // If images are provided as URLs, download and organize them
+      // Normalize image paths - always use relative paths, not full URLs
       let finalFrontImage = frontImageUrl;
       let finalBackImage = backImageUrl;
 
-      if (frontImageUrl && (frontImageUrl.startsWith('http://') || frontImageUrl.startsWith('https://'))) {
-        try {
-          const res = await fetch(frontImageUrl);
-          if (res.ok) {
-            const arrayBuf = await res.arrayBuffer();
-            const buf = Buffer.from(arrayBuf);
-            const frontPath = path.join(targetDir, 'front.jpg');
-            await fs.writeFile(frontPath, buf);
-            finalFrontImage = `/uploads/${folderName}/front.jpg`;
+      // If images are provided as full URLs (including localhost), extract the path
+      if (frontImageUrl) {
+        if (frontImageUrl.startsWith('http://') || frontImageUrl.startsWith('https://')) {
+          try {
+            // Try to download and save locally if it's a remote URL
+            const res = await fetch(frontImageUrl);
+            if (res.ok) {
+              const arrayBuf = await res.arrayBuffer();
+              const buf = Buffer.from(arrayBuf);
+              const frontPath = path.join(targetDir, 'front.jpg');
+              await fs.writeFile(frontPath, buf);
+              finalFrontImage = `/uploads/${folderName}/front.jpg`;
+            } else {
+              // If download fails, extract path from URL
+              try {
+                const urlObj = new URL(frontImageUrl);
+                finalFrontImage = urlObj.pathname; // Extract just the path
+              } catch {
+                // If URL parsing fails, use relative path
+                finalFrontImage = `/uploads/${folderName}/front.jpg`;
+              }
+            }
+          } catch (e: any) {
+            Logger.error('PUBLIC_CREATE_AADHAR_DOWNLOAD_FRONT_FAILED', { error: e.message });
+            // Fallback: extract path from URL or use default
+            try {
+              const urlObj = new URL(frontImageUrl);
+              finalFrontImage = urlObj.pathname;
+            } catch {
+              finalFrontImage = `/uploads/${folderName}/front.jpg`;
+            }
           }
-        } catch (e: any) {
-          Logger.error('PUBLIC_CREATE_AADHAR_DOWNLOAD_FRONT_FAILED', { error: e.message });
+        } else if (!frontImageUrl.startsWith('/')) {
+          // If it's not a full URL and doesn't start with /, make it relative
+          finalFrontImage = `/uploads/${folderName}/front.jpg`;
         }
+        // If it already starts with /, use it as-is
       }
 
-      if (backImageUrl && (backImageUrl.startsWith('http://') || backImageUrl.startsWith('https://'))) {
-        try {
-          const res = await fetch(backImageUrl);
-          if (res.ok) {
-            const arrayBuf = await res.arrayBuffer();
-            const buf = Buffer.from(arrayBuf);
-            const backPath = path.join(targetDir, 'back.jpg');
-            await fs.writeFile(backPath, buf);
-            finalBackImage = `/uploads/${folderName}/back.jpg`;
+      if (backImageUrl) {
+        if (backImageUrl.startsWith('http://') || backImageUrl.startsWith('https://')) {
+          try {
+            // Try to download and save locally if it's a remote URL
+            const res = await fetch(backImageUrl);
+            if (res.ok) {
+              const arrayBuf = await res.arrayBuffer();
+              const buf = Buffer.from(arrayBuf);
+              const backPath = path.join(targetDir, 'back.jpg');
+              await fs.writeFile(backPath, buf);
+              finalBackImage = `/uploads/${folderName}/back.jpg`;
+            } else {
+              // If download fails, extract path from URL
+              try {
+                const urlObj = new URL(backImageUrl);
+                finalBackImage = urlObj.pathname; // Extract just the path
+              } catch {
+                // If URL parsing fails, use relative path
+                finalBackImage = `/uploads/${folderName}/back.jpg`;
+              }
+            }
+          } catch (e: any) {
+            Logger.error('PUBLIC_CREATE_AADHAR_DOWNLOAD_BACK_FAILED', { error: e.message });
+            // Fallback: extract path from URL or use default
+            try {
+              const urlObj = new URL(backImageUrl);
+              finalBackImage = urlObj.pathname;
+            } catch {
+              finalBackImage = `/uploads/${folderName}/back.jpg`;
+            }
           }
-        } catch (e: any) {
-          Logger.error('PUBLIC_CREATE_AADHAR_DOWNLOAD_BACK_FAILED', { error: e.message });
+        } else if (!backImageUrl.startsWith('/')) {
+          // If it's not a full URL and doesn't start with /, make it relative
+          finalBackImage = `/uploads/${folderName}/back.jpg`;
         }
+        // If it already starts with /, use it as-is
       }
 
       // Insert or update Aadhar record (prevents duplicates via UNIQUE constraint)

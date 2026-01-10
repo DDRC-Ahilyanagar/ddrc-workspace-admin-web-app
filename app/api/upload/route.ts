@@ -95,10 +95,12 @@ export async function POST(request: NextRequest) {
       const filePath = join(uploadsDir, fileName);
       const bytes = await file.arrayBuffer();
       await writeFile(filePath, Buffer.from(bytes));
-      const url = `${publicBase}/uploads/${fileName}`;
+      // Always use relative path to avoid localhost issues
+      // Frontend/API will convert to absolute URL when needed using getAbsoluteImageUrl
+      const relativePath = `/uploads/${fileName}`;
       savedFiles.push({
-        url,
-        path: `/uploads/${fileName}`,
+        url: relativePath, // Return relative path as url for backward compatibility
+        path: relativePath, // Primary path (relative)
         filename: fileName,
         size: file.size,
       });
@@ -112,8 +114,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      url: savedFiles[0]?.url,
-      path: savedFiles[0]?.path,
+      url: savedFiles[0]?.path, // Return relative path
+      path: savedFiles[0]?.path, // Return relative path
       files: savedFiles,
     });
   } catch (error: any) {
