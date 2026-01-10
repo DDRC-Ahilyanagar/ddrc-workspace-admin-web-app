@@ -16,8 +16,8 @@ const translations = {
     },
     carousel: [
       {
-        title: 'District Disability Rehabilitation Centre, Ahilyanagar',
-        description: 'Ministry of Social Justice & Empowerment, Govt. of India approved',
+        title: 'दिव्यांग सर्वेक्षण अभियान - २०२६',
+        description: 'जिल्हा प्रशासन , जिल्हा दिव्यांग सक्षमीकरण विभाग व जिल्हा दिव्यांग पुनर्वसन केंद्र , अहिल्यानगर यांचे सयुंक्त विद्यमाने',
       },
       {
         title: 'Secure & Encrypted Data Collection',
@@ -187,8 +187,8 @@ const translations = {
     },
     carousel: [
       {
-        title: 'जिल्हा दिव्यांग पुनर्वसन केंद्र, अहिल्यानगर',
-        description: 'सामाजिक न्याय आणि सक्षमीकरण मंत्रालय, भारत सरकार मान्यताप्राप्त',
+        title: 'दिव्यांग सर्वेक्षण अभियान - २०२६',
+        description: 'जिल्हा प्रशासन , जिल्हा दिव्यांग सक्षमीकरण विभाग व जिल्हा दिव्यांग पुनर्वसन केंद्र , अहिल्यानगर यांचे सयुंक्त विद्यमाने',
       },
       {
         title: 'सुरक्षित आणि एन्क्रिप्टेड डेटा संकलन',
