@@ -120,7 +120,72 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
       // Freeze header row
       worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
-      // No sample data - empty template only
+      // Add sample row with example data to help users understand the format
+      if (Array.isArray(questions) && questions.length > 0) {
+        const sampleRow: any = {
+          aadhar_no: '123456789012',
+          name: 'राम कृष्ण पाटील',
+        };
+
+        // Add sample answers for each question
+        for (const q of questions) {
+          const questionText = (q.question || '').trim();
+          if (!questionText) continue;
+
+          const key = `q_${q.id}`;
+          let sampleValue = '';
+
+          // Provide sample values based on question type and content
+          if (questionText.includes('नाव') && questionText.includes('दिव्यांग')) {
+            sampleValue = 'राम कृष्ण पाटील';
+          } else if (questionText.includes('आधार') || questionText.includes('Aadhaar') || questionText.includes('Aadhar')) {
+            sampleValue = '123456789012';
+          } else if (questionText.includes('गाव') || questionText.includes('Village')) {
+            sampleValue = 'सांगवी';
+          } else if (questionText.includes('तालुका') || questionText.includes('Taluka')) {
+            sampleValue = 'पुणे';
+          } else if (questionText.includes('जिल्हा') || questionText.includes('District')) {
+            sampleValue = 'पुणे';
+          } else if (questionText.includes('पिन') || questionText.includes('PIN')) {
+            sampleValue = '411027';
+          } else if (questionText.includes('मोबाइल') || questionText.includes('Mobile')) {
+            sampleValue = '9876543210';
+          } else if (questionText.includes('दिव्यांगता प्रकार') || questionText.includes('Disability Type')) {
+            sampleValue = 'दृष्टिहीनता';
+          } else if (questionText.includes('दिव्यांगता टक्केवारी') || questionText.includes('Disability Percentage')) {
+            sampleValue = '75';
+          } else if (questionText.includes('वैश्विक कार्ड') || questionText.includes('UDID')) {
+            sampleValue = 'UDID123456789';
+          } else if (questionText.includes('लिंग') || questionText.includes('Gender')) {
+            sampleValue = 'पुरुष';
+          } else if (questionText.includes('जन्मतारीख') || questionText.includes('Date of Birth')) {
+            sampleValue = '1990-01-15';
+          } else if (questionText.includes('वय') || questionText.includes('Age')) {
+            sampleValue = '34';
+          } else if (questionText.includes('शिक्षण') || questionText.includes('Education')) {
+            sampleValue = '10वी पास';
+          } else {
+            // Default sample value
+            sampleValue = 'उदाहरण';
+          }
+
+          sampleRow[key] = sampleValue;
+        }
+
+        // Add the sample row
+        worksheet.addRow(sampleRow);
+
+        // Style the sample row (light gray background to indicate it's an example)
+        const sampleRowIndex = worksheet.rowCount;
+        const sampleRowObj = worksheet.getRow(sampleRowIndex);
+        sampleRowObj.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFF0F0F0' },
+        };
+        sampleRowObj.font = { italic: true, color: { argb: 'FF666666' } };
+        sampleRowObj.height = 20;
+      }
 
       // Generate buffer
       const buffer = await workbook.xlsx.writeBuffer();
