@@ -4,6 +4,9 @@ import { Logger } from './lib/logger';
 /**
  * Seed script to create 10 realistic survey records
  * Reads questions from database and creates surveys with proper conditional answers
+ * 
+ * NOTE: Survey seeding is currently DISABLED to prevent adding sample survey records.
+ * To re-enable, uncomment the seedSurveys() call at the bottom of this file.
  */
 
 interface Question {
@@ -335,6 +338,9 @@ async function seedSurveys() {
 }
 
 // Run if called directly
+// DISABLED: Survey seeding is disabled to prevent adding 10 sample survey records
+// Uncomment below to re-enable survey seeding
+/*
 seedSurveys()
   .then(() => {
     console.log('✅ Seed completed successfully');
@@ -344,6 +350,10 @@ seedSurveys()
     console.error('❌ Seed failed:', error);
     process.exit(1);
   });
+*/
+
+// Log that seeding is disabled
+console.log('⏭️  Survey seeding is disabled. To re-enable, uncomment the seedSurveys() call in seed_surveys.ts');
 
 export { seedSurveys };
 
