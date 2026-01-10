@@ -27,6 +27,58 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
     const conn = await pool.getConnection();
 
     try {
+      // Fetch all talukas and their villages for dependent dropdowns
+      const [talukasRows]: any = await conn.query(`
+        SELECT DISTINCT taluka 
+        FROM (
+          SELECT DISTINCT taluka FROM tbl_all_talukas WHERE (status IS NULL OR status = 'Active')
+          UNION
+          SELECT DISTINCT taluka FROM tbl_taluka WHERE (status IS NULL OR status = 'Active')
+        ) AS t
+        WHERE taluka IS NOT NULL AND taluka != ''
+        ORDER BY taluka
+      `);
+      
+      const talukas = Array.isArray(talukasRows) 
+        ? talukasRows.map((r: any) => r.taluka).filter(Boolean)
+        : [];
+      
+      // Fetch villages for each taluka
+      const talukaVillagesMap = new Map<string, string[]>();
+      for (const taluka of talukas) {
+        try {
+          const [tables]: any = await conn.query("SHOW TABLES LIKE 'tbl_all_villages'");
+          const useVillagesTable = Array.isArray(tables) && tables.length > 0;
+          
+          let sql: string;
+          if (useVillagesTable) {
+            sql = `SELECT DISTINCT villages FROM tbl_all_villages 
+                   WHERE taluka = ? AND (status IS NULL OR status = 'Active') 
+                   ORDER BY villages`;
+          } else {
+            sql = `SELECT DISTINCT village AS villages FROM tbl_all_grams 
+                   WHERE taluka = ? AND (status IS NULL OR status = 'Active') 
+                   ORDER BY village`;
+          }
+          
+          const [villageRows]: any = await conn.query(sql, [taluka]);
+          const villages = Array.isArray(villageRows)
+            ? villageRows
+                .map((r: any) => {
+                  const value = r.villages || r.village;
+                  return Array.isArray(value) ? value[0] : value;
+                })
+                .filter(Boolean)
+            : [];
+          
+          if (villages.length > 0) {
+            talukaVillagesMap.set(taluka, villages);
+          }
+        } catch (err) {
+          console.error(`Error fetching villages for taluka ${taluka}:`, err);
+        }
+      }
+
       // Fetch questions matching public form structure (including options, conditional rendering info)
       const [questions]: any = await conn.query(`
         SELECT 
@@ -91,6 +143,8 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
         'DROPDOWN LISTS:',
         '  • Columns with dropdown lists show a dropdown arrow when clicked',
         '  • Select from the dropdown instead of typing',
+        '  • TALUKA → VILLAGE: First select Taluka, then Village dropdown will show',
+        '    villages for that taluka (dependent dropdown)',
         '',
         'SAMPLE ROW:',
         '  • Row 2 contains sample data (gray background)',
@@ -113,6 +167,39 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
         }
         row.height = 20;
       });
+      
+      // Create a hidden sheet for taluka-village mappings (for dependent dropdowns)
+      const mappingSheet = workbook.addWorksheet('TalukaVillages');
+      mappingSheet.state = 'hidden'; // Hide this sheet
+      
+      // Create named ranges for each taluka's villages
+      // Excel requires named ranges to reference a sheet, so we'll use the hidden sheet
+      let currentRow = 1;
+      const talukaRangeNames: string[] = [];
+      
+      for (const taluka of talukas) {
+        const villages = talukaVillagesMap.get(taluka) || [];
+        if (villages.length === 0) continue;
+        
+        // Create a safe name for the range (Excel doesn't allow spaces/special chars in range names)
+        const rangeName = `Taluka_${taluka.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        talukaRangeNames.push(rangeName);
+        
+        // Write villages to the hidden sheet
+        villages.forEach((village, idx) => {
+          mappingSheet.getCell(currentRow + idx, 1).value = village;
+        });
+        
+        // Create named range for this taluka's villages
+        // ExcelJS uses definedNames collection
+        const startCell = mappingSheet.getCell(currentRow, 1).address;
+        const endCell = mappingSheet.getCell(currentRow + villages.length - 1, 1).address;
+        
+        // Add named range using definedNames
+        workbook.definedNames.add(rangeName, `TalukaVillages!$${startCell}:$${endCell}`);
+        
+        currentRow += villages.length + 1; // Add gap between talukas
+      }
       
       // Create main data worksheet
       const worksheet = workbook.addWorksheet('Divyang Data');
@@ -337,6 +424,32 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
         }
       }
 
+      // Identify taluka and village/gaav columns for dependent dropdowns
+      let talukaColumnIndex = -1;
+      let villageColumnIndex = -1;
+      let talukaColumnLetter = '';
+      let villageColumnLetter = '';
+      
+      for (let colIndex = 0; colIndex < columns.length; colIndex++) {
+        const column = columns[colIndex];
+        const metadata = questionMetadata.get(column.key);
+        const questionText = metadata?.question_text || column.header || '';
+        
+        // Check if this is taluka column
+        if ((questionText.includes('तालुका') || questionText.includes('Taluka')) && 
+            !questionText.includes('गाव') && !questionText.includes('Village')) {
+          talukaColumnIndex = colIndex;
+          talukaColumnLetter = worksheet.getColumn(colIndex + 1).letter;
+        }
+        
+        // Check if this is village/gaav column
+        if (questionText.includes('गाव') || questionText.includes('Village') || 
+            questionText.includes('ग्राम') || questionText.includes('Gaav')) {
+          villageColumnIndex = colIndex;
+          villageColumnLetter = worksheet.getColumn(colIndex + 1).letter;
+        }
+      }
+
       // Add dropdown lists (data validation) and comments for conditional columns
       // Start from row 2 (after header) and apply to many rows for future data entry
       const startRow = 2;
@@ -347,6 +460,62 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
         const metadata = questionMetadata.get(column.key);
         const columnLetter = worksheet.getColumn(colIndex + 1).letter;
         const headerCell = worksheet.getCell(`${columnLetter}1`);
+
+        // Handle taluka column - add dropdown with all talukas
+        if (colIndex === talukaColumnIndex && talukas.length > 0) {
+          const talukaFormula = `"${talukas.join(',')}"`;
+          for (let rowNum = startRow; rowNum <= endRow; rowNum++) {
+            const cell = worksheet.getCell(`${columnLetter}${rowNum}`);
+            cell.dataValidation = {
+              type: 'list',
+              allowBlank: true,
+              formulae: [talukaFormula],
+              showErrorMessage: true,
+              errorStyle: 'warning',
+              errorTitle: 'Invalid Taluka',
+              error: 'कृपया ड्रॉपडाउन सूचीमधून तालुका निवडा. Please select taluka from dropdown.',
+            };
+          }
+          continue; // Skip other processing for taluka column
+        }
+
+        // Handle village/gaav column - add dependent dropdown based on taluka selection
+        if (colIndex === villageColumnIndex && talukaColumnIndex >= 0 && talukaColumnLetter) {
+          // Add a note explaining the dependency
+          headerCell.note = `DEPENDENT DROPDOWN:\n\nThis field depends on the Taluka selection.\nAfter selecting a Taluka, this field will show villages for that taluka.\n\nकृपया प्रथम तालुका निवडा, नंतर गाव निवडा.`;
+          
+          // Add a light blue background to indicate dependency
+          headerCell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFE3F2FD' }, // Light blue
+          };
+          
+          // Create dependent dropdowns using INDIRECT formula
+          // Excel formula: INDIRECT("Taluka_" & SUBSTITUTE([taluka_cell], " ", "_"))
+          // This will dynamically reference the named range based on taluka selection
+          for (let rowNum = startRow; rowNum <= endRow; rowNum++) {
+            const cell = worksheet.getCell(`${columnLetter}${rowNum}`);
+            const talukaCellRef = `${talukaColumnLetter}${rowNum}`;
+            
+            // Build the INDIRECT formula
+            // Formula: INDIRECT("Taluka_" & SUBSTITUTE([taluka_cell], " ", "_"))
+            // This will create a reference like: INDIRECT("Taluka_Pune") which points to the named range
+            const indirectFormula = `INDIRECT("Taluka_" & SUBSTITUTE(${talukaCellRef}, " ", "_"))`;
+            
+            cell.dataValidation = {
+              type: 'list',
+              allowBlank: true,
+              formulae: [indirectFormula],
+              showErrorMessage: true,
+              errorStyle: 'warning',
+              errorTitle: 'Invalid Village',
+              error: 'कृपया प्रथम तालुका निवडा, नंतर गाव निवडा. Please select Taluka first, then select Village.',
+            };
+          }
+          
+          continue; // Skip other processing for village column
+        }
 
         if (metadata) {
           // Add comment/note for conditional questions
