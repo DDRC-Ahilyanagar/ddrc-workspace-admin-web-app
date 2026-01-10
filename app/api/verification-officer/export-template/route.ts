@@ -27,9 +27,9 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
     const conn = await pool.getConnection();
 
     try {
-      // Fetch questions matching public form structure
+      // Fetch questions matching public form structure (including options for dropdowns)
       const [questions]: any = await conn.query(`
-        SELECT q.id, q.question, q.section_id, s.name AS section_name, q.question_type
+        SELECT q.id, q.question, q.section_id, s.name AS section_name, q.question_type, q.options
         FROM questions q
         LEFT JOIN sections s ON s.id = q.section_id
         WHERE (
@@ -61,8 +61,9 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Divyang Data');
 
-      // Build columns from questions
+      // Build columns from questions and store question metadata for dropdowns
       const columns: Array<{ header: string; key: string; width: number }> = [];
+      const questionMetadata: Map<string, { id: number; options: string | null; question_type: string }> = new Map();
       
       // Add Aadhaar Number as first column (not in questions but required)
       columns.push({
@@ -101,6 +102,13 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
             key: key,
             width: Math.max(25, Math.min(50, questionText.length * 1.5)),
           });
+
+          // Store question metadata for dropdown creation
+          questionMetadata.set(key, {
+            id: q.id,
+            options: q.options || null,
+            question_type: (q.question_type || '').toLowerCase(),
+          });
         }
       }
 
@@ -135,38 +143,51 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
           const key = `q_${q.id}`;
           let sampleValue = '';
 
-          // Provide sample values based on question type and content
-          if (questionText.includes('नाव') && questionText.includes('दिव्यांग')) {
-            sampleValue = 'राम कृष्ण पाटील';
-          } else if (questionText.includes('आधार') || questionText.includes('Aadhaar') || questionText.includes('Aadhar')) {
-            sampleValue = '123456789012';
-          } else if (questionText.includes('गाव') || questionText.includes('Village')) {
-            sampleValue = 'सांगवी';
-          } else if (questionText.includes('तालुका') || questionText.includes('Taluka')) {
-            sampleValue = 'पुणे';
-          } else if (questionText.includes('जिल्हा') || questionText.includes('District')) {
-            sampleValue = 'पुणे';
-          } else if (questionText.includes('पिन') || questionText.includes('PIN')) {
-            sampleValue = '411027';
-          } else if (questionText.includes('मोबाइल') || questionText.includes('Mobile')) {
-            sampleValue = '9876543210';
-          } else if (questionText.includes('दिव्यांगता प्रकार') || questionText.includes('Disability Type')) {
-            sampleValue = 'दृष्टिहीनता';
-          } else if (questionText.includes('दिव्यांगता टक्केवारी') || questionText.includes('Disability Percentage')) {
-            sampleValue = '75';
-          } else if (questionText.includes('वैश्विक कार्ड') || questionText.includes('UDID')) {
-            sampleValue = 'UDID123456789';
-          } else if (questionText.includes('लिंग') || questionText.includes('Gender')) {
-            sampleValue = 'पुरुष';
-          } else if (questionText.includes('जन्मतारीख') || questionText.includes('Date of Birth')) {
-            sampleValue = '1990-01-15';
-          } else if (questionText.includes('वय') || questionText.includes('Age')) {
-            sampleValue = '34';
-          } else if (questionText.includes('शिक्षण') || questionText.includes('Education')) {
-            sampleValue = '10वी पास';
-          } else {
-            // Default sample value
-            sampleValue = 'उदाहरण';
+          // If question has options, use the first option as sample value
+          if (q.options && q.options.trim() && q.options.trim() !== 'NULL') {
+            const optionsList = q.options
+              .split(',')
+              .map((opt: string) => opt.trim())
+              .filter((opt: string) => opt.length > 0);
+            if (optionsList.length > 0) {
+              sampleValue = optionsList[0];
+            }
+          }
+
+          // If no options or still empty, provide sample values based on question content
+          if (!sampleValue) {
+            if (questionText.includes('नाव') && questionText.includes('दिव्यांग')) {
+              sampleValue = 'राम कृष्ण पाटील';
+            } else if (questionText.includes('आधार') || questionText.includes('Aadhaar') || questionText.includes('Aadhar')) {
+              sampleValue = '123456789012';
+            } else if (questionText.includes('गाव') || questionText.includes('Village')) {
+              sampleValue = 'सांगवी';
+            } else if (questionText.includes('तालुका') || questionText.includes('Taluka')) {
+              sampleValue = 'पुणे';
+            } else if (questionText.includes('जिल्हा') || questionText.includes('District')) {
+              sampleValue = 'पुणे';
+            } else if (questionText.includes('पिन') || questionText.includes('PIN')) {
+              sampleValue = '411027';
+            } else if (questionText.includes('मोबाइल') || questionText.includes('Mobile')) {
+              sampleValue = '9876543210';
+            } else if (questionText.includes('दिव्यांगता प्रकार') || questionText.includes('Disability Type')) {
+              sampleValue = 'दृष्टिहीनता';
+            } else if (questionText.includes('दिव्यांगता टक्केवारी') || questionText.includes('Disability Percentage')) {
+              sampleValue = '75';
+            } else if (questionText.includes('वैश्विक कार्ड') || questionText.includes('UDID')) {
+              sampleValue = 'UDID123456789';
+            } else if (questionText.includes('लिंग') || questionText.includes('Gender')) {
+              sampleValue = 'पुरुष';
+            } else if (questionText.includes('जन्मतारीख') || questionText.includes('Date of Birth')) {
+              sampleValue = '1990-01-15';
+            } else if (questionText.includes('वय') || questionText.includes('Age')) {
+              sampleValue = '34';
+            } else if (questionText.includes('शिक्षण') || questionText.includes('Education')) {
+              sampleValue = '10वी पास';
+            } else {
+              // Default sample value
+              sampleValue = 'उदाहरण';
+            }
           }
 
           sampleRow[key] = sampleValue;
@@ -185,6 +206,49 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
         };
         sampleRowObj.font = { italic: true, color: { argb: 'FF666666' } };
         sampleRowObj.height = 20;
+      }
+
+      // Add dropdown lists (data validation) for questions with options
+      // Start from row 2 (after header) and apply to many rows for future data entry
+      const startRow = 2;
+      const endRow = 1000; // Apply to many rows for future data entry
+
+      for (let colIndex = 0; colIndex < columns.length; colIndex++) {
+        const column = columns[colIndex];
+        const metadata = questionMetadata.get(column.key);
+
+        if (metadata && metadata.options) {
+          // Parse options (comma-separated string)
+          const optionsStr = metadata.options.trim();
+          if (optionsStr && optionsStr !== 'NULL' && optionsStr !== '') {
+            const optionsList = optionsStr
+              .split(',')
+              .map((opt: string) => opt.trim())
+              .filter((opt: string) => opt.length > 0);
+
+            if (optionsList.length > 0) {
+              // Get column letter (A, B, C, etc.)
+              const columnLetter = worksheet.getColumn(colIndex + 1).letter;
+
+              // Create a formula string for the list (comma-separated values in quotes)
+              const formula = `"${optionsList.join(',')}"`;
+
+              // Apply data validation to each cell in the range
+              for (let rowNum = startRow; rowNum <= endRow; rowNum++) {
+                const cell = worksheet.getCell(`${columnLetter}${rowNum}`);
+                cell.dataValidation = {
+                  type: 'list',
+                  allowBlank: true,
+                  formulae: [formula],
+                  showErrorMessage: true,
+                  errorStyle: 'warning',
+                  errorTitle: 'Invalid Value',
+                  error: `कृपया ड्रॉपडाउन सूचीमधून निवडा. Please select from dropdown.`,
+                };
+              }
+            }
+          }
+        }
       }
 
       // Generate buffer
