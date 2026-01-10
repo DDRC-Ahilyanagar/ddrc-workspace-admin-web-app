@@ -370,14 +370,20 @@ export async function POST(request: NextRequest) {
       const hasActiveFlag = Number(userData.is_active) === 1;
 
       // Allow OTP for pending/empty status users during mobile onboarding (they're in the process of completing profile)
-      // For other cases, require active/approved status
+      // Also allow OTP for active/approved users (for login)
       const allowOtpForOnboarding = isPending && !isWebRequest && role === 'field_officer';
+      const allowOtpForActiveUser = statusAllowsOtp && hasActiveFlag;
       
-      if (!allowOtpForOnboarding && (!statusAllowsOtp || !hasActiveFlag)) {
+      // Block OTP only if user is NOT in onboarding AND user is NOT active
+      if (!allowOtpForOnboarding && !allowOtpForActiveUser) {
         Logger.info('send_otp_rejected_user_not_approved', { 
           phone, 
           status: userData.status, 
-          is_active: userData.is_active 
+          is_active: userData.is_active,
+          allowOtpForOnboarding,
+          allowOtpForActiveUser,
+          statusAllowsOtp,
+          hasActiveFlag
         });
         return NextResponse.json(
           {
