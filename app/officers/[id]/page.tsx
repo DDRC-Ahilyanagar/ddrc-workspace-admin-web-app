@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { getAbsoluteImageUrl } from '@/lib/config';
 import AdminLayout from '@/components/AdminLayout';
 
 interface FieldOfficerProfile {
@@ -148,7 +149,7 @@ export default function OfficerProfilePage() {
               <div className="card-body text-center">
                 {profile.profile?.profilePhoto ? (
                   <img
-                    src={profile.profile.profilePhoto}
+                    src={getAbsoluteImageUrl(profile.profile.profilePhoto)}
                     alt={profile.name}
                     className="img-fluid rounded-circle mb-3"
                     style={{ width: '200px', height: '200px', objectFit: 'cover' }}

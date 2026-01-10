@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
+import { getAbsoluteImageUrl } from '@/lib/config';
 
 export const dynamic = 'force-dynamic';
 
@@ -117,7 +118,7 @@ export async function GET(
           updatedAt: user.updated_at ? new Date(user.updated_at).toISOString() : null,
           lastLogin: user.last_login ? new Date(user.last_login).toISOString() : null,
           profile: profile ? {
-            profilePhoto: profile.profile_photo || null,
+            profilePhoto: profile.profile_photo ? getAbsoluteImageUrl(profile.profile_photo) : null,
             taluka: profile.taluka || null,
             primaryGaav: profile.primary_gaav || null,
             additionalGaavs: additionalGaavs,
@@ -126,7 +127,7 @@ export async function GET(
             bankName: profile.bank_name || null,
             ifscCode: profile.ifsc_code || null,
             upiId: profile.upi_id || null,
-            qrCode: profile.qr_code || null,
+            qrCode: profile.qr_code ? getAbsoluteImageUrl(profile.qr_code) : null,
             profileComplete: profile.profile_complete === 1,
             createdAt: profile.created_at ? new Date(profile.created_at).toISOString() : null,
             updatedAt: profile.updated_at ? new Date(profile.updated_at).toISOString() : null,

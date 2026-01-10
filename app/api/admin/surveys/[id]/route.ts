@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';
 import { verifyAuth } from '@/lib/auth';
+import { getAbsoluteImageUrl } from '@/lib/config';
 import type { PoolConnection } from 'mysql2/promise';
 
 export const dynamic = 'force-dynamic';
@@ -578,8 +579,8 @@ export async function GET(
             user_id: survey.user_id,
             user_name: survey.user_name,
             user_phone: survey.user_phone,
-            front_image: survey.front_image,
-            back_image: survey.back_image,
+            front_image: survey.front_image ? getAbsoluteImageUrl(survey.front_image) : null,
+            back_image: survey.back_image ? getAbsoluteImageUrl(survey.back_image) : null,
             holder_name: survey.holder_name,
             address_text: survey.address_text,
             pincode: survey.pincode,
