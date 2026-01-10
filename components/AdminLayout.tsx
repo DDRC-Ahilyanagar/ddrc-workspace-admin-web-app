@@ -47,16 +47,16 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       router.push('/login');
       return; // Exit early - don't proceed with any API calls
     }
-    
+
     // Only proceed if user is logged in
     setUserName(localStorage.getItem('user_name') || '');
     const phone = localStorage.getItem('user_phone') || '';
     setUserPhone(phone);
-    
+
     // Get user_type from localStorage first (for immediate render)
     const storedUserType = localStorage.getItem('user_type') || '';
     setUserType(storedUserType);
-    
+
     // Always fetch user_type from API to ensure it's current
     if (phone) {
       const fetchUserType = async () => {
@@ -97,7 +97,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
     // Set initial mobile state
     setIsMobile(window.innerWidth <= 768);
-    
+
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [router]);
@@ -107,13 +107,13 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   // IMPORTANT: Only fetch when user is logged in
   useEffect(() => {
     if (!mounted) return;
-    
+
     // Check if user is logged in first
     const loggedIn = localStorage.getItem('logged_in');
     if (!loggedIn || loggedIn !== 'true') {
       return; // Don't fetch if not logged in
     }
-    
+
     // Skip fetching access requests for verification officers
     // Check both state and localStorage for user type
     const storedUserType = localStorage.getItem('user_type') || '';
@@ -121,7 +121,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     if (currentUserType === 'verification_officer') {
       return; // Don't fetch access requests for verification officers
     }
-    
+
     // Only fetch for admin users
     if (currentUserType !== 'admin' && currentUserType !== 'administrator') {
       return; // Don't fetch if not admin
@@ -136,9 +136,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       if (abortController) {
         abortController.abort();
       }
-      
+
       abortController = new AbortController();
-      
+
       try {
         const res = await fetch('/api/access-requests?status=pending', {
           cache: 'no-store',
@@ -150,9 +150,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             'Accept': 'application/json',
           },
         });
-        
+
         if (!isMounted || abortController.signal.aborted) return;
-        
+
         const json = await res.json();
         if (json.ok && Array.isArray(json.data) && isMounted) {
           setPendingCount(json.data.length);
@@ -168,7 +168,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
     // Initial fetch
     fetchPendingCount();
-    
+
     // Refresh count every 30 seconds
     intervalId = setInterval(() => {
       if (isMounted) {
@@ -265,7 +265,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   const isVerificationOfficer = userType?.toLowerCase().trim() === 'verification_officer';
   const isAuthorizedAdmin = userPhone === '7768068585' && userType?.toLowerCase().trim() === 'admin';
-  
+
   const adminMenuItems = [
     { path: '/dashboard', label: 'डॅशबोर्ड', icon: 'bi-speedometer2' },
     { path: '/survekshan', label: 'सर्वेक्षण', icon: 'bi-clipboard-check' },
@@ -281,16 +281,17 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   const verificationOfficerMenuItems = [
     { path: '/survekshan', label: 'सर्वेक्षण', icon: 'bi-clipboard-check' },
+    { path: '/verification-officer/village-lookup', label: 'गाव नावे शोधा', icon: 'bi-search' },
     { path: '/verification-officer/excel-import', label: 'Excel Import/Export', icon: 'bi-file-earmark-excel' },
   ];
 
   // Default to admin menu items if userType is not set or empty
   // Only use verification officer menu if userType is explicitly set and matches
-  const menuItems: Array<{ path: string; label: string; icon: string }> = 
-    (userType && userType.trim() && isVerificationOfficer) 
-      ? verificationOfficerMenuItems 
+  const menuItems: Array<{ path: string; label: string; icon: string }> =
+    (userType && userType.trim() && isVerificationOfficer)
+      ? verificationOfficerMenuItems
       : adminMenuItems;
-  
+
   // Debug: Log menu items in useEffect to avoid render-time issues
   useEffect(() => {
     if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
@@ -309,7 +310,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       <nav className="admin-top-nav animate__animated animate__fadeInDown">
         <div className="d-flex align-items-center justify-content-between w-100">
           <div className="d-flex align-items-center">
-            <button 
+            <button
               className="btn btn-link text-white me-3 sidebar-toggle animate__animated animate__pulse"
               onClick={toggleSidebar}
               aria-label="Toggle sidebar"
@@ -321,101 +322,101 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               <span className="text-white fw-bold">DDRC Survey Portal</span>
             </div>
           </div>
-          
+
           <div className="d-flex align-items-center animate__animated animate__fadeInRight">
             {/* Notification Bell - Only show for admin */}
             {!isVerificationOfficer && (
-            <div className="notification-wrapper position-relative me-3" ref={notifRef}>
-              <button
-                className="btn btn-link text-white position-relative"
-                onClick={toggleNotifications}
-                style={{ textDecoration: 'none', padding: '0.5rem' }}
-                title="प्रवेश विनंत्या"
-                aria-expanded={showNotifications}
-              >
-                <i className={`bi ${showNotifications ? 'bi-bell-fill' : 'bi-bell'}`} style={{ fontSize: '1.5rem' }}></i>
-                {pendingCount > 0 && (
-                  <span
-                    className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+              <div className="notification-wrapper position-relative me-3" ref={notifRef}>
+                <button
+                  className="btn btn-link text-white position-relative"
+                  onClick={toggleNotifications}
+                  style={{ textDecoration: 'none', padding: '0.5rem' }}
+                  title="प्रवेश विनंत्या"
+                  aria-expanded={showNotifications}
+                >
+                  <i className={`bi ${showNotifications ? 'bi-bell-fill' : 'bi-bell'}`} style={{ fontSize: '1.5rem' }}></i>
+                  {pendingCount > 0 && (
+                    <span
+                      className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                      style={{
+                        fontSize: '0.7rem',
+                        padding: '0.25rem 0.5rem',
+                        minWidth: '1.5rem',
+                      }}
+                    >
+                      {pendingCount > 99 ? '99+' : pendingCount}
+                    </span>
+                  )}
+                </button>
+
+                {showNotifications && (
+                  <div
+                    className="card shadow notification-dropdown animate__animated animate__fadeIn"
                     style={{
-                      fontSize: '0.7rem',
-                      padding: '0.25rem 0.5rem',
-                      minWidth: '1.5rem',
+                      minWidth: '320px',
+                      position: 'absolute',
+                      right: 0,
+                      top: '120%',
+                      zIndex: 1050,
                     }}
                   >
-                    {pendingCount > 99 ? '99+' : pendingCount}
-                  </span>
-                )}
-              </button>
-
-              {showNotifications && (
-                <div
-                  className="card shadow notification-dropdown animate__animated animate__fadeIn"
-                  style={{
-                    minWidth: '320px',
-                    position: 'absolute',
-                    right: 0,
-                    top: '120%',
-                    zIndex: 1050,
-                  }}
-                >
-                  <div className="card-header d-flex justify-content-between align-items-center py-2">
-                    <strong>प्रवेश विनंत्या</strong>
-                    <span className="badge bg-primary">{pendingCount}</span>
-                  </div>
-                  <div className="list-group list-group-flush" style={{ maxHeight: '260px', overflowY: 'auto' }}>
-                    {pendingRequests.length === 0 && (
-                      <div className="text-center py-3 text-muted">नवीन विनंत्या नाहीत</div>
-                    )}
-                    {pendingRequests.slice(0, 5).map((req) => (
-                      <div 
-                        key={`notif-${req?.id || Math.random()}`} 
-                        className="list-group-item"
-                        style={{ 
-                          cursor: 'pointer',
-                          transition: 'background-color 0.2s ease'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = '#f8f9fa';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = '';
-                        }}
+                    <div className="card-header d-flex justify-content-between align-items-center py-2">
+                      <strong>प्रवेश विनंत्या</strong>
+                      <span className="badge bg-primary">{pendingCount}</span>
+                    </div>
+                    <div className="list-group list-group-flush" style={{ maxHeight: '260px', overflowY: 'auto' }}>
+                      {pendingRequests.length === 0 && (
+                        <div className="text-center py-3 text-muted">नवीन विनंत्या नाहीत</div>
+                      )}
+                      {pendingRequests.slice(0, 5).map((req) => (
+                        <div
+                          key={`notif-${req?.id || Math.random()}`}
+                          className="list-group-item"
+                          style={{
+                            cursor: 'pointer',
+                            transition: 'background-color 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#f8f9fa';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = '';
+                          }}
+                          onClick={() => {
+                            router.push('/access-requests');
+                            setShowNotifications(false);
+                          }}
+                        >
+                          <div className="fw-semibold">{req?.name || 'नाव उपलब्ध नाही'}</div>
+                          <div className="small text-muted">{req?.phone || ''}</div>
+                          <div className="text-muted small">
+                            {req?.created_at ? new Date(req.created_at).toLocaleString('mr-IN', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            }) : ''}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="card-footer text-center py-2">
+                      <button
+                        className="btn btn-sm btn-outline-primary"
                         onClick={() => {
                           router.push('/access-requests');
                           setShowNotifications(false);
                         }}
                       >
-                        <div className="fw-semibold">{req?.name || 'नाव उपलब्ध नाही'}</div>
-                        <div className="small text-muted">{req?.phone || ''}</div>
-                        <div className="text-muted small">
-                          {req?.created_at ? new Date(req.created_at).toLocaleString('mr-IN', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          }) : ''}
-                        </div>
-                      </div>
-                    ))}
+                        सर्व पहा
+                      </button>
+                    </div>
                   </div>
-                  <div className="card-footer text-center py-2">
-                    <button
-                      className="btn btn-sm btn-outline-primary"
-                      onClick={() => {
-                        router.push('/access-requests');
-                        setShowNotifications(false);
-                      }}
-                    >
-                      सर्व पहा
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
             )}
-            
+
             {/* Language Switch Button */}
             <button
               className="btn btn-link text-white me-3"
@@ -428,12 +429,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 {language === 'en' ? 'MR' : 'EN'}
               </span>
             </button>
-            
+
             <div className="user-info me-3">
               <span className="text-white">{userName || 'User'}</span>
               <small className="text-white-50 d-block">{userPhone || ''}</small>
             </div>
-            <button 
+            <button
               className="btn btn-outline-light btn-sm"
               onClick={handleLogout}
             >
@@ -446,7 +447,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       <div className="admin-content-wrapper">
         {/* Sidebar Backdrop for Mobile */}
         {sidebarOpen && isMobile && (
-          <div 
+          <div
             className="sidebar-backdrop"
             onClick={() => setSidebarOpen(false)}
             style={{
@@ -461,25 +462,25 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             }}
           />
         )}
-        
+
         {/* Sidebar */}
-        <aside 
+        <aside
           ref={sidebarRef}
           className={`admin-sidebar ${sidebarOpen ? 'open animate__animated animate__fadeInLeft' : 'closed animate__animated animate__fadeOutLeft'}`}
         >
           <nav className="sidebar-nav">
             <div className="sidebar-logo-container mb-3 d-flex justify-content-center align-items-center animate__animated animate__fadeInDown" style={{ padding: '1rem' }}>
-              <img 
-                src={LOGO_URL} 
-                alt="DDRC Logo" 
+              <img
+                src={LOGO_URL}
+                alt="DDRC Logo"
                 style={{ maxWidth: '100%', height: 'auto', maxHeight: '80px' }}
               />
             </div>
             <ul className="nav flex-column">
               {menuItems && menuItems.length > 0 ? (
                 menuItems.map((item, index) => (
-                  <li 
-                    key={item.path} 
+                  <li
+                    key={item.path}
                     className="nav-item animate__animated animate__fadeInUp"
                     style={{ animationDelay: `${index * 0.1}s`, animationDuration: '0.5s' }}
                   >

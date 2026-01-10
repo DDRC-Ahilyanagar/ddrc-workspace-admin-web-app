@@ -27,29 +27,43 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
     const conn = await pool.getConnection();
 
     try {
-      // Fetch all talukas and their villages for dependent dropdowns
-      const [talukasRows]: any = await conn.query(`
-        SELECT DISTINCT taluka 
-        FROM (
-          SELECT DISTINCT taluka FROM tbl_all_talukas WHERE (status IS NULL OR status = 'Active')
-          UNION
-          SELECT DISTINCT taluka FROM tbl_taluka WHERE (status IS NULL OR status = 'Active')
-        ) AS t
-        WHERE taluka IS NOT NULL AND taluka != ''
-        ORDER BY taluka
-      `);
-      
-      const talukas = Array.isArray(talukasRows) 
+      // Check which taluka table exists
+      const [talukaTableCheck]: any = await conn.query("SHOW TABLES LIKE 'tbl_all_talukas'");
+      const hasAllTalukasTable = Array.isArray(talukaTableCheck) && talukaTableCheck.length > 0;
+
+      let talukaSql = "";
+      if (hasAllTalukasTable) {
+        talukaSql = `
+          SELECT DISTINCT taluka 
+          FROM (
+            SELECT DISTINCT taluka FROM tbl_all_talukas WHERE (status IS NULL OR status = 'Active')
+            UNION
+            SELECT DISTINCT taluka FROM tbl_taluka WHERE (status IS NULL OR status = 'Active')
+          ) AS t
+          WHERE taluka IS NOT NULL AND taluka != ''
+          ORDER BY taluka
+        `;
+      } else {
+        talukaSql = `
+          SELECT DISTINCT taluka FROM tbl_taluka 
+          WHERE (status IS NULL OR status = 'Active') AND taluka IS NOT NULL AND taluka != ''
+          ORDER BY taluka
+        `;
+      }
+
+      const [talukasRows]: any = await conn.query(talukaSql);
+
+      const talukas = Array.isArray(talukasRows)
         ? talukasRows.map((r: any) => r.taluka).filter(Boolean)
         : [];
-      
+
       // Fetch villages for each taluka
       const talukaVillagesMap = new Map<string, string[]>();
       for (const taluka of talukas) {
         try {
           const [tables]: any = await conn.query("SHOW TABLES LIKE 'tbl_all_villages'");
           const useVillagesTable = Array.isArray(tables) && tables.length > 0;
-          
+
           let sql: string;
           if (useVillagesTable) {
             sql = `SELECT DISTINCT villages FROM tbl_all_villages 
@@ -60,17 +74,17 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
                    WHERE taluka = ? AND (status IS NULL OR status = 'Active') 
                    ORDER BY village`;
           }
-          
+
           const [villageRows]: any = await conn.query(sql, [taluka]);
           const villages = Array.isArray(villageRows)
             ? villageRows
-                .map((r: any) => {
-                  const value = r.villages || r.village;
-                  return Array.isArray(value) ? value[0] : value;
-                })
-                .filter(Boolean)
+              .map((r: any) => {
+                const value = r.villages || r.village;
+                return Array.isArray(value) ? value[0] : value;
+              })
+              .filter(Boolean)
             : [];
-          
+
           if (villages.length > 0) {
             talukaVillagesMap.set(taluka, villages);
           }
@@ -120,13 +134,13 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
       `);
 
       const workbook = new ExcelJS.Workbook();
-      
+
       // Create instructions sheet first
       const instructionsSheet = workbook.addWorksheet('Instructions');
       instructionsSheet.columns = [
         { header: 'Instructions', key: 'instructions', width: 100 }
       ];
-      
+
       // Add instructions content
       const instructions = [
         'EXCEL TEMPLATE INSTRUCTIONS',
@@ -151,7 +165,7 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
         '  • Delete this row before entering real data',
         '  • Use it as a reference for expected format',
       ];
-      
+
       instructions.forEach((instruction, index) => {
         const row = instructionsSheet.addRow([instruction]);
         if (index === 0) {
@@ -167,58 +181,58 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
         }
         row.height = 20;
       });
-      
+
       // Create a hidden sheet for taluka-village mappings (for dependent dropdowns)
       const mappingSheet = workbook.addWorksheet('TalukaVillages');
       mappingSheet.state = 'hidden'; // Hide this sheet
-      
+
       // Create named ranges for each taluka's villages
       // Excel requires named ranges to reference a sheet, so we'll use the hidden sheet
       let currentRow = 1;
       const talukaRangeNames: string[] = [];
-      
+
       for (const taluka of talukas) {
         const villages = talukaVillagesMap.get(taluka) || [];
         if (villages.length === 0) continue;
-        
+
         // Create a safe name for the range (Excel doesn't allow spaces/special chars in range names)
         const rangeName = `Taluka_${taluka.replace(/[^a-zA-Z0-9]/g, '_')}`;
         talukaRangeNames.push(rangeName);
-        
+
         // Write villages to the hidden sheet
         villages.forEach((village, idx) => {
           mappingSheet.getCell(currentRow + idx, 1).value = village;
         });
-        
+
         // Create named range for this taluka's villages
         // ExcelJS uses definedNames collection
         const startCell = mappingSheet.getCell(currentRow, 1).address;
         const endCell = mappingSheet.getCell(currentRow + villages.length - 1, 1).address;
-        
+
         // Add named range using definedNames
         workbook.definedNames.add(rangeName, `TalukaVillages!$${startCell}:$${endCell}`);
-        
+
         currentRow += villages.length + 1; // Add gap between talukas
       }
-      
+
       // Create main data worksheet
       const worksheet = workbook.addWorksheet('Divyang Data');
 
       // Build columns from questions and store question metadata for dropdowns and conditionals
       const columns: Array<{ header: string; key: string; width: number }> = [];
-      const questionMetadata: Map<string, { 
-        id: number; 
-        options: string | null; 
+      const questionMetadata: Map<string, {
+        id: number;
+        options: string | null;
         question_type: string;
         rendering_condition: string | null;
         rendering_question: string | null;
         rendering_value: string | null;
         question_text: string;
       }> = new Map();
-      
+
       // Track similar questions (by normalized text) to identify duplicates
       const questionTextMap = new Map<string, number[]>(); // normalized text -> array of question IDs
-      
+
       // Add Aadhaar Number as first column (not in questions but required)
       columns.push({
         header: 'Aadhaar Number (आधार कार्ड नंबर)',
@@ -247,7 +261,7 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
         for (const q of questions) {
           const questionText = (q.question || '').trim();
           if (!questionText) continue;
-          
+
           const normalized = normalizeQuestionText(questionText);
           if (!questionTextMap.has(normalized)) {
             questionTextMap.set(normalized, []);
@@ -259,23 +273,23 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
       // Add all other questions as columns
       if (Array.isArray(questions) && questions.length > 0) {
         const seenQuestions = new Set<string>();
-        
+
         for (const q of questions) {
           const questionText = (q.question || '').trim();
           if (!questionText) continue;
-          
+
           // Check for similar questions
           const normalized = normalizeQuestionText(questionText);
           const similarQuestionIds = questionTextMap.get(normalized) || [];
           const hasSimilar = similarQuestionIds.length > 1;
-          
+
           // Skip exact duplicates (same text already seen)
           if (seenQuestions.has(questionText)) {
             continue;
           }
-          
+
           seenQuestions.add(questionText);
-          
+
           // Skip name question if already added
           if (questionText.includes('नाव') && questionText.includes('दिव्यांग')) {
             continue; // Already added as 'name'
@@ -283,21 +297,21 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
 
           // Create a safe key from question text
           const key = `q_${q.id}`;
-          
+
           // Build header with conditional info if applicable
           let header = `${questionText} (Q${q.id})`;
-          const isConditional = q.rendering_condition && 
+          const isConditional = q.rendering_condition &&
             (q.rendering_condition.toLowerCase() === 'yes' || q.rendering_condition === '1' || q.rendering_condition === 'true');
-          
+
           if (isConditional && q.rendering_question && q.rendering_value) {
             // Add conditional indicator to header
             header += ' [CONDITIONAL]';
           }
-          
+
           if (hasSimilar) {
             header += ' [SIMILAR]';
           }
-          
+
           columns.push({
             header: header,
             key: key,
@@ -332,7 +346,7 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
 
       // Freeze header row
       worksheet.views = [{ state: 'frozen', ySplit: 1 }];
-      
+
       // Add a summary of conditional questions at the end (as hidden columns or in a separate area)
       // We'll add conditional info as comments on headers instead (done below)
 
@@ -429,22 +443,22 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
       let villageColumnIndex = -1;
       let talukaColumnLetter = '';
       let villageColumnLetter = '';
-      
+
       for (let colIndex = 0; colIndex < columns.length; colIndex++) {
         const column = columns[colIndex];
         const metadata = questionMetadata.get(column.key);
         const questionText = metadata?.question_text || column.header || '';
-        
+
         // Check if this is taluka column
-        if ((questionText.includes('तालुका') || questionText.includes('Taluka')) && 
-            !questionText.includes('गाव') && !questionText.includes('Village')) {
+        if ((questionText.includes('तालुका') || questionText.includes('Taluka')) &&
+          !questionText.includes('गाव') && !questionText.includes('Village')) {
           talukaColumnIndex = colIndex;
           talukaColumnLetter = worksheet.getColumn(colIndex + 1).letter;
         }
-        
+
         // Check if this is village/gaav column
-        if (questionText.includes('गाव') || questionText.includes('Village') || 
-            questionText.includes('ग्राम') || questionText.includes('Gaav')) {
+        if (questionText.includes('गाव') || questionText.includes('Village') ||
+          questionText.includes('ग्राम') || questionText.includes('Gaav')) {
           villageColumnIndex = colIndex;
           villageColumnLetter = worksheet.getColumn(colIndex + 1).letter;
         }
@@ -483,26 +497,26 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
         if (colIndex === villageColumnIndex && talukaColumnIndex >= 0 && talukaColumnLetter) {
           // Add a note explaining the dependency
           headerCell.note = `DEPENDENT DROPDOWN:\n\nThis field depends on the Taluka selection.\nAfter selecting a Taluka, this field will show villages for that taluka.\n\nकृपया प्रथम तालुका निवडा, नंतर गाव निवडा.`;
-          
+
           // Add a light blue background to indicate dependency
           headerCell.fill = {
             type: 'pattern',
             pattern: 'solid',
             fgColor: { argb: 'FFE3F2FD' }, // Light blue
           };
-          
+
           // Create dependent dropdowns using INDIRECT formula
           // Excel formula: INDIRECT("Taluka_" & SUBSTITUTE([taluka_cell], " ", "_"))
           // This will dynamically reference the named range based on taluka selection
           for (let rowNum = startRow; rowNum <= endRow; rowNum++) {
             const cell = worksheet.getCell(`${columnLetter}${rowNum}`);
             const talukaCellRef = `${talukaColumnLetter}${rowNum}`;
-            
+
             // Build the INDIRECT formula
             // Formula: INDIRECT("Taluka_" & SUBSTITUTE([taluka_cell], " ", "_"))
             // This will create a reference like: INDIRECT("Taluka_Pune") which points to the named range
             const indirectFormula = `INDIRECT("Taluka_" & SUBSTITUTE(${talukaCellRef}, " ", "_"))`;
-            
+
             cell.dataValidation = {
               type: 'list',
               allowBlank: true,
@@ -513,17 +527,17 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
               error: 'कृपया प्रथम तालुका निवडा, नंतर गाव निवडा. Please select Taluka first, then select Village.',
             };
           }
-          
+
           continue; // Skip other processing for village column
         }
 
         if (metadata) {
           // Add comment/note for conditional questions
-          if (metadata.rendering_condition && 
-              (metadata.rendering_condition.toLowerCase() === 'yes' || 
-               metadata.rendering_condition === '1' || 
-               metadata.rendering_condition === 'true')) {
-            
+          if (metadata.rendering_condition &&
+            (metadata.rendering_condition.toLowerCase() === 'yes' ||
+              metadata.rendering_condition === '1' ||
+              metadata.rendering_condition === 'true')) {
+
             if (metadata.rendering_question && metadata.rendering_value) {
               // Find the rendering question text
               let renderingQText = '';
@@ -536,10 +550,10 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
 
               // Create comment explaining the condition
               const commentText = `CONDITIONAL FIELD:\n\nThis field should only be filled when:\n"${renderingQText}" = "${metadata.rendering_value}"\n\nकृपया हे फील्ड फक्त तेव्हा भरा जेव्हा:\n"${renderingQText}" = "${metadata.rendering_value}"`;
-              
+
               // Add note as cell comment (ExcelJS supports comments)
               headerCell.note = commentText;
-              
+
               // Also add conditional formatting hint (light yellow background for conditional columns)
               headerCell.fill = {
                 type: 'pattern',
@@ -597,7 +611,7 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
   } catch (error: any) {
     console.error('Error generating Excel template:', error);
     return NextResponse.json(
-      { ok: false, error: error.message || 'Failed to generate template' },
+      { ok: false, error: error.message || 'Failed to generate template', details: error.stack },
       { status: 500 }
     );
   }
