@@ -145,39 +145,28 @@ function SurveyDetailsContent() {
 
   const formatAnswer = (answer: Answer): string => {
     if (!answer.answer) return '-';
-    
+
     // If it's an array (for multi-select), join it
     try {
       const parsed = JSON.parse(answer.answer);
       if (Array.isArray(parsed)) {
         return parsed.join(', ');
       }
-    } catch {}
-    
-    // Check if it's actually an image path before normalizing
+    } catch { }
+
+    // Check if it's actually an image path
     const answerStr = answer.answer.trim();
-    
-    // Only normalize if it looks like an image path
-    if (answerStr.includes('uploads') || 
-        answerStr.startsWith('/uploads') ||
-        answerStr.startsWith('uploads/') ||
-        answerStr.match(/\.(jpg|jpeg|png|gif|webp|pdf)$/i) ||
-        answerStr.match(/^[a-f0-9-]{36}$/i) || // UUID format
-        answerStr.startsWith('http://') ||
-        answerStr.startsWith('https://') ||
-        answerStr.startsWith('/') && (answerStr.includes('.') || answerStr.includes('uploads'))) {
-      return normalizeImagePath(answerStr);
-    }
-    
-    // Otherwise return as plain text
+
+    // We don't normalize here anymore, we'll do it in the rendering logic 
+    // to handle multi-image answers correctly.
     return answerStr;
   };
 
   const isImageAnswer = (answer: string): boolean => {
     if (!answer) return false;
-    
+
     const answerStr = answer.trim();
-    
+
     // Only treat as image if it clearly looks like an image path/URL
     return (
       answerStr.includes('uploads') ||
@@ -185,11 +174,11 @@ function SurveyDetailsContent() {
       answerStr.startsWith('uploads/') ||
       answerStr.match(/\.(jpg|jpeg|png|gif|webp|pdf)$/i) !== null ||
       (answerStr.match(/^[a-f0-9-]{36}$/i) !== null) || // UUID format (likely image filename)
-      (answerStr.startsWith('http://') || answerStr.startsWith('https://')) && 
-        (answerStr.includes('.jpg') || answerStr.includes('.jpeg') || 
-         answerStr.includes('.png') || answerStr.includes('.gif') || 
-         answerStr.includes('.webp') || answerStr.includes('.pdf') ||
-         answerStr.includes('uploads'))
+      (answerStr.startsWith('http://') || answerStr.startsWith('https://')) &&
+      (answerStr.includes('.jpg') || answerStr.includes('.jpeg') ||
+        answerStr.includes('.png') || answerStr.includes('.gif') ||
+        answerStr.includes('.webp') || answerStr.includes('.pdf') ||
+        answerStr.includes('uploads'))
     );
   };
 
@@ -222,7 +211,7 @@ function SurveyDetailsContent() {
 
   const handleMarkVerified = async () => {
     if (!surveyId || surveyId <= 0) return;
-    
+
     const confirmMessage = 'तुम्हाला खात्री आहे की तुम्ही हे सर्वेक्षण पडताळलेले म्हणून चिन्हांकित करू इच्छिता?';
     if (!confirm(confirmMessage)) return;
 
@@ -234,7 +223,7 @@ function SurveyDetailsContent() {
         credentials: 'include',
       });
       const json = await res.json();
-      
+
       if (json.ok) {
         alert('सर्वेक्षण यशस्वीरित्या पडताळलेले म्हणून चिन्हांकित केले गेले.');
         // Reload survey details
@@ -258,7 +247,7 @@ function SurveyDetailsContent() {
 
   const handleMarkRejected = async () => {
     if (!surveyId || surveyId <= 0) return;
-    
+
     if (!rejectionReason.trim()) {
       alert('कृपया नाकारण्याचे कारण प्रविष्ट करा.');
       return;
@@ -279,7 +268,7 @@ function SurveyDetailsContent() {
         body: JSON.stringify({ reason: rejectionReason }),
       });
       const json = await res.json();
-      
+
       if (json.ok) {
         alert('सर्वेक्षण यशस्वीरित्या नाकारले गेले.');
         setShowRejectModal(false);
@@ -305,7 +294,7 @@ function SurveyDetailsContent() {
 
   const handleRequestClarification = async () => {
     if (!surveyId || surveyId <= 0) return;
-    
+
     const questions = Object.entries(selectedQuestions)
       .filter(([_, reason]) => reason && reason.trim())
       .map(([questionId, reason]) => ({
@@ -330,7 +319,7 @@ function SurveyDetailsContent() {
         body: JSON.stringify({ questions }),
       });
       const json = await res.json();
-      
+
       if (json.ok) {
         alert(`स्पष्टीकरण विनंती यशस्वीरित्या पाठवल्या गेल्या (${questions.length} प्रश्न).`);
         setShowClarificationModal(false);
@@ -440,46 +429,46 @@ function SurveyDetailsContent() {
                 </>
               )}
             </button>
-            {(userType || '').toLowerCase() === 'verification_officer' && 
-             survey?.verification_status !== 'verified' && 
-             survey?.verification_status !== 'rejected' &&
-             survey?.assigned_to && (
-              <>
-                <button
-                  className="btn btn-warning"
-                  disabled={markingVerified || markingRejected || sendingClarification}
-                  onClick={() => setShowClarificationModal(true)}
-                >
-                  <i className="bi bi-question-circle me-2"></i>
-                  स्पष्टीकरण विनंती करा
-                </button>
-                <button
-                  className="btn btn-success"
-                  disabled={markingVerified || markingRejected}
-                  onClick={handleMarkVerified}
-                >
-                  {markingVerified ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
-                      पडताळत आहे...
-                    </>
-                  ) : (
-                    <>
-                      <i className="bi bi-check-circle me-2"></i>
-                      पडताळलेले म्हणून चिन्हांकित करा
-                    </>
-                  )}
-                </button>
-                <button
-                  className="btn btn-danger"
-                  disabled={markingVerified || markingRejected}
-                  onClick={() => setShowRejectModal(true)}
-                >
-                  <i className="bi bi-x-circle me-2"></i>
-                  नाकारा
-                </button>
-              </>
-            )}
+            {(userType || '').toLowerCase() === 'verification_officer' &&
+              survey?.verification_status !== 'verified' &&
+              survey?.verification_status !== 'rejected' &&
+              survey?.assigned_to && (
+                <>
+                  <button
+                    className="btn btn-warning"
+                    disabled={markingVerified || markingRejected || sendingClarification}
+                    onClick={() => setShowClarificationModal(true)}
+                  >
+                    <i className="bi bi-question-circle me-2"></i>
+                    स्पष्टीकरण विनंती करा
+                  </button>
+                  <button
+                    className="btn btn-success"
+                    disabled={markingVerified || markingRejected}
+                    onClick={handleMarkVerified}
+                  >
+                    {markingVerified ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
+                        पडताळत आहे...
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-check-circle me-2"></i>
+                        पडताळलेले म्हणून चिन्हांकित करा
+                      </>
+                    )}
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    disabled={markingVerified || markingRejected}
+                    onClick={() => setShowRejectModal(true)}
+                  >
+                    <i className="bi bi-x-circle me-2"></i>
+                    नाकारा
+                  </button>
+                </>
+              )}
             <button
               className="btn btn-secondary"
               onClick={() => router.push('/survekshan')}
@@ -514,9 +503,8 @@ function SurveyDetailsContent() {
               <div className="col-md-6">
                 <strong>स्थिती:</strong>{' '}
                 <span
-                  className={`badge ${
-                    survey.status === 'Completed' ? 'bg-success' : 'bg-warning'
-                  }`}
+                  className={`badge ${survey.status === 'Completed' ? 'bg-success' : 'bg-warning'
+                    }`}
                 >
                   {survey.status === 'Completed' ? 'पूर्ण' : 'प्रलंबित'}
                 </span>
@@ -563,25 +551,26 @@ function SurveyDetailsContent() {
                     <strong>आधार समोरील:</strong>
                     <div className="mt-2">
                       {(() => {
-                        const normalizedPath = normalizeImagePath(survey.front_image);
-                        const isValidImage = normalizedPath.startsWith('http') || normalizedPath.startsWith('/');
-                        return isValidImage ? (
-                          <img
-                            src={normalizedPath}
-                            alt="Aadhaar Front"
-                            className="img-fluid border rounded"
-                            style={{ maxHeight: '300px' }}
-                            onError={(e) => {
-                              // If image fails to load, show fallback
-                              (e.target as HTMLImageElement).style.display = 'none';
-                              const parent = (e.target as HTMLImageElement).parentElement;
-                              if (parent) {
-                                parent.innerHTML = `<span class="badge bg-warning">Image not found: ${survey.front_image}</span>`;
-                              }
-                            }}
-                          />
+                        const originalPath = survey.front_image;
+                        const absUrl = getAbsoluteImageUrl(originalPath);
+                        return absUrl ? (
+                          <a href={absUrl} target="_blank" rel="noopener noreferrer">
+                            <img
+                              src={absUrl}
+                              alt="Aadhaar Front"
+                              className="img-fluid border rounded"
+                              style={{ maxHeight: '300px', cursor: 'pointer' }}
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                                const parent = (e.target as HTMLImageElement).parentElement;
+                                if (parent) {
+                                  parent.innerHTML = `<span class="badge bg-warning">Image not found: ${originalPath}</span>`;
+                                }
+                              }}
+                            />
+                          </a>
                         ) : (
-                          <span className="badge bg-secondary">{survey.front_image}</span>
+                          <span className="badge bg-secondary">{originalPath || '-'}</span>
                         );
                       })()}
                     </div>
@@ -592,25 +581,26 @@ function SurveyDetailsContent() {
                     <strong>आधार मागील:</strong>
                     <div className="mt-2">
                       {(() => {
-                        const normalizedPath = normalizeImagePath(survey.back_image);
-                        const isValidImage = normalizedPath.startsWith('http') || normalizedPath.startsWith('/');
-                        return isValidImage ? (
-                          <img
-                            src={normalizedPath}
-                            alt="Aadhaar Back"
-                            className="img-fluid border rounded"
-                            style={{ maxHeight: '300px' }}
-                            onError={(e) => {
-                              // If image fails to load, show fallback
-                              (e.target as HTMLImageElement).style.display = 'none';
-                              const parent = (e.target as HTMLImageElement).parentElement;
-                              if (parent) {
-                                parent.innerHTML = `<span class="badge bg-warning">Image not found: ${survey.back_image}</span>`;
-                              }
-                            }}
-                          />
+                        const originalPath = survey.back_image;
+                        const absUrl = getAbsoluteImageUrl(originalPath);
+                        return absUrl ? (
+                          <a href={absUrl} target="_blank" rel="noopener noreferrer">
+                            <img
+                              src={absUrl}
+                              alt="Aadhaar Back"
+                              className="img-fluid border rounded"
+                              style={{ maxHeight: '300px', cursor: 'pointer' }}
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                                const parent = (e.target as HTMLImageElement).parentElement;
+                                if (parent) {
+                                  parent.innerHTML = `<span class="badge bg-warning">Image not found: ${originalPath}</span>`;
+                                }
+                              }}
+                            />
+                          </a>
                         ) : (
-                          <span className="badge bg-secondary">{survey.back_image}</span>
+                          <span className="badge bg-secondary">{originalPath || '-'}</span>
                         );
                       })()}
                     </div>
@@ -644,12 +634,12 @@ function SurveyDetailsContent() {
                           <th style={{ width: '5%' }}>ID</th>
                           <th style={{ width: '35%' }}>प्रश्न</th>
                           <th style={{ width: '50%' }}>उत्तर</th>
-                          {(userType || '').toLowerCase() === 'verification_officer' && 
-                           survey?.verification_status !== 'verified' && 
-                           survey?.verification_status !== 'rejected' &&
-                           survey?.assigned_to && (
-                            <th style={{ width: '10%' }}>क्रिया</th>
-                          )}
+                          {(userType || '').toLowerCase() === 'verification_officer' &&
+                            survey?.verification_status !== 'verified' &&
+                            survey?.verification_status !== 'rejected' &&
+                            survey?.assigned_to && (
+                              <th style={{ width: '10%' }}>क्रिया</th>
+                            )}
                         </tr>
                       </thead>
                       <tbody>
@@ -658,21 +648,21 @@ function SurveyDetailsContent() {
                           const isImage = isImageAnswer(answerText);
                           const clarification = clarifications[ans.question_id];
                           const normalizedUserTypeForClarification = (userType || '').toLowerCase();
-                          const canRequestClarification = normalizedUserTypeForClarification === 'verification_officer' && 
-                                                         survey?.verification_status !== 'verified' && 
-                                                         survey?.verification_status !== 'rejected' &&
-                                                         survey?.assigned_to;
+                          const canRequestClarification = normalizedUserTypeForClarification === 'verification_officer' &&
+                            survey?.verification_status !== 'verified' &&
+                            survey?.verification_status !== 'rejected' &&
+                            survey?.assigned_to;
                           // Allow editing for verification officers if survey is not verified/rejected
                           // Backend will enforce assignment check
                           const normalizedUserType = (userType || '').toLowerCase();
-                          const canEdit = normalizedUserType === 'verification_officer' && 
-                                        survey?.verification_status !== 'verified' && 
-                                        survey?.verification_status !== 'rejected' &&
-                                        !isImage;
-                          
+                          const canEdit = normalizedUserType === 'verification_officer' &&
+                            survey?.verification_status !== 'verified' &&
+                            survey?.verification_status !== 'rejected' &&
+                            !isImage;
+
                           // Create unique key combining section_id, question_id, and index to avoid duplicates
                           const uniqueKey = `${sectionKey}_${ans.section_id || 0}_${ans.question_id}_${ansIdx}`;
-                          
+
                           return (
                             <tr key={uniqueKey} className={clarification ? 'table-warning' : ''}>
                               <td>{ans.question_id}</td>
@@ -748,7 +738,7 @@ function SurveyDetailsContent() {
                                             }),
                                           });
                                           const json = await res.json();
-                                          
+
                                           if (json.ok) {
                                             // Reload survey details
                                             const res2 = await fetch(`/api/admin/surveys/${surveyId}`, {
@@ -806,19 +796,35 @@ function SurveyDetailsContent() {
                                   <div className="d-flex align-items-center justify-content-between">
                                     <div>
                                       {isImage ? (
-                                        <img
-                                          src={getAbsoluteImageUrl(answerText)}
-                                          alt="Answer"
-                                          className="img-fluid border rounded"
-                                          style={{ maxHeight: '200px' }}
-                                          onError={(e) => {
-                                            (e.target as HTMLImageElement).style.display = 'none';
-                                            const parent = (e.target as HTMLImageElement).parentElement;
-                                            if (parent) {
-                                              parent.innerHTML = `<span class="badge bg-warning">Image not found: ${answerText}</span>`;
-                                            }
-                                          }}
-                                        />
+                                        <div className="d-flex flex-wrap gap-2">
+                                          {(answerText || '').split(',').map((part: string, i: number) => {
+                                            const item = part.trim();
+                                            if (!item) return null;
+                                            const absUrl = getAbsoluteImageUrl(item);
+                                            return (
+                                              <a key={i} href={absUrl} target="_blank" rel="noopener noreferrer">
+                                                <img
+                                                  src={absUrl}
+                                                  alt={`Answer ${i}`}
+                                                  className="img-thumbnail"
+                                                  style={{ height: '100px', cursor: 'pointer' }}
+                                                  onError={(e) => {
+                                                    (e.target as HTMLImageElement).style.display = 'none';
+                                                    if (i === 0) { // Only show error for first image to avoid clutter
+                                                      const parent = (e.target as HTMLImageElement).parentElement?.parentElement;
+                                                      if (parent && !parent.querySelector('.badge-error')) {
+                                                        const span = document.createElement('span');
+                                                        span.className = 'badge bg-warning badge-error';
+                                                        span.innerText = `Image not found: ${item}`;
+                                                        parent.appendChild(span);
+                                                      }
+                                                    }
+                                                  }}
+                                                />
+                                              </a>
+                                            );
+                                          })}
+                                        </div>
                                       ) : (
                                         <span>{answerText || '-'}</span>
                                       )}
@@ -917,10 +923,10 @@ function SurveyDetailsContent() {
                         {answers.map((ans, ansIdx) => {
                           const questionKey = ans.question_id;
                           const isSelected = selectedQuestions.hasOwnProperty(questionKey);
-                          
+
                           // Create unique key combining section_id, question_id, and index to avoid duplicates
                           const uniqueKey = `clarification_${ans.section_id || 0}_${ans.question_id}_${ansIdx}`;
-                          
+
                           return (
                             <tr key={uniqueKey}>
                               <td>
