@@ -20,6 +20,7 @@ interface Officer {
   name: string;
   phone: string;
   email: string;
+  userType?: string;
   completedForms: number;
   incompleteForms: number;
   totalForms: number;
@@ -35,6 +36,7 @@ export default function OfficersPage() {
   const [loading, setLoading] = useState(true);
   const [ratePerSurvey, setRatePerSurvey] = useState(0);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [changingRole, setChangingRole] = useState<string | null>(null);
 
   useEffect(() => {
     fetchOfficers();
@@ -94,6 +96,42 @@ export default function OfficersPage() {
     setExpandedRows(newExpanded);
   };
 
+  const changeUserRole = async (userId: string, currentRole: string) => {
+    const newRole = currentRole?.toLowerCase().includes('field') 
+      ? 'verification_officer' 
+      : 'field_officer';
+    
+    if (!confirm(`Are you sure you want to change this user's role to ${newRole}?`)) {
+      return;
+    }
+
+    setChangingRole(userId);
+    try {
+      const res = await fetch('/api/admin/users/change-role', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Include cookies for authentication
+        body: JSON.stringify({
+          user_id: parseInt(userId),
+          new_role: newRole
+        })
+      });
+
+      const json = await res.json();
+      if (json.ok) {
+        alert(`User role changed successfully to ${newRole}`);
+        fetchOfficers(); // Refresh the list
+      } else {
+        alert(`Error: ${json.error || 'Failed to change role'}`);
+      }
+    } catch (error) {
+      console.error('Failed to change role:', error);
+      alert('Failed to change user role');
+    } finally {
+      setChangingRole(null);
+    }
+  };
+
   return (
     <AdminLayout>
       <div className="container-fluid">
@@ -147,11 +185,13 @@ export default function OfficersPage() {
                       <th style={{ width: '30px' }}></th>
                       <th>Officer Name</th>
                       <th>Contact</th>
+                      <th>Role</th>
                       <th>Completed Forms</th>
                       <th>Incomplete Forms</th>
                       <th>Total Forms</th>
                       <th>Wallet Balance</th>
                       <th>Last Login</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -186,6 +226,19 @@ export default function OfficersPage() {
                             </td>
                             <td>{officer.phone}</td>
                             <td>
+                              <span className={`badge ${
+                                officer.userType?.toLowerCase().includes('field') 
+                                  ? 'bg-primary' 
+                                  : 'bg-info'
+                              }`}>
+                                {officer.userType === 'field_officer' || officer.userType?.toLowerCase().includes('field')
+                                  ? 'Field Officer'
+                                  : officer.userType === 'verification_officer' || officer.userType?.toLowerCase().includes('verification')
+                                  ? 'Verification Officer'
+                                  : officer.userType || 'Unknown'}
+                              </span>
+                            </td>
+                            <td>
                               <span className="badge bg-success">
                                 {officer.completedForms}
                               </span>
@@ -210,6 +263,24 @@ export default function OfficersPage() {
                               <small className="text-muted">
                                 {formatDate(officer.lastLogin)}
                               </small>
+                            </td>
+                            <td>
+                              <button
+                                className="btn btn-sm btn-outline-primary"
+                                onClick={() => changeUserRole(officer.id, officer.userType || '')}
+                                disabled={changingRole === officer.id}
+                                title={`Change role to ${
+                                  officer.userType?.toLowerCase().includes('field') 
+                                    ? 'Verification Officer' 
+                                    : 'Field Officer'
+                                }`}
+                              >
+                                {changingRole === officer.id ? (
+                                  <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                ) : (
+                                  <i className="bi bi-arrow-repeat"></i>
+                                )}
+                              </button>
                             </td>
                           </tr>
                           {isExpanded && (
@@ -301,6 +372,7 @@ export default function OfficersPage() {
                       <th></th>
                       <th>Total</th>
                       <th></th>
+                      <th></th>
                       <th>
                         <span className="badge bg-success">
                           {officers.reduce((sum, o) => sum + o.completedForms, 0)}
@@ -326,6 +398,7 @@ export default function OfficersPage() {
                             })}
                         </strong>
                       </th>
+                      <th></th>
                       <th></th>
                     </tr>
                   </tfoot>

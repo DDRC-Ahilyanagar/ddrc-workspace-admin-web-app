@@ -582,9 +582,9 @@ export default function LandingPage() {
                 <div className="col-lg-6 text-center">
                   <div className="play-store-badge">
                     <a 
-                      href="javascript:void(0)" 
-                      className="play-store-link"
+                      href="#"
                       onClick={(e) => e.preventDefault()}
+                      className="play-store-link"
                     >
                       <img 
                         src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" 

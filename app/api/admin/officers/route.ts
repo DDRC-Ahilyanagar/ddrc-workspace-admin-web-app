@@ -18,34 +18,17 @@ export async function GET(request: NextRequest) {
     const conn = await pool.getConnection();
 
     try {
-      // Get all field officers (users with userType = 'field_officer')
+      // Get all field officers and verification officers (users with userType = 'field_officer' or 'verification_officer')
       let officers;
       try {
-        officers = await prisma.user.findMany({
-          where: {
-            userType: 'field_officer',
-            isActive: true,
-          },
-          select: {
-            id: true,
-            name: true,
-            contactNumber: true,
-            email: true,
-            lastLogin: true,
-            createdAt: true,
-          },
-          orderBy: {
-            name: 'asc',
-          },
-        });
-        console.log('Prisma query result:', { count: officers.length, officers: officers.map(o => ({ id: o.id, name: o.name })) });
-      } catch (prismaError: any) {
-        console.error('Prisma query error:', prismaError);
-        // Fallback: Use raw SQL query if Prisma fails
+        // Try to get both field_officer and verification_officer using Prisma
+        // Since Prisma enum doesn't support OR easily, we'll use raw SQL for this
         const [rawOfficers]: any = await conn.query(
-          `SELECT id, name, contact_number, email, last_login, created_at 
+          `SELECT id, name, contact_number, email, user_type, last_login, created_at 
            FROM users 
-           WHERE user_type = 'field_officer' AND is_active = 1 
+           WHERE (user_type = 'field_officer' OR user_type = 'verification_officer' OR user_type = 'field officer' OR user_type = 'verification officer')
+           AND (is_active = 1 OR is_active = true)
+           AND (status = 'active' OR status IS NULL OR status = '')
            ORDER BY name ASC`
         );
         officers = Array.isArray(rawOfficers) ? rawOfficers.map((o: any) => ({
@@ -53,6 +36,26 @@ export async function GET(request: NextRequest) {
           name: o.name,
           contactNumber: o.contact_number,
           email: o.email,
+          userType: o.user_type,
+          lastLogin: o.last_login,
+          createdAt: o.created_at,
+        })) : [];
+        console.log('Officers query result:', { count: officers.length, officers: officers.map((o: any) => ({ id: Number(o.id), name: o.name, userType: o.userType })) });
+      } catch (prismaError: any) {
+        console.error('Officers query error:', prismaError);
+        // Fallback: Use simpler raw SQL query if the above fails
+        const [rawOfficers]: any = await conn.query(
+          `SELECT id, name, contact_number, email, user_type, last_login, created_at 
+           FROM users 
+           WHERE (user_type = 'field_officer' OR user_type = 'verification_officer') AND is_active = 1 
+           ORDER BY name ASC`
+        );
+        officers = Array.isArray(rawOfficers) ? rawOfficers.map((o: any) => ({
+          id: BigInt(o.id),
+          name: o.name,
+          contactNumber: o.contact_number,
+          email: o.email,
+          userType: o.user_type,
           lastLogin: o.last_login,
           createdAt: o.created_at,
         })) : [];
@@ -130,6 +133,7 @@ export async function GET(request: NextRequest) {
             name: officer.name,
             phone: officer.contactNumber || '-',
             email: officer.email || '-',
+            userType: officer.userType || 'field_officer',
             completedForms: completedCount,
             incompleteForms: incompleteCount,
             totalForms: completedCount + incompleteCount,

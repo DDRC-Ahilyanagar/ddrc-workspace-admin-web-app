@@ -135,54 +135,11 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
 
       const workbook = new ExcelJS.Workbook();
 
-      // Create instructions sheet first
-      const instructionsSheet = workbook.addWorksheet('Instructions');
-      instructionsSheet.columns = [
-        { header: 'Instructions', key: 'instructions', width: 100 }
-      ];
-
-      // Add instructions content
-      const instructions = [
-        'EXCEL TEMPLATE INSTRUCTIONS',
-        '',
-        'COLUMN MARKINGS:',
-        '  • [CONDITIONAL] - Fill this column only when the condition is met',
-        '  • [SIMILAR] - Similar questions exist (check question IDs to identify)',
-        '',
-        'CONDITIONAL FIELDS:',
-        '  • Conditional fields have a yellow header background',
-        '  • Hover over the header cell to see the condition',
-        '  • Only fill conditional fields when the specified condition is met',
-        '',
-        'DROPDOWN LISTS:',
-        '  • Columns with dropdown lists show a dropdown arrow when clicked',
-        '  • Select from the dropdown instead of typing',
-        '  • TALUKA → VILLAGE: First select Taluka, then Village dropdown will show',
-        '    villages for that taluka (dependent dropdown)',
-        '',
-        'SAMPLE ROW:',
-        '  • Row 2 contains sample data (gray background)',
-        '  • Delete this row before entering real data',
-        '  • Use it as a reference for expected format',
-      ];
-
-      instructions.forEach((instruction, index) => {
-        const row = instructionsSheet.addRow([instruction]);
-        if (index === 0) {
-          row.font = { bold: true, size: 14 };
-          row.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FF4472C4' },
-          };
-          row.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        } else if (instruction.startsWith('  •')) {
-          row.font = { size: 10 };
-        }
-        row.height = 20;
-      });
+      // Create main data worksheet FIRST (so it's worksheets[0] for import)
+      const worksheet = workbook.addWorksheet('Divyang Data');
 
       // Create a hidden sheet for taluka-village mappings (for dependent dropdowns)
+      // This must be created AFTER the main sheet but will be hidden
       const mappingSheet = workbook.addWorksheet('TalukaVillages');
       mappingSheet.state = 'hidden'; // Hide this sheet
 
@@ -214,9 +171,6 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
 
         currentRow += villages.length + 1; // Add gap between talukas
       }
-
-      // Create main data worksheet
-      const worksheet = workbook.addWorksheet('Divyang Data');
 
       // Build columns from questions and store question metadata for dropdowns and conditionals
       const columns: Array<{ header: string; key: string; width: number }> = [];
@@ -350,84 +304,126 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
       // Add a summary of conditional questions at the end (as hidden columns or in a separate area)
       // We'll add conditional info as comments on headers instead (done below)
 
-      // Add sample row with example data to help users understand the format
+      // Add 10 sample rows with taluka "Parner" and village "Bahirobawadi"
       if (Array.isArray(questions) && questions.length > 0) {
-        const sampleRow: any = {
-          aadhar_no: '123456789012',
-          name: 'राम कृष्ण पाटील',
-        };
+        const sampleNames = [
+          'राम कृष्ण पाटील',
+          'सीता देवी शर्मा',
+          'कृष्णा मोहन देशमुख',
+          'प्रिया सुनील जोशी',
+          'विकास अनिल कुलकर्णी',
+          'माधुरी राजेश पवार',
+          'अजय सुरेश गायकवाड',
+          'स्वाती रवींद्र नाईक',
+          'रोहित प्रकाश सावंत',
+          'अंजली दिलीप चव्हाण'
+        ];
 
-        // Add sample answers for each question
-        for (const q of questions) {
-          const questionText = (q.question || '').trim();
-          if (!questionText) continue;
+        const sampleAadhaars = [
+          '123456789012',
+          '234567890123',
+          '345678901234',
+          '456789012345',
+          '567890123456',
+          '678901234567',
+          '789012345678',
+          '890123456789',
+          '901234567890',
+          '012345678901'
+        ];
 
-          const key = `q_${q.id}`;
-          let sampleValue = '';
+        const disabilityTypes = ['दृष्टिहीनता', 'श्रवण हानी', 'चलन अक्षमता', 'मानसिक मंदता', 'मानसिक आजार'];
+        const genders = ['पुरुष', 'स्त्री', 'अन्य'];
+        const educationLevels = ['अनपढ', '1-4', '5-7', '8-10', '10वी पास', '12वी पास', 'पदवी'];
 
-          // If question has options, use the first option as sample value
-          if (q.options && q.options.trim() && q.options.trim() !== 'NULL') {
-            const optionsList = q.options
-              .split(',')
-              .map((opt: string) => opt.trim())
-              .filter((opt: string) => opt.length > 0);
-            if (optionsList.length > 0) {
-              sampleValue = optionsList[0];
+        // Generate 10 sample rows
+        for (let rowIndex = 0; rowIndex < 10; rowIndex++) {
+          const sampleRow: any = {
+            aadhar_no: sampleAadhaars[rowIndex],
+            name: sampleNames[rowIndex],
+          };
+
+          // Add sample answers for each question
+          for (const q of questions) {
+            const questionText = (q.question || '').trim();
+            if (!questionText) continue;
+
+            const key = `q_${q.id}`;
+            let sampleValue = '';
+
+            // Set taluka to "Parner" for all rows
+            if (questionText.includes('तालुका') || questionText.includes('Taluka') || 
+                questionText.includes('ता.') || questionText.toLowerCase().includes('taluka')) {
+              sampleValue = 'Parner';
             }
+            // Set village to "Bahirobawadi" for all rows
+            else if (questionText.includes('गाव') || questionText.includes('Village') || 
+                     questionText.includes('ग्राम') || questionText.includes('Gaav')) {
+              sampleValue = 'Bahirobawadi';
+            }
+            // If question has options, use a random option as sample value
+            else if (q.options && q.options.trim() && q.options.trim() !== 'NULL') {
+              const optionsList = q.options
+                .split(',')
+                .map((opt: string) => opt.trim())
+                .filter((opt: string) => opt.length > 0);
+              if (optionsList.length > 0) {
+                // Use different options for different rows to show variety
+                sampleValue = optionsList[rowIndex % optionsList.length];
+              }
+            }
+            // If no options or still empty, provide sample values based on question content
+            else if (!sampleValue) {
+              if (questionText.includes('नाव') && questionText.includes('दिव्यांग')) {
+                sampleValue = sampleNames[rowIndex];
+              } else if (questionText.includes('आधार') || questionText.includes('Aadhaar') || questionText.includes('Aadhar')) {
+                sampleValue = sampleAadhaars[rowIndex];
+              } else if (questionText.includes('जिल्हा') || questionText.includes('District')) {
+                sampleValue = 'अहमदनगर';
+              } else if (questionText.includes('पिन') || questionText.includes('PIN')) {
+                sampleValue = '414302';
+              } else if (questionText.includes('मोबाइल') || questionText.includes('Mobile')) {
+                sampleValue = `9876543${String(rowIndex).padStart(3, '0')}`;
+              } else if (questionText.includes('दिव्यांगता प्रकार') || questionText.includes('Disability Type')) {
+                sampleValue = disabilityTypes[rowIndex % disabilityTypes.length];
+              } else if (questionText.includes('दिव्यांगता टक्केवारी') || questionText.includes('Disability Percentage')) {
+                sampleValue = String(40 + (rowIndex * 5)); // 40, 45, 50, etc.
+              } else if (questionText.includes('वैश्विक कार्ड') || questionText.includes('UDID')) {
+                sampleValue = `UDID${sampleAadhaars[rowIndex]}`;
+              } else if (questionText.includes('लिंग') || questionText.includes('Gender')) {
+                sampleValue = genders[rowIndex % genders.length];
+              } else if (questionText.includes('जन्मतारीख') || questionText.includes('Date of Birth')) {
+                const year = 1980 + (rowIndex * 3);
+                const month = String((rowIndex % 12) + 1).padStart(2, '0');
+                const day = String((rowIndex % 28) + 1).padStart(2, '0');
+                sampleValue = `${year}-${month}-${day}`;
+              } else if (questionText.includes('वय') || questionText.includes('Age')) {
+                sampleValue = String(25 + (rowIndex * 3));
+              } else if (questionText.includes('शिक्षण') || questionText.includes('Education')) {
+                sampleValue = educationLevels[rowIndex % educationLevels.length];
+              } else {
+                // Default sample value
+                sampleValue = 'उदाहरण';
+              }
+            }
+
+            sampleRow[key] = sampleValue;
           }
 
-          // If no options or still empty, provide sample values based on question content
-          if (!sampleValue) {
-            if (questionText.includes('नाव') && questionText.includes('दिव्यांग')) {
-              sampleValue = 'राम कृष्ण पाटील';
-            } else if (questionText.includes('आधार') || questionText.includes('Aadhaar') || questionText.includes('Aadhar')) {
-              sampleValue = '123456789012';
-            } else if (questionText.includes('गाव') || questionText.includes('Village')) {
-              sampleValue = 'सांगवी';
-            } else if (questionText.includes('तालुका') || questionText.includes('Taluka')) {
-              sampleValue = 'पुणे';
-            } else if (questionText.includes('जिल्हा') || questionText.includes('District')) {
-              sampleValue = 'पुणे';
-            } else if (questionText.includes('पिन') || questionText.includes('PIN')) {
-              sampleValue = '411027';
-            } else if (questionText.includes('मोबाइल') || questionText.includes('Mobile')) {
-              sampleValue = '9876543210';
-            } else if (questionText.includes('दिव्यांगता प्रकार') || questionText.includes('Disability Type')) {
-              sampleValue = 'दृष्टिहीनता';
-            } else if (questionText.includes('दिव्यांगता टक्केवारी') || questionText.includes('Disability Percentage')) {
-              sampleValue = '75';
-            } else if (questionText.includes('वैश्विक कार्ड') || questionText.includes('UDID')) {
-              sampleValue = 'UDID123456789';
-            } else if (questionText.includes('लिंग') || questionText.includes('Gender')) {
-              sampleValue = 'पुरुष';
-            } else if (questionText.includes('जन्मतारीख') || questionText.includes('Date of Birth')) {
-              sampleValue = '1990-01-15';
-            } else if (questionText.includes('वय') || questionText.includes('Age')) {
-              sampleValue = '34';
-            } else if (questionText.includes('शिक्षण') || questionText.includes('Education')) {
-              sampleValue = '10वी पास';
-            } else {
-              // Default sample value
-              sampleValue = 'उदाहरण';
-            }
-          }
+          // Add the sample row
+          worksheet.addRow(sampleRow);
 
-          sampleRow[key] = sampleValue;
+          // Style the sample rows (light gray background to indicate they're examples)
+          const sampleRowIndex = worksheet.rowCount;
+          const sampleRowObj = worksheet.getRow(sampleRowIndex);
+          sampleRowObj.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFF0F0F0' },
+          };
+          sampleRowObj.font = { italic: true, color: { argb: 'FF666666' } };
+          sampleRowObj.height = 20;
         }
-
-        // Add the sample row
-        worksheet.addRow(sampleRow);
-
-        // Style the sample row (light gray background to indicate it's an example)
-        const sampleRowIndex = worksheet.rowCount;
-        const sampleRowObj = worksheet.getRow(sampleRowIndex);
-        sampleRowObj.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFF0F0F0' },
-        };
-        sampleRowObj.font = { italic: true, color: { argb: 'FF666666' } };
-        sampleRowObj.height = 20;
       }
 
       // Create a map of question ID to question text for finding rendering questions

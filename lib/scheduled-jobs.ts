@@ -1,5 +1,58 @@
 import cron from 'node-cron';
 import { Logger } from './logger';
+import { autoAssignSurveys } from './auto-assign-surveys';
+
+// Lock flag to prevent concurrent auto-assignment runs
+let isAutoAssignRunning = false;
+
+/**
+ * Poll for unassigned surveys and assign them
+ * Runs every 10 seconds
+ */
+async function pollAndAssignSurveys() {
+  // Prevent concurrent executions
+  if (isAutoAssignRunning) {
+    Logger.info('AUTO_ASSIGN_POLL_SKIPPED', {
+      reason: 'Previous assignment still running',
+      timestamp: new Date().toISOString()
+    });
+    return;
+  }
+
+  isAutoAssignRunning = true;
+  
+  try {
+    Logger.info('AUTO_ASSIGN_POLL_STARTED', {
+      timestamp: new Date().toISOString()
+    });
+
+    // Call autoAssignSurveys without surveyId to process all unassigned surveys
+    const result = await autoAssignSurveys();
+    
+    if (result.ok && result.assigned > 0) {
+      Logger.info('AUTO_ASSIGN_POLL_SUCCESS', {
+        assigned: result.assigned,
+        checked: result.checked,
+        message: result.message,
+        timestamp: new Date().toISOString()
+      });
+    } else if (result.checked > 0) {
+      Logger.info('AUTO_ASSIGN_POLL_NO_ASSIGNMENTS', {
+        checked: result.checked,
+        message: result.message,
+        timestamp: new Date().toISOString()
+      });
+    }
+  } catch (error: any) {
+    Logger.error('AUTO_ASSIGN_POLL_ERROR', {
+      error: error?.message || String(error),
+      stack: error?.stack,
+      timestamp: new Date().toISOString()
+    });
+  } finally {
+    isAutoAssignRunning = false;
+  }
+}
 
 /**
  * Initialize scheduled jobs
@@ -82,13 +135,35 @@ export function initializeScheduledJobs() {
     timezone: 'Asia/Kolkata', // Indian Standard Time
   });
 
-  // NOTE: Auto-assign surveys polling job has been removed
-  // Surveys are now assigned immediately when submitted via public form
-  // The auto-assignment happens in real-time in submit-answers route
+  // Auto-assign surveys polling service
+  // Runs every 10 seconds to check for unassigned surveys
+  // Only processes surveys with:
+  // - user_id = 1 (unassigned)
+  // - source = 'Divyang Self' or 'Excel Import'
+  // - Has a gaav (village) in survey_json
+  // - Not already in survey_assignments table
+  const pollInterval = setInterval(() => {
+    pollAndAssignSurveys().catch((error) => {
+      Logger.error('AUTO_ASSIGN_POLL_INTERVAL_ERROR', {
+        error: error?.message || String(error),
+        timestamp: new Date().toISOString()
+      });
+    });
+  }, 10000); // 10 seconds = 10000 milliseconds
+
+  // Start the first poll immediately (after 5 seconds to let server fully start)
+  setTimeout(() => {
+    pollAndAssignSurveys().catch((error) => {
+      Logger.error('AUTO_ASSIGN_POLL_INITIAL_ERROR', {
+        error: error?.message || String(error),
+        timestamp: new Date().toISOString()
+      });
+    });
+  }, 5000);
 
   Logger.info('SCHEDULED_JOBS_INITIALIZED', {
     daily_stats_email: 'Scheduled at 9:00 PM IST daily',
-    auto_assign_surveys: 'Immediate assignment on submission (no polling)',
+    auto_assign_surveys: 'Polling every 10 seconds for unassigned surveys',
   });
 }
 
