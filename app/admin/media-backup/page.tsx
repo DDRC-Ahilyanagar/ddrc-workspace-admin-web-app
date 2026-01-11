@@ -20,10 +20,30 @@ export default function MediaBackupPage() {
   const [error, setError] = useState('');
   const [expandedFolder, setExpandedFolder] = useState<string | null>(null);
   const [selectedFolderImages, setSelectedFolderImages] = useState<Array<{ name: string; path: string }>>([]);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   useEffect(() => {
     loadFolders();
   }, []);
+
+  // Keyboard navigation for lightbox
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!lightboxOpen) return;
+
+      if (e.key === 'Escape') {
+        setLightboxOpen(false);
+      } else if (e.key === 'ArrowLeft') {
+        setLightboxIndex((prev) => (prev > 0 ? prev - 1 : selectedFolderImages.length - 1));
+      } else if (e.key === 'ArrowRight') {
+        setLightboxIndex((prev) => (prev < selectedFolderImages.length - 1 ? prev + 1 : 0));
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lightboxOpen, selectedFolderImages.length]);
 
   const loadFolders = async () => {
     setLoading(true);
@@ -61,14 +81,14 @@ export default function MediaBackupPage() {
 
     setExpandedFolder(folderName);
     setSelectedFolderImages([]); // Clear previous images
-    
+
     // Load all images for this folder
     try {
       const response = await fetch(`/api/admin/backup-folders?folder=${encodeURIComponent(folderName)}`, {
         cache: 'no-store',
       });
       const data = await response.json();
-      
+
       if (data.ok && data.folderImages && Array.isArray(data.folderImages)) {
         setSelectedFolderImages(data.folderImages);
       } else {
@@ -86,6 +106,23 @@ export default function MediaBackupPage() {
         setSelectedFolderImages(folder.images);
       }
     }
+  };
+
+  const openLightbox = (index: number) => {
+    setLightboxIndex(index);
+    setLightboxOpen(true);
+  };
+
+  const closeLightbox = () => {
+    setLightboxOpen(false);
+  };
+
+  const goToPrevious = () => {
+    setLightboxIndex((prev) => (prev > 0 ? prev - 1 : selectedFolderImages.length - 1));
+  };
+
+  const goToNext = () => {
+    setLightboxIndex((prev) => (prev < selectedFolderImages.length - 1 ? prev + 1 : 0));
   };
 
   if (loading) {
@@ -184,24 +221,26 @@ export default function MediaBackupPage() {
                             <div className="row g-2">
                               {selectedFolderImages.length > 0 ? (
                                 selectedFolderImages.map((image, idx) => (
-                                  <div key={idx} className="col-6 col-md-4 col-lg-3">
-                                    <div className="card">
+                                  <div key={idx} className="col-6 col-sm-4 col-md-3 col-lg-2 col-xl-1">
+                                    <div
+                                      className="card h-100"
+                                      style={{ cursor: 'pointer' }}
+                                      onClick={() => openLightbox(idx)}
+                                    >
                                       <img
                                         src={image.path}
                                         alt={image.name}
                                         className="card-img-top"
                                         style={{
-                                          height: '200px',
+                                          height: '120px',
                                           objectFit: 'cover',
-                                          cursor: 'pointer',
                                         }}
-                                        onClick={() => window.open(image.path, '_blank')}
                                         onError={(e) => {
                                           (e.target as HTMLImageElement).src = '/placeholder-image.png';
                                         }}
                                       />
-                                      <div className="card-body p-2">
-                                        <p className="card-text small mb-0 text-truncate" title={image.name}>
+                                      <div className="card-body p-1">
+                                        <p className="card-text small mb-0 text-truncate" title={image.name} style={{ fontSize: '0.7rem' }}>
                                           {image.name}
                                         </p>
                                       </div>
@@ -231,8 +270,81 @@ export default function MediaBackupPage() {
             </div>
           </div>
         )}
+
+        {/* Lightbox Modal */}
+        {lightboxOpen && selectedFolderImages.length > 0 && (
+          <div
+            className="modal d-block"
+            style={{
+              backgroundColor: 'rgba(0, 0, 0, 0.9)',
+              zIndex: 9999,
+            }}
+            onClick={closeLightbox}
+          >
+            <div className="modal-dialog modal-fullscreen">
+              <div className="modal-content bg-transparent border-0">
+                <div className="modal-header border-0 position-absolute top-0 end-0 z-3">
+                  <button
+                    type="button"
+                    className="btn-close btn-close-white"
+                    onClick={closeLightbox}
+                    aria-label="Close"
+                  ></button>
+                </div>
+                <div className="modal-body d-flex align-items-center justify-content-center position-relative">
+                  {/* Previous Button */}
+                  <button
+                    className="btn btn-light position-absolute start-0 top-50 translate-middle-y ms-3"
+                    style={{ zIndex: 10 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      goToPrevious();
+                    }}
+                  >
+                    <i className="bi bi-chevron-left"></i>
+                  </button>
+
+                  {/* Image */}
+                  <div className="text-center" onClick={(e) => e.stopPropagation()}>
+                    <img
+                      src={selectedFolderImages[lightboxIndex].path}
+                      alt={selectedFolderImages[lightboxIndex].name}
+                      style={{
+                        maxWidth: '90vw',
+                        maxHeight: '85vh',
+                        objectFit: 'contain',
+                      }}
+                    />
+                    <div className="text-white mt-3">
+                      <p className="mb-1">{selectedFolderImages[lightboxIndex].name}</p>
+                      <p className="text-muted small">
+                        {lightboxIndex + 1} / {selectedFolderImages.length}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Next Button */}
+                  <button
+                    className="btn btn-light position-absolute end-0 top-50 translate-middle-y me-3"
+                    style={{ zIndex: 10 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      goToNext();
+                    }}
+                  >
+                    <i className="bi bi-chevron-right"></i>
+                  </button>
+
+                  {/* Keyboard hint */}
+                  <div className="position-absolute bottom-0 start-50 translate-middle-x mb-3 text-white-50 small">
+                    Use ← → arrow keys to navigate, ESC to close
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </AdminLayout>
   );
 }
-

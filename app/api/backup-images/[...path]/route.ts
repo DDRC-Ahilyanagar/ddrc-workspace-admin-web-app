@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import { promises as fs } from 'fs';
 
-const MEDIA_ROOT = path.join(process.cwd(), 'media_backups');
+const MEDIA_ROOT = path.join(process.cwd(), 'public', 'uploads');
 const API_KEY = process.env.BACKUP_API_KEY || '';
 
 export const runtime = 'nodejs';
@@ -28,14 +28,14 @@ export const GET = async (
   }
   try {
     const { path: pathArray } = await params;
-    
+
     // Reconstruct the file path
     const filePath = path.join(MEDIA_ROOT, ...pathArray.map(p => decodeURIComponent(p)));
-    
+
     // Security: Ensure the path is within mediaRoot
     const resolvedPath = path.resolve(filePath);
     const resolvedRoot = path.resolve(MEDIA_ROOT);
-    
+
     if (!resolvedPath.startsWith(resolvedRoot)) {
       return NextResponse.json(
         { ok: false, error: 'Invalid path' },
@@ -56,7 +56,7 @@ export const GET = async (
     // Read and return the file
     const fileBuffer = await fs.readFile(resolvedPath);
     const ext = path.extname(resolvedPath).toLowerCase();
-    
+
     let contentType = 'application/octet-stream';
     if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
     else if (ext === '.png') contentType = 'image/png';
