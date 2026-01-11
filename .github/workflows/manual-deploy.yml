@@ -1,0 +1,70 @@
+name: Manual Deploy to VPS
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_build:
+        description: 'Skip build (use existing .next folder)'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        if: ${{ !inputs.skip_build }}
+        run: npm ci
+
+      - name: Build
+        if: ${{ !inputs.skip_build }}
+        run: npm run build
+
+      - name: Upload to Server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          timeout: 300s
+          command_timeout: 300s
+          debug: true
+          source: ".next/**,package.json,package-lock.json,public/**,lib/**,app/**,middleware.ts,next.config.mjs,tsconfig.json,storage/**,prisma/**"
+          target: "/var/www/surveys.ddrcnagar.in"
+
+      - name: Deploy on Server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          timeout: 900s
+          command_timeout: 900s
+          debug: true
+          script: |
+            cd /var/www/surveys.ddrcnagar.in
+            echo "📦 Installing dependencies..."
+            npm ci --omit=dev --no-audit --no-fund
+            echo "🗄️ Running database migrations..."
+            npm run prisma:generate || true
+            npm run prisma:migrate deploy || true
+            echo "📁 Ensuring storage directories exist..."
+            mkdir -p storage/logs storage/reports
+            echo "🔄 Restarting application..."
+            export NODE_ENV=production
+            export PORT=3000
+            pm2 restart surveys-ddrc || pm2 start npm --name "surveys-ddrc" -- start
+            pm2 save
+            echo "✅ Deployment complete!"
