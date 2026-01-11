@@ -5,7 +5,7 @@ import { promises as fs } from 'fs';
 import { requireAuth } from '@/lib/auth';
 import { Logger } from '@/lib/logger';
 
-const MEDIA_ROOT = path.join(process.cwd(), 'media_backups');
+const MEDIA_ROOT = path.join(process.cwd(), 'public', 'uploads');
 
 const sanitizeName = (value: string) =>
   value
@@ -115,7 +115,7 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
 
     const savedFiles: string[] = [];
     const skippedFiles: string[] = [];
-    
+
     for (let idx = 0; idx < files.length; idx++) {
       const entry = files[idx];
       if (!(entry instanceof File)) {
