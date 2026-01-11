@@ -329,8 +329,26 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
           }
         }
 
+        // FALLBACK: If no village match, assign to ANY available field officer
         if (matchingOfficers.length === 0) {
-          continue; // No matching officers
+          Logger.warn('AUTO_ASSIGN_NO_VILLAGE_MATCH_FALLBACK', {
+            survey_id: survey.id,
+            village: surveyVillage,
+            taluka: surveyTaluka,
+            message: 'No field officer configured for this village, using fallback assignment'
+          });
+
+          // Get all field officers as fallback
+          const allOfficerIds = Array.from(officerGavMap.keys());
+          if (allOfficerIds.length > 0) {
+            matchingOfficers.push(...allOfficerIds);
+          } else {
+            Logger.error('AUTO_ASSIGN_NO_OFFICERS_AVAILABLE', {
+              survey_id: survey.id,
+              message: 'No field officers available at all'
+            });
+            continue; // Skip this survey
+          }
         }
 
         // Round-robin: Find officer with least assignments for this GAV
