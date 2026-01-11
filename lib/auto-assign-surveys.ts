@@ -1,6 +1,7 @@
 import { getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';
 import { getAllLocations, isOnline } from '@/lib/location-store';
+import { sendFCMPushNotification } from './fcm';
 
 /**
  * Extract village/GAV from survey_json
@@ -60,29 +61,53 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
   const conn = await pool.getConnection();
 
   try {
-    // Step 1: Get question ID for village/GAV
-    const [villageQuestionRows]: any = await conn.query(`
-      SELECT id FROM questions 
-      WHERE (question LIKE '%गाव%' OR question LIKE '%village%' OR question LIKE '%ग्राम%')
+    // Step 0: Ensure assignment table exists
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS survey_assignments (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        survey_id BIGINT UNSIGNED NOT NULL,
+        field_officer_id BIGINT UNSIGNED NOT NULL,
+        source VARCHAR(255) DEFAULT 'Divyang Self',
+        status ENUM('pending', 'completed') DEFAULT 'pending',
+        assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        completed_at TIMESTAMP NULL,
+        PRIMARY KEY (id),
+        KEY idx_survey_id (survey_id),
+        KEY idx_officer_status (field_officer_id, status)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Step 1: Get question IDs for village and taluka
+    const [questionRows]: any = await conn.query(`
+      SELECT id, question FROM questions 
+      WHERE (question LIKE '%गाव%' OR question LIKE '%village%' OR question LIKE '%ग्राम%'
+             OR question LIKE '%taluka%' OR question LIKE '%तालुका%' OR question LIKE '%ता.%')
       AND (status = 'Active' OR status IS NULL)
-      ORDER BY id ASC
-      LIMIT 1
     `);
 
     let villageQuestionId: number | null = null;
-    if (Array.isArray(villageQuestionRows) && villageQuestionRows.length > 0) {
-      villageQuestionId = Number(villageQuestionRows[0].id);
+    let talukaQuestionId: number | null = null;
+
+    if (Array.isArray(questionRows)) {
+      for (const row of questionRows) {
+        const q = row.question.toLowerCase();
+        // Prioritize exact matches or well-known labels if possible, but keywords work
+        if (!villageQuestionId && (q.includes('गाव') || q.includes('village') || q.includes('ग्राम'))) {
+          villageQuestionId = row.id;
+        }
+        if (!talukaQuestionId && (q.includes('taluka') || q.includes('तालुका') || q.includes('ता.'))) {
+          talukaQuestionId = row.id;
+        }
+      }
     }
 
     if (!villageQuestionId) {
-      Logger.error('AUTO_ASSIGN_NO_VILLAGE_QUESTION', {
-        message: 'Could not find village question in questions table'
-      });
+      Logger.error('AUTO_ASSIGN_NO_VILLAGE_QUESTION', { message: 'Village question not found' });
       return {
         ok: false,
         assigned: 0,
         checked: 0,
-        message: 'Village question not found in database',
+        message: 'Location questions (Village) not found',
         details: []
       };
     }
@@ -103,13 +128,13 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
       AND s.survey_json IS NOT NULL
       AND s.survey_json != ''
     `;
-    
+
     const queryParams: any[] = [];
     if (surveyId) {
       query += ` AND s.id = ?`;
       queryParams.push(surveyId);
     }
-    
+
     query += ` ORDER BY s.created_at DESC`;
 
     const [unassignedSurveys]: any = await conn.query(query, queryParams);
@@ -133,101 +158,77 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
       survey_id: surveyId
     });
 
-    // Step 3: Get all online field officers
-    const allLocations = getAllLocations();
-    const onlineOfficerIds = new Set<number>();
-    
-    for (const location of allLocations) {
-      if (isOnline(location.user_id)) {
-        onlineOfficerIds.add(location.user_id);
-      }
-    }
+    // Step 3: Get active field officers and their assigned villages from PROFILE
+    const officerGavMap = new Map<number, any>(); // officer_id -> { taluka, villages[] }
 
-    if (onlineOfficerIds.size === 0) {
-      Logger.info('AUTO_ASSIGN_NO_ONLINE_OFFICERS', {
-        message: 'No field officers are currently online'
-      });
-      return {
-        ok: true,
-        assigned: 0,
-        checked: unassignedSurveys.length,
-        message: 'No online field officers found',
-        details: []
-      };
-    }
+    try {
+      const [activeOfficers]: any = await conn.query(`
+        SELECT u.id, p.primary_gaav, p.additional_gaavs, p.taluka
+        FROM users u
+        JOIN field_officer_profiles p ON u.id = p.user_id
+        WHERE (u.user_type = 'field_officer' OR u.user_type = 'field officer')
+        AND (u.status = 'active' OR u.status IS NULL)
+        AND u.is_active = 1
+      `);
 
-    Logger.info('AUTO_ASSIGN_ONLINE_OFFICERS', {
-      count: onlineOfficerIds.size,
-      officer_ids: Array.from(onlineOfficerIds)
-    });
+      if (Array.isArray(activeOfficers)) {
+        for (const officer of activeOfficers) {
+          const villages: string[] = [];
 
-    // Step 4: Get GAV for each online field officer from their latest survey
-    const officerGavMap = new Map<number, string>(); // officer_id -> village/GAV
+          if (officer.primary_gaav) {
+            villages.push(officer.primary_gaav.trim().toLowerCase());
+          }
 
-    for (const officerId of onlineOfficerIds) {
-      try {
-        const [officerSurveys]: any = await conn.query(`
-          SELECT survey_json
-          FROM surveys
-          WHERE user_id = ?
-          AND survey_json IS NOT NULL
-          AND survey_json != ''
-          ORDER BY updated_at DESC, created_at DESC
-          LIMIT 1
-        `, [officerId]);
+          if (officer.additional_gaavs) {
+            try {
+              const add = typeof officer.additional_gaavs === 'string'
+                ? JSON.parse(officer.additional_gaavs)
+                : officer.additional_gaavs;
+              if (Array.isArray(add)) {
+                add.forEach((v: any) => {
+                  if (v) villages.push(String(v).trim().toLowerCase());
+                });
+              }
+            } catch (e) { /* ignore */ }
+          }
 
-        if (Array.isArray(officerSurveys) && officerSurveys.length > 0) {
-          const surveyJsonRaw = officerSurveys[0].survey_json;
-          try {
-            const surveyJson = typeof surveyJsonRaw === 'string' 
-              ? JSON.parse(surveyJsonRaw) 
-              : surveyJsonRaw;
+          const taluka = officer.taluka ? officer.taluka.trim().toLowerCase() : null;
 
-            // Extract village/GAV from survey_json
-            const village = extractVillageFromSurveyJson(surveyJson, villageQuestionId);
-            if (village && village.trim().length > 0) {
-              officerGavMap.set(officerId, village.trim().toLowerCase());
-              Logger.info('AUTO_ASSIGN_OFFICER_GAV', {
-                officer_id: officerId,
-                village: village
-              });
-            }
-          } catch (parseError) {
-            Logger.error('AUTO_ASSIGN_PARSE_OFFICER_SURVEY', {
-              officer_id: officerId,
-              error: (parseError as any)?.message
-            });
+          if (villages.length > 0) {
+            officerGavMap.set(officer.id, { taluka, villages });
           }
         }
-      } catch (error) {
-        Logger.error('AUTO_ASSIGN_FETCH_OFFICER_GAV', {
-          officer_id: officerId,
-          error: (error as any)?.message
-        });
       }
+    } catch (profileError) {
+      Logger.error('AUTO_ASSIGN_PROFILE_ERROR', { error: (profileError as any)?.message });
     }
 
     if (officerGavMap.size === 0) {
-      Logger.info('AUTO_ASSIGN_NO_OFFICER_GAV', {
-        message: 'No field officers have GAV in their surveys'
+      Logger.info('AUTO_ASSIGN_NO_PROFILES', {
+        message: 'No field officers have configured villages in their profile'
       });
       return {
         ok: true,
         assigned: 0,
         checked: unassignedSurveys.length,
-        message: 'No field officers have GAV information',
+        message: 'No field officers have configured villages in their profile',
         details: []
       };
     }
+
+    Logger.info('AUTO_ASSIGN_OFFICERS_FOUND', {
+      count: officerGavMap.size,
+      officer_ids: Array.from(officerGavMap.keys())
+    });
 
     // Step 5: Pre-load assignment counts for all officer-GAV combinations
     // Map: "officerId_gav" -> count of assigned surveys
     const assignmentCountsCache = new Map<string, number>();
-    
+
     // Helper function to get assignment count for an officer-GAV combination
     const getAssignmentCount = async (officerId: number, gav: string): Promise<number> => {
       const cacheKey = `${officerId}_${gav}`;
-      
+
       // Return cached value if available
       if (assignmentCountsCache.has(cacheKey)) {
         return assignmentCountsCache.get(cacheKey)!;
@@ -250,17 +251,17 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
           for (const assignedSurvey of assignedSurveys) {
             try {
               const surveyJsonRaw = assignedSurvey.survey_json;
-              const surveyJson = typeof surveyJsonRaw === 'string' 
-                ? JSON.parse(surveyJsonRaw) 
+              const surveyJson = typeof surveyJsonRaw === 'string'
+                ? JSON.parse(surveyJsonRaw)
                 : surveyJsonRaw;
-              
+
               const assignedVillage = extractVillageFromSurveyJson(surveyJson, villageQuestionId);
               if (assignedVillage) {
                 const assignedVillageLower = assignedVillage.trim().toLowerCase();
                 // Check if this survey's GAV matches the target GAV
-                if (assignedVillageLower === gav || 
-                    assignedVillageLower.includes(gav) ||
-                    gav.includes(assignedVillageLower)) {
+                if (assignedVillageLower === gav ||
+                  assignedVillageLower.includes(gav) ||
+                  gav.includes(assignedVillageLower)) {
                   count++;
                 }
               }
@@ -269,7 +270,7 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
             }
           }
         }
-        
+
         // Cache the count
         assignmentCountsCache.set(cacheKey, count);
         return count;
@@ -291,26 +292,39 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
     for (const survey of unassignedSurveys) {
       try {
         const surveyJsonRaw = survey.survey_json;
-        const surveyJson = typeof surveyJsonRaw === 'string' 
-          ? JSON.parse(surveyJsonRaw) 
+        const surveyJson = typeof surveyJsonRaw === 'string'
+          ? JSON.parse(surveyJsonRaw)
           : surveyJsonRaw;
 
-        // Extract village/GAV from survey
+        // Extract village and taluka from survey
         const surveyVillage = extractVillageFromSurveyJson(surveyJson, villageQuestionId);
-        
+        const surveyTaluka = talukaQuestionId ? extractVillageFromSurveyJson(surveyJson, talukaQuestionId) : null;
+
         if (!surveyVillage || surveyVillage.trim().length === 0) {
-          continue; // Skip surveys without village information
+          continue;
         }
 
         const surveyVillageLower = surveyVillage.trim().toLowerCase();
+        const surveyTalukaLower = surveyTaluka ? surveyTaluka.trim().toLowerCase() : null;
 
-        // Find all matching field officers for this GAV
+        // Find matching field officers
         const matchingOfficers: number[] = [];
-        for (const [officerId, officerVillage] of officerGavMap.entries()) {
-          // Exact match or contains match
-          if (surveyVillageLower === officerVillage || 
-              surveyVillageLower.includes(officerVillage) ||
-              officerVillage.includes(surveyVillageLower)) {
+        for (const [officerId, officerData] of officerGavMap.entries()) {
+          // Check Taluka Match (if both have taluka info)
+          if (surveyTalukaLower && officerData.taluka) {
+            if (surveyTalukaLower !== officerData.taluka && !officerData.taluka.includes(surveyTalukaLower) && !surveyTalukaLower.includes(officerData.taluka)) {
+              continue; // Taluka mismatch
+            }
+          }
+
+          // Check Village Match
+          const hasVillageMatch = officerData.villages.some((v: string) =>
+            surveyVillageLower === v ||
+            surveyVillageLower.includes(v) ||
+            v.includes(surveyVillageLower)
+          );
+
+          if (hasVillageMatch) {
             matchingOfficers.push(officerId);
           }
         }
@@ -322,7 +336,7 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
         // Round-robin: Find officer with least assignments for this GAV
         let matchedOfficerId: number | null = null;
         let minCount = Infinity;
-        
+
         // Get assignment counts for all matching officers (from cache or DB)
         const officerCounts = new Map<number, number>();
         for (const officerId of matchingOfficers) {
@@ -338,7 +352,7 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
         // This ensures consistent round-robin behavior
         if (!matchedOfficerId && matchingOfficers.length > 0) {
           // Find all officers with minimum count
-          const officersWithMinCount = matchingOfficers.filter(id => 
+          const officersWithMinCount = matchingOfficers.filter(id =>
             (officerCounts.get(id) || 0) === minCount
           );
           // Pick the first one (ensures round-robin: A, B, C, A, B, C...)
@@ -354,6 +368,63 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
                 updated_at = NOW()
             WHERE id = ?
           `, [matchedOfficerId, survey.id]);
+
+          // Create explicit assignment record used for tracking
+          try {
+            await conn.execute(`
+               INSERT INTO survey_assignments 
+               (survey_id, field_officer_id, source, status, assigned_at)
+               VALUES (?, ?, ?, 'pending', NOW())
+             `, [survey.id, matchedOfficerId, survey.source || 'Divyang Self']);
+
+            // LOG ACTIVITY: Survey Assigned
+            try {
+              await conn.execute(
+                `INSERT INTO survey_activity_logs (user_id, type, taluka, village, aadhaar_id, details) 
+                 VALUES (?, ?, ?, ?, ?, ?)`,
+                [
+                  matchedOfficerId,
+                  'SURVEY_ASSIGNED',
+                  surveyTaluka || null,
+                  surveyVillage || null,
+                  survey.aadhaar_id || null,
+                  JSON.stringify({
+                    survey_id: survey.id,
+                    action: 'auto_assign'
+                  })
+                ]
+              );
+            } catch (logError) {
+              console.error('ACTIVITY_LOG_ASSIGN_FAILED:', logError);
+            }
+
+            // Create notification for the field officer
+            const notificationTitle = 'नवीन सर्वेक्षण सोपवले';
+            const notificationMessage = `${surveyVillage} गावातील एक नवीन सर्वेक्षण तुम्हाला सोपवण्यात आले आहे.`;
+
+            await conn.execute(`
+              INSERT INTO notifications (user_id, type, title, message, data, created_at)
+              VALUES (?, 'survey_assigned', ?, ?, ?, NOW())
+            `, [
+              matchedOfficerId,
+              notificationTitle,
+              notificationMessage,
+              JSON.stringify({ survey_id: survey.id, village: surveyVillage })
+            ]);
+
+            // Try to send push notification
+            try {
+              await sendFCMPushNotification(matchedOfficerId, notificationTitle, notificationMessage, {
+                survey_id: survey.id,
+                type: 'survey_assigned'
+              });
+            } catch (pushError: any) {
+              Logger.error('AUTO_ASSIGN_PUSH_ERROR', { error: pushError.message });
+            }
+
+          } catch (assignError: any) {
+            Logger.error('AUTO_ASSIGN_INSERT_ERROR', { error: (assignError as any)?.message });
+          }
 
           // Update the cache to reflect the new assignment
           const cacheKey = `${matchedOfficerId}_${surveyVillageLower}`;

@@ -98,7 +98,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
             if (Array.isArray(u) && (u as any[]).length > 0) {
               userId = (u as any[])[0].id as number;
             }
-          } catch {}
+          } catch { }
         }
       }
     }
@@ -109,7 +109,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
       ? parseInt(String(body.camp_id))
       : NaN;
     const campId = Number.isFinite(campIdRaw) ? campIdRaw : 0;
-    
+
     // Get source from body, or determine from user context
     // For authenticated field officers, always use their name as source
     let source = '';
@@ -174,7 +174,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
 
     let pool;
     let connection;
-    
+
     try {
       pool = getDbPool();
     } catch (poolError: any) {
@@ -196,7 +196,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
     }
 
     let earlyReturnResponse: NextResponse | null = null;
-    
+
     try {
       // Validate that survey_aadhar entry exists
       try {
@@ -213,7 +213,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
           return;
         }
       } catch (e: any) {
-        Logger.error('aadhaar_lookup_failed', { 
+        Logger.error('aadhaar_lookup_failed', {
           error: e?.message || String(e),
           stack: e?.stack,
           aadhaar_id: aadhaarId
@@ -246,7 +246,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
           ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         `);
       } catch (createError: any) {
-        Logger.error('submit_answers_create_surveys_table_failed', { 
+        Logger.error('submit_answers_create_surveys_table_failed', {
           error: createError.message,
           note: 'Table might already exist'
         });
@@ -270,7 +270,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
           ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         `);
       } catch (createError: any) {
-        Logger.error('submit_answers_create_survey_files_table_failed', { 
+        Logger.error('submit_answers_create_survey_files_table_failed', {
           error: createError.message,
           note: 'Table might already exist'
         });
@@ -323,9 +323,9 @@ export async function handleSubmit(request: NextRequest, user: any) {
         try {
           await fs.mkdir(surveysDir, { recursive: true });
         } catch (mkdirError: any) {
-          Logger.error('submit_answers_mkdir_failed', { 
+          Logger.error('submit_answers_mkdir_failed', {
             error: mkdirError.message,
-            surveysDir 
+            surveysDir
           });
           // Continue - directory might already exist
         }
@@ -335,30 +335,30 @@ export async function handleSubmit(request: NextRequest, user: any) {
           await fs.writeFile(filePath, JSON.stringify(responsePayload, null, 2), 'utf8');
           relativePath = path.join('surveys', fileName);
         } catch (writeError: any) {
-          Logger.error('submit_answers_file_write_failed', { 
-            error: writeError.message, 
+          Logger.error('submit_answers_file_write_failed', {
+            error: writeError.message,
             stack: writeError.stack,
             filePath,
-            aadhaar_id: aadhaarId 
+            aadhaar_id: aadhaarId
           });
           // Continue without file path if file write fails
           relativePath = '';
         }
       } catch (fileError: any) {
-        Logger.error('submit_answers_file_operation_failed', { 
-          error: fileError.message, 
+        Logger.error('submit_answers_file_operation_failed', {
+          error: fileError.message,
           stack: fileError.stack,
-          aadhaar_id: aadhaarId 
+          aadhaar_id: aadhaarId
         });
         // Continue without file path if file operation fails
         relativePath = '';
       }
-      
+
       let responseJson: string;
       try {
         responseJson = JSON.stringify(responsePayload);
       } catch (jsonError: any) {
-        Logger.error('submit_answers_json_stringify_failed', { 
+        Logger.error('submit_answers_json_stringify_failed', {
           error: jsonError.message,
           aadhaar_id: aadhaarId
         });
@@ -380,7 +380,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
               await connection.execute(`ALTER TABLE surveys ADD COLUMN ${definition}`);
               surveyColumnNames.push(col.toLowerCase());
             } catch (alterError: any) {
-              Logger.info('submit_answers_column_add_failed', { 
+              Logger.info('submit_answers_column_add_failed', {
                 column: col,
                 error: alterError.message,
                 note: 'Column might already exist'
@@ -394,7 +394,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
         await ensureColumn('survey_json', 'survey_json LONGTEXT NULL');
         await ensureColumn('json_path', 'json_path VARCHAR(255) NULL');
         await ensureColumn('source', 'source VARCHAR(255) NULL');
-        
+
         // Add unique constraint if it doesn't exist
         try {
           await connection.execute(`
@@ -408,7 +408,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
           }
         }
       } catch (migrationError: any) {
-        Logger.error('submit_answers_migration_failed', { 
+        Logger.error('submit_answers_migration_failed', {
           error: migrationError.message,
           note: 'Continuing with existing table structure'
         });
@@ -432,18 +432,18 @@ export async function handleSubmit(request: NextRequest, user: any) {
           'SELECT id, survey_json FROM surveys WHERE aadhaar_id = ? LIMIT 1',
           [aadhaarId]
         );
-        
+
         if (Array.isArray(existingSurvey) && (existingSurvey as any[]).length > 0) {
           // Update existing survey record
           const existing = (existingSurvey as any[])[0];
           surveyId = existing.id;
-          
+
           // Merge with existing JSON if it exists
           let mergedJson = responsePayload;
           if (existing.survey_json) {
             try {
-              const existingJson = typeof existing.survey_json === 'string' 
-                ? JSON.parse(existing.survey_json) 
+              const existingJson = typeof existing.survey_json === 'string'
+                ? JSON.parse(existing.survey_json)
                 : existing.survey_json;
               // Merge answers: update existing or add new
               const existingAnswers = existingJson.answers || [];
@@ -467,7 +467,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
               mergedJson = responsePayload;
             }
           }
-          
+
           // Recalculate totals from merged JSON
           const allAnswers = mergedJson.answers || [];
           const totalAnswered = allAnswers.filter((a: any) => {
@@ -478,18 +478,18 @@ export async function handleSubmit(request: NextRequest, user: any) {
             const ans = String(a.answer || '').trim();
             return ans === '' || ans === '--';
           }).length;
-          
+
           let mergedJsonString: string;
           try {
             mergedJsonString = JSON.stringify(mergedJson);
           } catch (stringifyError: any) {
-            Logger.error('submit_answers_merged_json_stringify_failed', { 
+            Logger.error('submit_answers_merged_json_stringify_failed', {
               error: stringifyError.message,
               aadhaar_id: aadhaarId
             });
             throw new Error('Failed to serialize merged survey data. Please try again.');
           }
-          
+
           await connection.execute(
             `UPDATE surveys 
              SET no_of_questions_answered = ?,
@@ -501,7 +501,38 @@ export async function handleSubmit(request: NextRequest, user: any) {
              WHERE aadhaar_id = ?`,
             [totalAnswered, totalUnanswered, mergedJsonString, relativePath, source, aadhaarId]
           );
-          
+
+          // Mark clarifications as resolved for any questions that were answered in this submission
+          // This handles the case where field officer responds to clarification requests
+          if (surveyId && normalizedItems.length > 0) {
+            try {
+              const questionIds = normalizedItems
+                .filter(item => {
+                  const ans = String(item.answer || '').trim();
+                  return ans !== '' && ans !== '--';
+                })
+                .map(item => item.question_id);
+
+              if (questionIds.length > 0) {
+                await connection.query(
+                  `UPDATE question_clarifications 
+                   SET status = 'resolved', 
+                       resolved_at = NOW(),
+                       updated_at = NOW()
+                   WHERE survey_id = ? AND question_id IN (?) AND status = 'pending'`,
+                  [surveyId, questionIds]
+                );
+              }
+            } catch (clarError: any) {
+              // Non-blocking error - log but don't fail the request
+              Logger.error('CLARIFICATION_RESOLVE_ON_SUBMIT_ERROR', {
+                error: clarError.message,
+                survey_id: surveyId,
+                aadhaar_id: aadhaarId
+              });
+            }
+          }
+
           Logger.info('submit_answers_survey_updated', {
             survey_id: surveyId,
             aadhaar_id: aadhaarId,
@@ -523,7 +554,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
                  updated_at = NOW()`,
               [userId, aadhaarId, answeredCount, unansweredCount, responseJson, relativePath, source]
             );
-            
+
             if ((insertSurvey as any)?.insertId) {
               surveyId = (insertSurvey as any).insertId as number;
             } else {
@@ -536,7 +567,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
                 surveyId = (existing as any[])[0].id;
               }
             }
-            
+
             Logger.info('submit_answers_survey_created_or_updated', {
               survey_id: surveyId,
               aadhaar_id: aadhaarId,
@@ -580,7 +611,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
           }
         }
       } catch (surveyError: any) {
-        Logger.error('submit_answers_survey_record_failed', { 
+        Logger.error('submit_answers_survey_record_failed', {
           error: surveyError?.message,
           stack: surveyError?.stack,
           aadhaar_id: aadhaarId,
@@ -593,50 +624,58 @@ export async function handleSubmit(request: NextRequest, user: any) {
       // Extract taluka and district from answers and update survey_aadhar if needed
       // Question 47 = सध्याचा ता. (Current Taluka)
       // Question 48 = सध्याचा जि. (Current District)
+      // Question 49 = गाव (Village)
+      let logTaluka: string | null = null;
+      let logVillage: string | null = null;
+      let logDistrict: string | null = null;
+
       try {
-        let taluka: string | null = null;
-        let district: string | null = null;
-        
-        // Find taluka and district from answers
+        // Find taluka, village and district from answers
         const talukaAnswer = normalizedItems.find(item => item.question_id === 47);
         const districtAnswer = normalizedItems.find(item => item.question_id === 48);
-        
+        const villageAnswer = normalizedItems.find(item => item.question_id === 49);
+
         if (talukaAnswer && talukaAnswer.answer) {
-          taluka = String(talukaAnswer.answer).trim();
-          if (taluka === '' || taluka === '--') taluka = null;
+          logTaluka = String(talukaAnswer.answer).trim();
+          if (logTaluka === '' || logTaluka === '--') logTaluka = null;
         }
-        
+
         if (districtAnswer && districtAnswer.answer) {
-          district = String(districtAnswer.answer).trim();
-          if (district === '' || district === '--') district = null;
+          logDistrict = String(districtAnswer.answer).trim();
+          if (logDistrict === '' || logDistrict === '--') logDistrict = null;
         }
-        
+
+        if (villageAnswer && villageAnswer.answer) {
+          logVillage = String(villageAnswer.answer).trim();
+          if (logVillage === '' || logVillage === '--') logVillage = null;
+        }
+
         // Update survey_aadhar with taluka/district if we found them and they're not already set
-        if (taluka || district) {
+        if (logTaluka || logDistrict) {
           const updateFields: string[] = [];
           const updateValues: any[] = [];
-          
-          if (taluka) {
+
+          if (logTaluka) {
             updateFields.push('taluka = COALESCE(?, taluka)');
-            updateValues.push(taluka);
+            updateValues.push(logTaluka);
           }
-          
-          if (district) {
+
+          if (logDistrict) {
             updateFields.push('district = COALESCE(?, district)');
-            updateValues.push(district);
+            updateValues.push(logDistrict);
           }
-          
+
           if (updateFields.length > 0) {
             updateValues.push(aadhaarId);
             await connection.execute(
               `UPDATE survey_aadhar SET ${updateFields.join(', ')}, updated_at = NOW() WHERE id = ?`,
               updateValues
             );
-            
+
             Logger.info('submit_answers_updated_survey_aadhar', {
               aadhaar_id: aadhaarId,
-              taluka,
-              district,
+              taluka: logTaluka,
+              district: logDistrict,
             });
           }
         }
@@ -648,14 +687,54 @@ export async function handleSubmit(request: NextRequest, user: any) {
         });
       }
 
-      Logger.info('submit_answers', { 
-        aadhaar_id: aadhaarId, 
+      // If survey is fully completed (no unanswered questions), mark the assignment-tracking row as completed
+      if (unansweredCount === 0 && surveyId && userId) {
+        try {
+          await connection.execute(`
+             UPDATE survey_assignments 
+             SET status = 'completed', completed_at = NOW()
+             WHERE survey_id = ? AND field_officer_id = ?
+           `, [surveyId, userId]);
+        } catch (completeError) {
+          // Non-blocking error
+          Logger.info('submit_answers_assignment_complete_error', {
+            error: (completeError as any)?.message,
+            survey_id: surveyId
+          });
+        }
+      }
+
+      Logger.info('submit_answers', {
+        aadhaar_id: aadhaarId,
         survey_id: surveyId,
         answers_count: normalizedItems.length,
         answered: answeredCount,
         unanswered: unansweredCount,
         json_path: relativePath
       });
+
+      // LOG ACTIVITY every time a submission happens
+      try {
+        await connection.execute(
+          `INSERT INTO survey_activity_logs (user_id, type, taluka, village, aadhaar_id, details) 
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [
+            userId,
+            'SECTION_SUBMITTED',
+            logTaluka || null,
+            logVillage || null,
+            aadhaarId,
+            JSON.stringify({
+              survey_id: surveyId,
+              answered_count: answeredCount,
+              unanswered_count: unansweredCount,
+              items_count: normalizedItems.length
+            })
+          ]
+        );
+      } catch (logError) {
+        Logger.error('ACTIVITY_LOG_SUBMIT_FAILED', { error: (logError as any).message });
+      }
 
       // Immediately trigger auto-assignment for public form submissions
       // (source = 'Divyang Self' and user_id = 1)
@@ -670,16 +749,16 @@ export async function handleSubmit(request: NextRequest, user: any) {
       }
 
       // Store success response to return after connection release
-      earlyReturnResponse = NextResponse.json({ 
-        ok: true, 
-        saved: normalizedItems.length, 
-        survey_id: surveyId, 
+      earlyReturnResponse = NextResponse.json({
+        ok: true,
+        saved: normalizedItems.length,
+        survey_id: surveyId,
         json_path: relativePath,
         answered: answeredCount,
         unanswered: unansweredCount
       });
     } catch (dbError: any) {
-      Logger.error('submit_answers_db_error', { 
+      Logger.error('submit_answers_db_error', {
         error: dbError.message,
         stack: dbError.stack,
         aadhaar_id: aadhaarId,
@@ -687,9 +766,9 @@ export async function handleSubmit(request: NextRequest, user: any) {
       });
       // Store error response to return after connection release
       earlyReturnResponse = NextResponse.json(
-        { 
-          ok: false, 
-          error: dbError.message || 'Database operation failed. Please try again.' 
+        {
+          ok: false,
+          error: dbError.message || 'Database operation failed. Please try again.'
         },
         { status: 500 }
       );
@@ -702,26 +781,26 @@ export async function handleSubmit(request: NextRequest, user: any) {
         }
       }
     }
-    
+
     // Return the response after connection is released
     if (earlyReturnResponse) {
       return earlyReturnResponse;
     }
   } catch (error: any) {
-    Logger.error('submit_answers_failed', { 
+    Logger.error('submit_answers_failed', {
       error: error.message,
       stack: error.stack,
       name: error.name
     });
-    
+
     // Return user-friendly error messages
     const errorMessage = error.message || 'An unexpected error occurred';
     const isTimeout = errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT');
     const isConnectionError = errorMessage.includes('ECONNREFUSED') || errorMessage.includes('ENOTFOUND');
-    
+
     return NextResponse.json(
-      { 
-        ok: false, 
+      {
+        ok: false,
         error: isTimeout || isConnectionError
           ? 'Database connection failed. Please try again.'
           : errorMessage
@@ -740,7 +819,7 @@ export const POST = async (request: NextRequest) => {
       const authResult = await verifyAuth(request);
       user = authResult.user;
     } catch (authError: any) {
-      Logger.info('submit_answers_auth_optional', { 
+      Logger.info('submit_answers_auth_optional', {
         error: authError.message,
         note: 'Continuing without auth - will use user_id from body'
       });
@@ -749,15 +828,15 @@ export const POST = async (request: NextRequest) => {
     }
     return await handleSubmit(request, user);
   } catch (error: any) {
-    Logger.error('submit_answers_post_handler_failed', { 
+    Logger.error('submit_answers_post_handler_failed', {
       error: error.message,
       stack: error.stack,
       name: error.name
     });
     return NextResponse.json(
-      { 
-        ok: false, 
-        error: error.message || 'An unexpected error occurred. Please try again.' 
+      {
+        ok: false,
+        error: error.message || 'An unexpected error occurred. Please try again.'
       },
       { status: 500 }
     );

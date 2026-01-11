@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getLocationHistory } from '@/lib/location-store';
 import { requireAuth } from '@/lib/auth';
+import { Logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,7 +52,7 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
       locations: locations || [],
     });
   } catch (error: any) {
-    console.error('Error fetching location history:', error);
+    Logger.error('Error fetching location history:', { error: error.message });
     return NextResponse.json(
       { ok: false, error: error.message || 'Failed to fetch location history' },
       { status: 500 }

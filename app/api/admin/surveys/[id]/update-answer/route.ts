@@ -58,8 +58,8 @@ export const PUT = requireAuth(async (request: NextRequest, user) => {
       let surveyJson: any = {};
       if (survey.survey_json) {
         try {
-          surveyJson = typeof survey.survey_json === 'string' 
-            ? JSON.parse(survey.survey_json) 
+          surveyJson = typeof survey.survey_json === 'string'
+            ? JSON.parse(survey.survey_json)
             : survey.survey_json;
         } catch (parseError: any) {
           Logger.error('SURVEY_JSON_PARSE_ERROR', { error: parseError.message, survey_id: surveyId });
@@ -125,14 +125,33 @@ export const PUT = requireAuth(async (request: NextRequest, user) => {
         [JSON.stringify(surveyJson), totalAnswered, totalUnanswered, surveyId]
       );
 
+      // Mark clarification as resolved if it exists for this question
+      try {
+        await conn.query(
+          `UPDATE question_clarifications 
+           SET status = 'resolved', 
+               resolved_at = NOW(),
+               updated_at = NOW()
+           WHERE survey_id = ? AND question_id = ? AND status = 'pending'`,
+          [surveyId, question_id]
+        );
+      } catch (clarError: any) {
+        // Non-blocking error - log but don't fail the request
+        Logger.error('CLARIFICATION_RESOLVE_ERROR', {
+          error: clarError.message,
+          survey_id: surveyId,
+          question_id: question_id
+        });
+      }
+
       Logger.info('SURVEY_ANSWER_UPDATED', {
         survey_id: surveyId,
         question_id: question_id,
         verification_officer_id: user.id,
       });
 
-      return NextResponse.json({ 
-        ok: true, 
+      return NextResponse.json({
+        ok: true,
         message: 'Answer updated successfully',
         answer: answerValue,
       });

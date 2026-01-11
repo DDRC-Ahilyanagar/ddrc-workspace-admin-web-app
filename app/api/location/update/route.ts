@@ -37,32 +37,34 @@ export async function POST(request: NextRequest) {
     }
 
     // Store in memory (not database)
-    updateLocation({
-      user_id,
-      latitude,
-      longitude,
-      accuracy,
-      altitude,
-      speed,
-      heading,
-      timestamp,
-    });
-
-    Logger.info('LOCATION_UPDATE_RECEIVED', {
-      user_id,
-      latitude,
-      longitude,
-      timestamp: timestamp || new Date().toISOString(),
-    });
+    try {
+      updateLocation({
+        user_id,
+        latitude,
+        longitude,
+        accuracy,
+        altitude,
+        speed,
+        heading,
+        timestamp,
+      });
+    } catch (e) {
+      // In-memory update failed - not critical
+      Logger.warn('LOCATION_UPDATE_STORE_FAILED', { error: (e as any).message });
+    }
 
     return NextResponse.json({
       ok: true,
       message: 'Location updated successfully',
     });
   } catch (error: any) {
+    if (error.name === 'SyntaxError') {
+      return NextResponse.json({ ok: false, error: 'Invalid JSON body' }, { status: 400 });
+    }
     Logger.error('LOCATION_UPDATE_ERROR', { error: error.message });
+    // Return 200 even if logging fails? No, keep 500 for unexpected but handle gracefully
     return NextResponse.json(
-      { ok: false, error: error.message || 'Failed to update location' },
+      { ok: false, error: 'Failed to process location update' },
       { status: 500 }
     );
   }

@@ -30,36 +30,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const pool = getDbPool();
-    const conn = await pool.getConnection();
+    let conn;
+    try {
+      const pool = getDbPool();
+      conn = await pool.getConnection();
+    } catch (dbError: any) {
+      Logger.error('NOTIFICATIONS_DB_CONNECTION_FAILED', { error: dbError.message });
+      return NextResponse.json(
+        { ok: false, error: 'Database service unavailable' },
+        { status: 503 }
+      );
+    }
 
     try {
-      // Ensure notifications table exists
-      try {
-        await conn.query(`
-          CREATE TABLE IF NOT EXISTS notifications (
-            id bigint unsigned NOT NULL AUTO_INCREMENT,
-            user_id bigint unsigned NOT NULL,
-            type enum('clarification_request','survey_assigned','survey_approved','survey_rejected','general') NOT NULL DEFAULT 'general',
-            title varchar(255) NOT NULL,
-            message text NOT NULL,
-            data json DEFAULT NULL,
-            is_read tinyint(1) NOT NULL DEFAULT 0,
-            read_at timestamp NULL DEFAULT NULL,
-            created_at timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            PRIMARY KEY (id),
-            KEY idx_user_id (user_id),
-            KEY idx_type (type),
-            KEY idx_is_read (is_read),
-            KEY idx_created_at (created_at),
-            KEY idx_user_read (user_id, is_read)
-          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        `);
-      } catch (createError: any) {
-        Logger.error('CREATE_NOTIFICATIONS_TABLE_ERROR', { error: createError.message });
-        // Continue - table might already exist
-      }
 
       // Get query parameters
       const url = new URL(request.url);
@@ -90,16 +73,6 @@ export async function GET(request: NextRequest) {
       params.push(limit);
 
       const [rows]: any = await conn.query(query, params);
-
-      Logger.info('GET_NOTIFICATIONS_QUERY', {
-        user_id: user.id,
-        user_name: user.name,
-        user_phone: user.phone,
-        user_type: userType,
-        unread_only: unreadOnly,
-        limit: limit,
-        found_count: Array.isArray(rows) ? rows.length : 0,
-      });
 
       const notifications = Array.isArray(rows) ? rows.map((row: any) => {
         let data = null;
@@ -165,8 +138,13 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const { notification_id, mark_all_read } = body;
 
-    const pool = getDbPool();
-    const conn = await pool.getConnection();
+    let conn;
+    try {
+      const pool = getDbPool();
+      conn = await pool.getConnection();
+    } catch (dbError: any) {
+      return NextResponse.json({ ok: false, error: 'Database service unavailable' }, { status: 503 });
+    }
 
     try {
       if (mark_all_read) {

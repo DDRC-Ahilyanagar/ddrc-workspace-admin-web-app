@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { getAllLocations, isOnline } from '@/lib/location-store';
 import { requireAuth } from '@/lib/auth';
+import { Logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,7 +80,7 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
       conn.release();
     }
   } catch (error: any) {
-    console.error('Error fetching locations:', error);
+    Logger.error('Error fetching locations:', { error: error.message });
     return NextResponse.json(
       { ok: false, error: error.message || 'Failed to fetch locations' },
       { status: 500 }

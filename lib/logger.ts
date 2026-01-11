@@ -13,17 +13,17 @@ function ensureLogDir() {
 function writeLog(level: string, message: string, context: any = {}) {
   ensureLogDir();
   const timestamp = new Date().toISOString();
-  const ctx = Object.keys(context).length > 0 
-    ? JSON.stringify(context, null, 2) 
+  const ctx = Object.keys(context).length > 0
+    ? JSON.stringify(context, null, 2)
     : '';
   const line = `[${timestamp}] ${level}: ${message} ${ctx}\n`;
-  fs.appendFile(LOG_FILE, line, 'utf8', () => {});
+  fs.appendFile(LOG_FILE, line, 'utf8', () => { });
 }
 
 export const Logger = {
   info: (message: string, context: any = {}) => {
     writeLog('INFO', message, context);
-    console.log(`[INFO] ${message}`, context);
+    // console.log(`[INFO] ${message}`, context); // Removed to reduce noise
   },
   warn: (message: string, context: any = {}) => {
     writeLog('WARN', message, context);

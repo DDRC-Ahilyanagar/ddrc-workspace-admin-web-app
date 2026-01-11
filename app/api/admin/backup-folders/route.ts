@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import path from 'path';
 import { promises as fs } from 'fs';
+import { Logger } from '@/lib/logger';
 
 const MEDIA_ROOT = path.join(process.cwd(), 'media_backups');
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
@@ -26,10 +27,10 @@ export async function GET(request: NextRequest) {
     // Only allow admin with phone 7768068585
     const userType = (user?.user_type || '').toLowerCase().trim();
     const userPhone = user?.phone || '';
-    
-    if (userType !== 'admin' || userPhone !== '7768068585') {
+
+    if (userType !== 'admin') {
       return NextResponse.json(
-        { ok: false, error: 'Unauthorized: Access restricted to specific admin user' },
+        { ok: false, error: 'Unauthorized: Access restricted to admins' },
         { status: 403 }
       );
     }
@@ -37,14 +38,14 @@ export async function GET(request: NextRequest) {
     // Check if requesting specific folder images
     const { searchParams } = new URL(request.url);
     const folderName = searchParams.get('folder');
-    
+
     if (folderName) {
       // Return all images for a specific folder
       try {
         const folderPath = path.join(MEDIA_ROOT, decodeURIComponent(folderName));
         const resolvedPath = path.resolve(folderPath);
         const resolvedRoot = path.resolve(MEDIA_ROOT);
-        
+
         // Security check
         if (!resolvedPath.startsWith(resolvedRoot)) {
           return NextResponse.json(
@@ -95,7 +96,7 @@ export async function GET(request: NextRequest) {
     for (const entry of entries) {
       if (entry.isDirectory()) {
         const folderPath = path.join(MEDIA_ROOT, entry.name);
-        
+
         try {
           // Read images in folder
           const files = await fs.readdir(folderPath);
@@ -118,7 +119,7 @@ export async function GET(request: NextRequest) {
             } else {
               folderParts = entry.name.split('_');
             }
-            
+
             // Last part is usually the mobile number
             const mobileNo = folderParts[folderParts.length - 1] || '';
             // Everything before the last part is the officer name
@@ -134,9 +135,9 @@ export async function GET(request: NextRequest) {
               totalImages: images.length,
             });
           }
-        } catch (err) {
+        } catch (err: any) {
           // Skip folders that can't be read
-          console.error(`Error reading folder ${entry.name}:`, err);
+          Logger.error(`Error reading backup folder ${entry.name}:`, { error: err.message });
           continue;
         }
       }

@@ -41,7 +41,7 @@ export default function PublicFormPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  
+
   // Address section state (for dynamic loading)
   const [talukas, setTalukas] = useState<string[]>([]);
   const [villages, setVillages] = useState<string[]>([]);
@@ -79,12 +79,12 @@ export default function PublicFormPage() {
 
     // Build a map of parent question labels/IDs to their dependent questions
     const parentToChildren = new Map<string, Question[]>();
-    
+
     // First pass: identify all conditional questions and group them by parent
     for (const q of questions) {
       const rawCondition = (q.rendering_condition || '').toString().trim().toLowerCase();
       const hasCondition = rawCondition === 'yes' || rawCondition === 'true' || rawCondition === '1';
-      
+
       if (hasCondition && q.rendering_question) {
         const parentKey = q.rendering_question.trim();
         if (parentKey) {
@@ -95,29 +95,29 @@ export default function PublicFormPage() {
         }
       }
     }
-    
+
     // Second pass: rebuild the list ensuring conditional questions appear immediately after their parent
     const reordered: Question[] = [];
     const processed = new Set<number>();
-    
+
     // Helper function to recursively add a question and all its dependents
     const addQuestionAndDependents = (q: Question) => {
       if (processed.has(q.id)) return;
-      
+
       reordered.push(q);
       processed.add(q.id);
-      
+
       // Add all questions that depend on this one (recursively handles nested dependencies)
       const qLabel = q.question?.trim() || '';
       const qId = q.id.toString();
-      
+
       // Check by question text (exact match)
       if (parentToChildren.has(qLabel)) {
         for (const child of parentToChildren.get(qLabel)!) {
           addQuestionAndDependents(child);
         }
       }
-      
+
       // Check by question ID (if rendering_question is a number)
       if (parentToChildren.has(qId)) {
         for (const child of parentToChildren.get(qId)!) {
@@ -125,33 +125,33 @@ export default function PublicFormPage() {
         }
       }
     };
-    
+
     // Process all independent questions first (those without rendering conditions)
     // This ensures parents are processed before their dependents
     for (const q of questions) {
       if (processed.has(q.id)) continue;
-      
+
       const rawCondition = (q.rendering_condition || '').toString().trim().toLowerCase();
       const hasCondition = rawCondition === 'yes' || rawCondition === 'true' || rawCondition === '1';
-      
+
       if (!hasCondition) {
         // Independent question - add it and all its dependents
         addQuestionAndDependents(q);
       }
     }
-    
+
     // Process any remaining dependent questions that weren't added (edge case: parent not in list)
     for (const q of questions) {
       if (!processed.has(q.id)) {
         addQuestionAndDependents(q);
       }
     }
-    
+
     // If reordering didn't work or resulted in different length, fall back to original order
     if (reordered.length !== questions.length) {
       return questions.sort((a, b) => (a.id || 0) - (b.id || 0));
     }
-    
+
     return reordered;
   };
 
@@ -215,11 +215,11 @@ export default function PublicFormPage() {
   useEffect(() => {
     if (allQuestions.length > 0 && dobQuestionId && ageQuestionId) {
       const dobValue = answers[dobQuestionId]?.toString() || '';
-      
+
       // Only update if DOB actually changed
       if (dobValue !== prevDobRef.current) {
         prevDobRef.current = dobValue;
-        
+
         if (dobValue) {
           const calculatedAge = calculateAge(dobValue);
           if (calculatedAge) {
@@ -254,15 +254,35 @@ export default function PublicFormPage() {
   // Pre-fill district and load dependent data when address step loads
   useEffect(() => {
     if (currentStep === 'address' && allQuestions.length > 0) {
+      const updates: Record<number, any> = {};
+
       // Pre-fill district with "Ahilyanagar" if not set
       const districtQuestionId = getQuestionIdByText('सध्याचा जि.') || getQuestionIdByText('जि.');
       if (districtQuestionId && !answers[districtQuestionId]) {
-        setAnswers((prev) => ({ ...prev, [districtQuestionId]: 'Ahilyanagar' }));
+        updates[districtQuestionId] = 'Ahilyanagar';
       }
-      
-      // Load dependent data if taluka is already selected
+
+      // Pre-fill Taluka as 'Parner'
       const talukaQuestionId = getQuestionIdByText('सध्याचा ता.') || getQuestionIdByText('ता.');
-      if (talukaQuestionId && answers[talukaQuestionId]) {
+      if (talukaQuestionId) {
+        updates[talukaQuestionId] = 'Parner';
+        // Load dependent data for Parner
+        loadDependentData('Parner');
+      }
+
+      // Pre-fill Village as 'Bhalawani'
+      const villageQuestionId = getQuestionIdByText('सध्याचा गाव') || getQuestionIdByText('गाव');
+      if (villageQuestionId) {
+        updates[villageQuestionId] = 'Bhalawani';
+      }
+
+      // Apply all updates
+      if (Object.keys(updates).length > 0) {
+        setAnswers((prev) => ({ ...prev, ...updates }));
+      }
+
+      // Load dependent data if taluka is already selected (existing logic)
+      if (talukaQuestionId && answers[talukaQuestionId] && !updates[talukaQuestionId]) {
         const selectedTaluka = answers[talukaQuestionId];
         if (selectedTaluka && (villages.length === 0 || grams.length === 0)) {
           loadDependentData(selectedTaluka);
@@ -270,6 +290,102 @@ export default function PublicFormPage() {
       }
     }
   }, [currentStep, allQuestions.length]);
+
+  // TEMP: Prefill form data for testing
+  useEffect(() => {
+    // Only prefill if we haven't already (check if aadhar is empty)
+    if (!aadharNo && !divyangName && currentStep === 'upload-front') {
+      setAadharNo('123456789012');
+      setDivyangName('Test User');
+
+      // Create dummy files for images to pass validation
+      // Use a valid 1x1 pixel PNG base64 to avoid "Input buffer contains unsupported image format" error
+      const validBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNiAAAABgADNjd8qAAAAABJRU5ErkJggg==';
+      const byteCharacters = atob(validBase64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const dummyFile = new File([byteArray], 'test_image.png', { type: 'image/png' });
+
+      // setFrontImage(dummyFile);
+      // setBackImage(dummyFile);
+      // setFrontImageUrl('/placeholder-id-front.png');
+      // setBackImageUrl('/placeholder-id-back.png');
+    }
+
+    if (allQuestions.length > 0) {
+      const updates: Record<number, any> = {};
+
+      // Helper to safely add answer if question exists
+      const addAnswer = (text: string, value: any) => {
+        // Try exact match first
+        let qId = getQuestionIdByText(text);
+
+        // If not found, try finding by substring if needed (less reliable but fallback)
+        if (!qId) {
+          const q = allQuestions.find(q => q.question?.includes(text));
+          if (q) qId = q.id;
+        }
+
+        if (qId) {
+          updates[qId] = value;
+        }
+      };
+
+      // Personal Info Prefills
+      addAnswer('लिंग', 'पुरुष');
+      addAnswer('मोबाईल नं', '9999999999');
+      addAnswer('जन्म तारीख', '1990-01-01');
+      addAnswer('ईमेल आयडी', 'test@example.com');
+      addAnswer('शिक्षण', 'पदवीधर');
+      addAnswer('व्यवसाय', 'नोकरी');
+      addAnswer('उत्पन्न गट', 'APL');
+
+      // Additional requested prefills
+      addAnswer('वैवाहिक स्थिती', 'विवाहित');
+      addAnswer('धर्म', 'हिंदू');
+      addAnswer('वडील/आई चे नाव', 'सुभाष कदम');
+      addAnswer('वडील किंवा काळजीवाहकाचा मोबाईल नं', '9876543210');
+      addAnswer('कुटूंब प्रमुखाचे नाव', 'सुभाष कदम');
+      addAnswer('घरातील एकूण सदस्य', '4');
+      addAnswer('प्रवर्ग', 'खुला प्रवर्ग (OPEN/GENERAL)');
+      addAnswer('रक्त गट', 'O+');
+      addAnswer('लाभार्थी आत्महत्या ग्रस्त कुटुंबातील सदस्य आहे का?', 'नाही');
+      addAnswer('लाभार्थी अनाथ आहे का? (१८ वर्षाखालील व आई-वडील दोन्ही नसलेले)', 'नाही');
+      addAnswer('लाभार्थी आदिवासी क्षेत्रातील रहिवाशी आहे का?', 'नाही');
+      addAnswer('लाभार्थी प्रकल्पग्रस्त आहे का?', 'नाही');
+      addAnswer('लाभार्थी एकल पालकाच्या कुटुंबातील आहे का?', 'नाही');
+      addAnswer('लाभार्थी स्थलांतरित (कामासाठी स्थलांतर केलेले) कुटुंबातील आहे का?', 'नाही');
+
+      // Disability Details
+      addAnswer('वैश्विक कार्ड (UDID)', 'नाही');
+      addAnswer('दिव्यांगता प्रकार (Disability Type)', 'Blindness');
+      addAnswer('दिव्यांगता टक्केवारी (% of Disability)', '40');
+
+      // Additional Disability Related
+      addAnswer('आपले युडीआयडी कार्ड आहे का?', 'नाही');
+      addAnswer('UDID कार्ड क्रमांक', '1234567890123456');
+
+      // Address Fields (Backup in case the other effect doesn't fire)
+      addAnswer('सध्याचा ता.', 'Parner');
+      addAnswer('ता.', 'Parner');
+      addAnswer('सध्याचा गाव', 'Bhalawani');
+      addAnswer('गाव', 'Bhalawani');
+      addAnswer('सध्याचा जि.', 'Ahilyanagar');
+      addAnswer('जि.', 'Ahilyanagar');
+
+      // Missing Prefills
+      addAnswer('जिल्हा', 'Ahilyanagar');
+      addAnswer('राज्य', 'Maharashtra');
+      addAnswer('पिनकोड', '414302');
+
+      if (Object.keys(updates).length > 0) {
+        setAnswers((prev) => ({ ...prev, ...updates }));
+      }
+    }
+  }, [allQuestions.length, currentStep]);
 
   const loadQuestions = async () => {
     setLoading(true);
@@ -283,12 +399,12 @@ export default function PublicFormPage() {
         // Also filter out inactive questions (status !== 'Active')
         const personalInfo = questions.filter(
           (q) => (q.title === 'वैयक्तिक माहिती' || q.section_id === 1) &&
-                 (q.status === 'Active' || !q.status || q.status === null)
+            (q.status === 'Active' || !q.status || q.status === null)
         );
-        
+
         // Add disability type, percentage, and UDID questions
         const disabilityQuestions = questions.filter(
-          (q) => 
+          (q) =>
             q.title === 'दिव्यांगता तपशील' && (
               q.question.includes('दिव्यांगता प्रकार') ||
               q.question.includes('दिव्यांगता टक्केवारी') ||
@@ -296,7 +412,7 @@ export default function PublicFormPage() {
               q.question === 'वैश्विक कार्ड (UDID)'
             )
         );
-        
+
         // Find questions from other sections that have rendering conditions based on personal info questions
         // Get all question texts and IDs from personal info section
         const personalInfoQuestionTexts = new Set(
@@ -305,15 +421,15 @@ export default function PublicFormPage() {
         const personalInfoQuestionIds = new Set(
           personalInfo.map(q => q.id).filter(Boolean)
         );
-        
+
         // Include questions from other sections that depend on personal info questions
         const conditionalQuestions = questions.filter((q) => {
           // Skip if already in personalInfo or disabilityQuestions
-          if (personalInfo.some(pq => pq.id === q.id) || 
-              disabilityQuestions.some(dq => dq.id === q.id)) {
+          if (personalInfo.some(pq => pq.id === q.id) ||
+            disabilityQuestions.some(dq => dq.id === q.id)) {
             return false;
           }
-          
+
           // Include if it has a rendering condition pointing to a personal info question
           const rawCondition = (q.rendering_condition || '').toString().trim().toLowerCase();
           if (rawCondition === 'yes' || rawCondition === 'true' || rawCondition === '1') {
@@ -332,13 +448,13 @@ export default function PublicFormPage() {
           }
           return false;
         });
-        
+
         // Combine all questions
         const allPersonalInfo = [...personalInfo, ...disabilityQuestions, ...conditionalQuestions];
-        
+
         // Reorder questions so conditional questions appear immediately after their parent
         const reorderedQuestions = reorderQuestionsWithConditionals(allPersonalInfo);
-        
+
         setPersonalInfoQuestions(reorderedQuestions);
 
         // Filter current address questions (title = "पत्ता" AND question starts with "सध्याचा")
@@ -414,7 +530,7 @@ export default function PublicFormPage() {
         setError(`कृपया सर्व आवश्यक फील्ड भरा: ${missing.question}`);
         return;
       }
-      
+
       // Validate mobile numbers (must be exactly 10 digits)
       for (const q of visibleQuestions) {
         if (q.question?.includes('मोबाईल') || q.question?.includes('Mobile')) {
@@ -427,7 +543,7 @@ export default function PublicFormPage() {
             }
           }
         }
-        
+
         // Validate email format
         if (q.question?.includes('ईमेल') || q.question?.includes('Email') || q.question?.includes('email')) {
           const emailValue = answers[q.id];
@@ -440,7 +556,7 @@ export default function PublicFormPage() {
           }
         }
       }
-      
+
       setCurrentStep('address');
       setError('');
     } else if (currentStep === 'address') {
@@ -458,7 +574,7 @@ export default function PublicFormPage() {
         setError(`कृपया सर्व आवश्यक फील्ड भरा: ${missing.question}`);
         return;
       }
-      
+
       await submitForm();
     }
   };
@@ -479,7 +595,7 @@ export default function PublicFormPage() {
   // Check for existing survey by Aadhar number
   const checkExistingSurvey = async (aadharDigits: string) => {
     if (aadharDigits.length !== 12) return;
-    
+
     setCheckingExisting(true);
     try {
       const response = await apiCall('public/get-survey-by-aadhar', {
@@ -515,12 +631,12 @@ export default function PublicFormPage() {
       // If existing survey data is available, use that aadhar_id
       if (existingSurveyData && existingSurveyData.aadhar_id) {
         setAadharId(existingSurveyData.aadhar_id);
-        
+
         // Prefill answers if available
         if (existingSurveyData.answers && Object.keys(existingSurveyData.answers).length > 0) {
           setAnswers((prev) => ({ ...prev, ...existingSurveyData.answers }));
         }
-        
+
         // Pre-fill the name in personal info section
         if (divyangName && allQuestions.length > 0) {
           const nameQuestionId = getQuestionIdByText('दिव्यांगांचे नाव');
@@ -528,7 +644,7 @@ export default function PublicFormPage() {
             setAnswers((prev) => ({ ...prev, [nameQuestionId]: divyangName }));
           }
         }
-        
+
         setCurrentStep('personal-info');
         setLoading(false);
         return;
@@ -566,7 +682,7 @@ export default function PublicFormPage() {
       }
 
       setAadharId(createResponse.aadhar_id);
-      
+
       // Pre-fill the name in personal info section
       if (divyangName && allQuestions.length > 0) {
         const nameQuestionId = getQuestionIdByText('दिव्यांगांचे नाव');
@@ -574,7 +690,7 @@ export default function PublicFormPage() {
           setAnswers((prev) => ({ ...prev, [nameQuestionId]: divyangName }));
         }
       }
-      
+
       setCurrentStep('personal-info');
     } catch (err: any) {
       setError(err.message || 'त्रुटी आली. कृपया पुन्हा प्रयत्न करा.');
@@ -594,7 +710,7 @@ export default function PublicFormPage() {
       // Final validation: Ensure all visible questions have answers
       const allVisibleQuestions = [...personalInfoQuestions, ...addressQuestions]
         .filter((q) => shouldShowQuestion(q));
-      
+
       const missingAnswers = allVisibleQuestions.find((q) => {
         const answer = answers[q.id];
         if (answer === null || answer === undefined || answer === '') return true;
@@ -602,7 +718,7 @@ export default function PublicFormPage() {
         if (typeof answer === 'string' && answer.trim() === '') return true;
         return false;
       });
-      
+
       if (missingAnswers) {
         setError(`कृपया सर्व आवश्यक फील्ड भरा: ${missingAnswers.question}`);
         setSubmitting(false);
@@ -633,39 +749,39 @@ export default function PublicFormPage() {
   const handleAnswerChange = (questionId: number, value: any) => {
     setAnswers((prev) => {
       const newAnswers = { ...prev, [questionId]: value };
-      
+
       // Auto-calculate age when date of birth changes
       const dobQuestionId = getQuestionIdByText('जन्म तारीख');
       const ageQuestionId = getQuestionIdByText('वय');
-      
+
       if (questionId === dobQuestionId && ageQuestionId) {
         const age = calculateAge(value);
         if (age) {
           newAnswers[ageQuestionId] = age;
         }
       }
-      
+
       // Handle taluka selection - load dependent data
       const question = allQuestions.find(q => q.id === questionId);
       if (question) {
         const label = question.question?.trim() || '';
         const isTaluka = label === 'ता.' || label === 'सध्याचा ता.' || label.includes('तालुका');
-        
+
         if (isTaluka && value) {
           // Clear dependent fields when taluka changes
           const villageQuestionId = getQuestionIdByText('सध्याचा गाव') || getQuestionIdByText('गाव');
           const gramQuestionId = getQuestionIdByText('सध्याचा ग्रामपंचायत') || getQuestionIdByText('ग्रामपंचायत');
           const talathiQuestionId = getQuestionIdByText('सध्याचा तलाठी कार्यालय') || getQuestionIdByText('तलाठी कार्यालय');
-          
+
           if (villageQuestionId) delete newAnswers[villageQuestionId];
           if (gramQuestionId) delete newAnswers[gramQuestionId];
           if (talathiQuestionId) delete newAnswers[talathiQuestionId];
-          
+
           // Load dependent data
           loadDependentData(value);
         }
       }
-      
+
       return newAnswers;
     });
     // Force re-render to show/hide conditional questions
@@ -675,10 +791,10 @@ export default function PublicFormPage() {
   const handleFileUpload = async (questionId: number, file: File) => {
     // Create immediate preview URL for instant feedback
     const previewUrl = URL.createObjectURL(file);
-    
+
     // Set preview immediately so user can see the image
     handleAnswerChange(questionId, previewUrl);
-    
+
     // Now upload the file in the background
     setLoading(true);
     try {
@@ -708,38 +824,38 @@ export default function PublicFormPage() {
   // Expand multi-answer values (handle arrays and pipe-separated values)
   const expandMultiAnswerValues = (answer: any): string[] => {
     if (!answer) return [];
-    
+
     // Handle arrays (multi-select)
     if (Array.isArray(answer)) {
       return answer.map(v => normalizeValue(String(v))).filter(v => v.length > 0);
     }
-    
+
     const answerStr = String(answer).trim();
     if (!answerStr) return [];
-    
+
     // Handle pipe-separated values (||)
     const parts = answerStr.split('||');
     const values: string[] = [];
-    
+
     for (const part of parts) {
       const segment = part.trim();
       if (!segment) continue;
-      
+
       // Handle format like "key: value" - extract value part
-      const clean = segment.includes(':') 
+      const clean = segment.includes(':')
         ? segment.substring(segment.indexOf(':') + 1).trim()
         : segment;
-      
+
       if (clean) {
         values.push(normalizeValue(clean));
       }
     }
-    
+
     // If no values extracted, use the original answer
     if (values.length === 0) {
       values.push(normalizeValue(answerStr));
     }
-    
+
     return values;
   };
 
@@ -765,18 +881,18 @@ export default function PublicFormPage() {
     const renderingQuestion = allQuestions.find((x) => {
       // Skip self-reference
       if (x.id === currentQid) return false;
-      
+
       // Match by ID if rendering_question is a number
       const renderingQId = parseInt(targetLabel);
       if (renderingQId > 0 && x.id === renderingQId) {
         return true;
       }
-      
+
       // Match by exact question text
       if (x.question?.trim() === targetLabel) {
         return true;
       }
-      
+
       return false;
     });
 
@@ -802,7 +918,7 @@ export default function PublicFormPage() {
     if (expectedValues.length === 0) return false;
 
     // Check if any expected value matches any actual value
-    return expectedValues.some(expected => 
+    return expectedValues.some(expected =>
       actualValues.some(actual => actual === expected)
     );
   };
@@ -812,7 +928,7 @@ export default function PublicFormPage() {
 
     const currentAnswer = answers[q.id];
     const label = q.question?.trim() || '';
-    
+
     // Check if this is an address field
     const isDistrict = label === 'जि.' || label === 'सध्याचा जि.';
     const isTaluka = label === 'ता.' || label === 'सध्याचा ता.' || label.includes('तालुका');
@@ -839,7 +955,7 @@ export default function PublicFormPage() {
         } else {
           options = q.options?.split(',').map((o) => o.trim()).filter(o => o && o !== '--Select--') || [];
         }
-        
+
         const isMultiSelect = q.multi_select === 1 || q.multi_select === '1';
 
         if (isMultiSelect) {
@@ -900,17 +1016,20 @@ export default function PublicFormPage() {
         const isEmailField = q.question?.includes('ईमेल') || q.question?.includes('Email') || q.question?.includes('email');
         // Check if this is the age field (should be read-only)
         const isAgeField = q.question?.trim() === 'वय';
-        
+
+        // Validation check for UI highlighting
+        const isInvalid = error && !currentAnswer && !isAgeField;
+
         // District field: always default to "Ahilyanagar"
         if (isDistrict) {
           const districtValue = currentAnswer || 'Ahilyanagar';
-          
+
           return (
             <div key={q.id} className="mb-3 mb-md-4">
               <label className="form-label fw-semibold mb-2 d-block">{q.question}</label>
               <input
                 type="text"
-                className="form-control form-control-lg"
+                className={`form-control form-control-lg ${isInvalid ? 'is-invalid' : ''}`}
                 value={districtValue}
                 onChange={(e) => handleAnswerChange(q.id, e.target.value)}
                 required
@@ -919,14 +1038,14 @@ export default function PublicFormPage() {
             </div>
           );
         }
-        
+
         // Gram Panchayat should always be a dropdown, even if question_type is 'text'
         if (isGram && grams.length > 0) {
           return (
             <div key={q.id} className="mb-3 mb-md-4">
               <label className="form-label fw-semibold mb-2 d-block">{q.question}</label>
               <select
-                className="form-select form-select-lg"
+                className={`form-select form-select-lg ${isInvalid ? 'is-invalid' : ''}`}
                 value={currentAnswer || ''}
                 onChange={(e) => handleAnswerChange(q.id, e.target.value)}
                 required
@@ -942,17 +1061,17 @@ export default function PublicFormPage() {
             </div>
           );
         }
-        
+
         return (
           <div key={q.id} className="mb-3 mb-md-4">
             <label className="form-label fw-semibold mb-2 d-block">{q.question}</label>
             <input
               type={isEmailField ? 'email' : 'text'}
-              className="form-control form-control-lg"
+              className={`form-control form-control-lg ${isInvalid ? 'is-invalid' : ''}`}
               value={currentAnswer || ''}
               onChange={(e) => {
                 let value = e.target.value;
-                
+
                 // Mobile number validation: only digits, max 10
                 if (isMobileField) {
                   value = value.replace(/\D/g, ''); // Remove non-digits
@@ -960,13 +1079,13 @@ export default function PublicFormPage() {
                     value = value.slice(0, 10);
                   }
                 }
-                
+
                 handleAnswerChange(q.id, value);
               }}
               onBlur={(e) => {
                 // Validate on blur
                 const value = e.target.value.trim();
-                
+
                 if (isMobileField && value && value.length !== 10) {
                   setError('कृपया 10 अंकी मोबाईल नंबर प्रविष्ट करा');
                 } else if (isEmailField && value) {
@@ -993,11 +1112,12 @@ export default function PublicFormPage() {
         );
 
       case 'long_answer':
+        const isLongInvalid = error && !currentAnswer;
         return (
           <div key={q.id} className="mb-3 mb-md-4">
             <label className="form-label fw-semibold mb-2 d-block">{q.question}</label>
             <textarea
-              className="form-control"
+              className={`form-control ${isLongInvalid ? 'is-invalid' : ''}`}
               rows={4}
               value={currentAnswer || ''}
               onChange={(e) => handleAnswerChange(q.id, e.target.value)}
@@ -1009,12 +1129,13 @@ export default function PublicFormPage() {
         );
 
       case 'date':
+        const isDateInvalid = error && !currentAnswer;
         return (
           <div key={q.id} className="mb-3 mb-md-4">
             <label className="form-label fw-semibold mb-2 d-block">{q.question}</label>
             <input
               type="date"
-              className="form-control form-control-lg"
+              className={`form-control form-control-lg ${isDateInvalid ? 'is-invalid' : ''}`}
               value={currentAnswer || ''}
               onChange={(e) => handleAnswerChange(q.id, e.target.value)}
               required
@@ -1024,12 +1145,13 @@ export default function PublicFormPage() {
         );
 
       case 'number':
+        const isNumberInvalid = error && !currentAnswer;
         return (
           <div key={q.id} className="mb-3 mb-md-4">
             <label className="form-label fw-semibold mb-2 d-block">{q.question}</label>
             <input
               type="number"
-              className="form-control form-control-lg"
+              className={`form-control form-control-lg ${isNumberInvalid ? 'is-invalid' : ''}`}
               value={currentAnswer || ''}
               onChange={(e) => handleAnswerChange(q.id, e.target.value)}
               required
@@ -1039,12 +1161,13 @@ export default function PublicFormPage() {
         );
 
       case 'upload':
+        const isUploadInvalid = error && !currentAnswer;
         return (
           <div key={q.id} className="mb-3 mb-md-4">
             <label className="form-label fw-semibold mb-2 d-block">{q.question}</label>
             <input
               type="file"
-              className="form-control form-control-lg"
+              className={`form-control form-control-lg ${isUploadInvalid ? 'is-invalid' : ''}`}
               accept="image/*"
               required
               onChange={(e) => {
@@ -1080,12 +1203,13 @@ export default function PublicFormPage() {
         );
 
       default:
+        const isDefaultInvalid = error && !currentAnswer;
         return (
           <div key={q.id} className="mb-3 mb-md-4">
             <label className="form-label fw-semibold mb-2 d-block">{q.question}</label>
             <input
               type="text"
-              className="form-control form-control-lg"
+              className={`form-control form-control-lg ${isDefaultInvalid ? 'is-invalid' : ''}`}
               value={currentAnswer || ''}
               onChange={(e) => handleAnswerChange(q.id, e.target.value)}
               style={{ fontSize: '1rem', minHeight: '48px' }}
@@ -1117,31 +1241,31 @@ export default function PublicFormPage() {
               <div className="card-body text-center p-5 p-md-6" style={{ background: 'linear-gradient(to bottom, #ffffff 0%, #f8f9fa 100%)' }}>
                 {/* Animated Success Icon */}
                 <div className="mb-4" style={{ animation: 'scaleIn 0.5s ease-out' }}>
-                  <div 
+                  <div
                     className="rounded-circle d-inline-flex align-items-center justify-content-center shadow-lg"
-                    style={{ 
-                      width: '120px', 
-                      height: '120px', 
+                    style={{
+                      width: '120px',
+                      height: '120px',
                       background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
                       position: 'relative',
                       animation: 'bounceIn 0.8s ease-out'
                     }}
                   >
-                    <svg 
-                      width="60" 
-                      height="60" 
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      stroke="white" 
-                      strokeWidth="3" 
-                      strokeLinecap="round" 
+                    <svg
+                      width="60"
+                      height="60"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="white"
+                      strokeWidth="3"
+                      strokeLinecap="round"
                       strokeLinejoin="round"
                       style={{ animation: 'checkmark 0.5s ease-out 0.3s both' }}
                     >
                       <path d="M20 6L9 17l-5-5" />
                     </svg>
                     {/* Ripple effect */}
-                    <div 
+                    <div
                       className="position-absolute rounded-circle"
                       style={{
                         width: '120px',
@@ -1156,11 +1280,11 @@ export default function PublicFormPage() {
                     />
                   </div>
                 </div>
-                
+
                 {/* Success Message */}
-                <h2 
-                  className="mb-3 fw-bold" 
-                  style={{ 
+                <h2
+                  className="mb-3 fw-bold"
+                  style={{
                     color: '#28a745',
                     fontSize: '2rem',
                     animation: 'fadeInUpSuccess 0.6s ease-out 0.2s both'
@@ -1168,10 +1292,10 @@ export default function PublicFormPage() {
                 >
                   फॉर्म सबमिट झाला!
                 </h2>
-                
-                <p 
-                  className="lead mb-3" 
-                  style={{ 
+
+                <p
+                  className="lead mb-3"
+                  style={{
                     color: '#495057',
                     fontSize: '1.15rem',
                     animation: 'fadeInUpSuccess 0.6s ease-out 0.4s both'
@@ -1179,10 +1303,10 @@ export default function PublicFormPage() {
                 >
                   आपला फॉर्म यशस्वीरित्या सबमिट झाला आहे.
                 </p>
-                
-                <p 
-                  className="mb-4" 
-                  style={{ 
+
+                <p
+                  className="mb-4"
+                  style={{
                     color: '#6c757d',
                     fontSize: '1rem',
                     fontWeight: '500',
@@ -1191,33 +1315,33 @@ export default function PublicFormPage() {
                 >
                   धन्यवाद!
                 </p>
-                
+
                 {/* Decorative elements */}
                 <div className="mt-4 pt-4 border-top">
                   <div className="d-flex justify-content-center gap-2">
-                    <div 
+                    <div
                       className="rounded-circle"
-                      style={{ 
-                        width: '8px', 
-                        height: '8px', 
+                      style={{
+                        width: '8px',
+                        height: '8px',
                         background: '#28a745',
                         animation: 'pulse 1.5s ease-in-out infinite 0.8s'
                       }}
                     />
-                    <div 
+                    <div
                       className="rounded-circle"
-                      style={{ 
-                        width: '8px', 
-                        height: '8px', 
+                      style={{
+                        width: '8px',
+                        height: '8px',
                         background: '#28a745',
                         animation: 'pulse 1.5s ease-in-out infinite 1s'
                       }}
                     />
-                    <div 
+                    <div
                       className="rounded-circle"
-                      style={{ 
-                        width: '8px', 
-                        height: '8px', 
+                      style={{
+                        width: '8px',
+                        height: '8px',
                         background: '#28a745',
                         animation: 'pulse 1.5s ease-in-out infinite 1.2s'
                       }}
@@ -1365,10 +1489,10 @@ export default function PublicFormPage() {
                           let value = e.target.value;
                           // Remove all non-digits
                           const digits = value.replace(/\D/g, '');
-                          
+
                           // Limit to 12 digits only (not 14)
                           const limitedDigits = digits.slice(0, 12);
-                          
+
                           // Format with hyphens: XXXX-XXXX-XXXX
                           let formatted = '';
                           if (limitedDigits.length > 0) {
@@ -1380,9 +1504,9 @@ export default function PublicFormPage() {
                               formatted += '-' + limitedDigits.slice(8, 12);
                             }
                           }
-                          
+
                           setAadharNo(formatted);
-                          
+
                           // Check for existing survey when 12 digits are entered
                           if (limitedDigits.length === 12) {
                             checkExistingSurvey(limitedDigits);
@@ -1414,7 +1538,7 @@ export default function PublicFormPage() {
                       <div className="alert alert-warning mt-2" role="alert">
                         <strong>⚠️ सर्वेक्षण आधीच अस्तित्वात आहे!</strong>
                         <p className="mb-2 mt-2">
-                          या आधार क्रमांकासाठी सर्वेक्षण आधीच भरले गेले आहे. 
+                          या आधार क्रमांकासाठी सर्वेक्षण आधीच भरले गेले आहे.
                           {existingSurveyData.survey && (
                             <span> उत्तरांची संख्या: {existingSurveyData.survey.answer_count}</span>
                           )}

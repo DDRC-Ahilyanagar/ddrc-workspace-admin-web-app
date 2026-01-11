@@ -139,6 +139,27 @@ async function handleCreate(request: NextRequest, user?: any) {
         aadharId = (existing as any[])[0]?.id;
       }
 
+      // LOG ACTIVITY: Started New Survey / Created Aadhaar
+      try {
+        await connection.execute(
+          `INSERT INTO survey_activity_logs (user_id, type, taluka, village, aadhaar_id, details) 
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [
+            userId,
+            'SURVEY_STARTED',
+            body.taluka || null,
+            body.village || null,
+            aadharId,
+            JSON.stringify({
+              aadhar_no: aadharNo,
+              action: 'create_aadhar'
+            })
+          ]
+        );
+      } catch (logError) {
+        Logger.error('ACTIVITY_LOG_CREATE_AADHAAR_FAILED', { error: (logError as any).message });
+      }
+
       // Try OCR to extract fields and stage files; accumulate for response
       let extractedName: string | null = null;
       let extractedGender: string | null = null;
@@ -151,10 +172,10 @@ async function handleCreate(request: NextRequest, user?: any) {
         const digits = aadharNo.replace(/\D+/g, '');
         let extractedNameLocal = '';
         // Download images locally first
-        const downloads: {filePath: string, url: string}[] = [];
+        const downloads: { filePath: string, url: string }[] = [];
         const baseDir = path.join(process.cwd(), 'public', 'uploads');
         await fs.mkdir(baseDir, { recursive: true });
-        const tempDir = path.join(baseDir, `tmp_${Date.now()}_${Math.floor(Math.random()*1000)}`);
+        const tempDir = path.join(baseDir, `tmp_${Date.now()}_${Math.floor(Math.random() * 1000)}`);
         await fs.mkdir(tempDir, { recursive: true });
 
         async function downloadTo(fileUrl: string, fileName: string) {
@@ -180,14 +201,14 @@ async function handleCreate(request: NextRequest, user?: any) {
             text = text.replace(/\s+/g, ' ').trim();
           }
         } catch (ocrError: any) {
-          Logger.error('create_aadhar_front_ocr_failed', { 
+          Logger.error('create_aadhar_front_ocr_failed', {
             error: ocrError.message,
             stack: ocrError.stack,
             note: 'OCR failed but continuing without extracted data'
           });
           // Continue without OCR data - not critical for Aadhaar creation
         }
-        
+
         if (text) {
           try {
             // Extract name heuristics: look for lines before Aadhaar or after labels like Name/नाम
@@ -207,7 +228,7 @@ async function handleCreate(request: NextRequest, user?: any) {
             for (let i = 0; i < rawLines.length; i++) {
               const ln = rawLines[i];
               if (/\b(नाव|नाम)\b/.test(ln)) {
-                const next = rawLines[i+1]?.trim();
+                const next = rawLines[i + 1]?.trim();
                 if (next && /[\u0900-\u097F]/.test(next)) { marathiName = next; break; }
               }
             }
@@ -270,7 +291,7 @@ async function handleCreate(request: NextRequest, user?: any) {
           });
         }
         // Cleanup temp dir
-        await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+        await fs.rm(tempDir, { recursive: true, force: true }).catch(() => { });
 
         // Update holder_name if we found something
         if (extractedNameLocal && extractedNameLocal !== 'UNKNOWN') {
@@ -288,46 +309,46 @@ async function handleCreate(request: NextRequest, user?: any) {
               raw = await extractTextFromImage(imageBuffer, 'aadhaar');
               raw = raw.replace(/\r/g, '').trim();
             } catch (ocrError: any) {
-              Logger.error('create_aadhar_back_ocr_failed', { 
+              Logger.error('create_aadhar_back_ocr_failed', {
                 error: ocrError.message,
                 note: 'Back image OCR failed but continuing'
               });
               // Continue without address extraction
             }
-            
+
             if (raw) {
               try {
-              // Extract pincode (6 digits)
-              const pinMatch = raw.match(/\b(\d{6})\b/);
-              const pincode = pinMatch ? pinMatch[1] : null;
-              // Heuristic: find address even when no label is present
-              const lines = raw.split(/\n+/).map((l: string) => l.trim()).filter(Boolean as any);
-              const addrCandidates = lines.filter((l: string) => {
-                // Prefer lines with Devanagari or common address terms
-                const hasDevanagari = /[\u0900-\u097F]/.test(l);
-                const hasAddressTerms = /(address|to|resident|gaon|galli|road|nagar|taluk|taluka|district|post|village|ward|near|behind)/i.test(l);
-                // Many Aadhaar back sides list address in 3-6 consecutive lines; include medium-length lines
-                const plausibleLen = l.length >= 4 && l.length <= 80;
-                return plausibleLen && (hasDevanagari || hasAddressTerms);
-              });
-              const addressText = (addrCandidates.length > 0 ? addrCandidates.join(', ') : lines.slice(Math.max(0, lines.length - 6)).join(', ')).slice(0, 1000);
-              // Try infer taluka/district keywords
-              let taluka: string | null = null;
-              let district: string | null = null;
-              for (const l of lines) {
-                const t = l.match(/taluka\s*[:\-]?\s*([A-Za-z ]{3,})/i);
-                if (t && !taluka) taluka = t[1].trim();
-                const d = l.match(/district\s*[:\-]?\s*([A-Za-z ]{3,})/i);
-                if (d && !district) district = d[1].trim();
-              }
-              await connection.execute(
-                `UPDATE survey_aadhar SET address_text = COALESCE(?, address_text), pincode = COALESCE(?, pincode), taluka = COALESCE(?, taluka), district = COALESCE(?, district) WHERE id = ?`,
-                [(addressText && addressText.trim().length > 3) ? addressText : null, pincode, taluka, district, aadharId]
-              );
-              extractedAddress = (addressText && addressText.trim().length > 3) ? addressText : null;
-              extractedPincode = pincode;
-              extractedTaluka = taluka;
-              extractedDistrict = district;
+                // Extract pincode (6 digits)
+                const pinMatch = raw.match(/\b(\d{6})\b/);
+                const pincode = pinMatch ? pinMatch[1] : null;
+                // Heuristic: find address even when no label is present
+                const lines = raw.split(/\n+/).map((l: string) => l.trim()).filter(Boolean as any);
+                const addrCandidates = lines.filter((l: string) => {
+                  // Prefer lines with Devanagari or common address terms
+                  const hasDevanagari = /[\u0900-\u097F]/.test(l);
+                  const hasAddressTerms = /(address|to|resident|gaon|galli|road|nagar|taluk|taluka|district|post|village|ward|near|behind)/i.test(l);
+                  // Many Aadhaar back sides list address in 3-6 consecutive lines; include medium-length lines
+                  const plausibleLen = l.length >= 4 && l.length <= 80;
+                  return plausibleLen && (hasDevanagari || hasAddressTerms);
+                });
+                const addressText = (addrCandidates.length > 0 ? addrCandidates.join(', ') : lines.slice(Math.max(0, lines.length - 6)).join(', ')).slice(0, 1000);
+                // Try infer taluka/district keywords
+                let taluka: string | null = null;
+                let district: string | null = null;
+                for (const l of lines) {
+                  const t = l.match(/taluka\s*[:\-]?\s*([A-Za-z ]{3,})/i);
+                  if (t && !taluka) taluka = t[1].trim();
+                  const d = l.match(/district\s*[:\-]?\s*([A-Za-z ]{3,})/i);
+                  if (d && !district) district = d[1].trim();
+                }
+                await connection.execute(
+                  `UPDATE survey_aadhar SET address_text = COALESCE(?, address_text), pincode = COALESCE(?, pincode), taluka = COALESCE(?, taluka), district = COALESCE(?, district) WHERE id = ?`,
+                  [(addressText && addressText.trim().length > 3) ? addressText : null, pincode, taluka, district, aadharId]
+                );
+                extractedAddress = (addressText && addressText.trim().length > 3) ? addressText : null;
+                extractedPincode = pincode;
+                extractedTaluka = taluka;
+                extractedDistrict = district;
               } catch (parseError: any) {
                 Logger.error('create_aadhar_parse_address_failed', { error: parseError.message });
               }
@@ -340,8 +361,8 @@ async function handleCreate(request: NextRequest, user?: any) {
         Logger.error('create_aadhar_ocr_or_store_failed', { error: e.message });
       }
 
-      return NextResponse.json({ 
-        ok: true, 
+      return NextResponse.json({
+        ok: true,
         aadhar_id: aadharId,
         extracted: {
           name: extractedName || null,
@@ -378,7 +399,7 @@ export async function POST(request: NextRequest) {
   } catch (e) {
     // Auth not required, continue without user
   }
-  
+
   return await handleCreate(request, user);
 }
 

@@ -25,7 +25,10 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [mounted, setMounted] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [activeTab, setActiveTab] = useState<'requests' | 'alerts'>('requests');
   const [isMobile, setIsMobile] = useState(false);
   // Language state - load from localStorage or default to 'mr' (Marathi)
   const [language, setLanguage] = useState<'en' | 'mr'>(() => {
@@ -102,9 +105,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     return () => window.removeEventListener('resize', handleResize);
   }, [router]);
 
-  // Fetch pending access requests count - runs silently in background
-  // Only fetch for admin users, skip for verification officers
-  // IMPORTANT: Only fetch when user is logged in
+  // Fetch pending access requests count and admin notifications
   useEffect(() => {
     if (!mounted) return;
 
@@ -114,79 +115,84 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       return; // Don't fetch if not logged in
     }
 
-    // Skip fetching access requests for verification officers
-    // Check both state and localStorage for user type
     const storedUserType = localStorage.getItem('user_type') || '';
     const currentUserType = (userType || storedUserType)?.toLowerCase().trim();
-    if (currentUserType === 'verification_officer') {
-      return; // Don't fetch access requests for verification officers
-    }
 
-    // Only fetch for admin users
-    if (currentUserType !== 'admin' && currentUserType !== 'administrator') {
-      return; // Don't fetch if not admin
-    }
+    // Only fetch for admin or verification officer
+    const isAllowed = ['admin', 'administrator', 'verification_officer'].some(t => currentUserType.includes(t));
+    if (!isAllowed) return;
 
     let isMounted = true;
     let intervalId: NodeJS.Timeout | null = null;
-    let abortController: AbortController | null = null;
 
-    const fetchPendingCount = async () => {
-      // Cancel any previous request
-      if (abortController) {
-        abortController.abort();
-      }
-
-      abortController = new AbortController();
-
+    const fetchAllNotifications = async () => {
       try {
-        const res = await fetch('/api/access-requests?status=pending', {
+        // 1. Fetch Access Requests (Admin Only)
+        if (currentUserType === 'admin' || currentUserType === 'administrator') {
+          const res = await fetch('/api/access-requests?status=pending', {
+            cache: 'no-store',
+            credentials: 'include',
+          });
+          const json = await res.json();
+          if (json.ok && Array.isArray(json.data) && isMounted) {
+            setPendingCount(json.data.length);
+            setPendingRequests(json.data);
+          }
+        }
+
+        // 2. Fetch General Admin Notifications (Admin & Verification Officer)
+        const notifRes = await fetch('/api/admin/notifications?limit=20', {
           cache: 'no-store',
           credentials: 'include',
-          signal: abortController.signal,
-          // Prevent any navigation or page refresh
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-          },
         });
-
-        if (!isMounted || abortController.signal.aborted) return;
-
-        const json = await res.json();
-        if (json.ok && Array.isArray(json.data) && isMounted) {
-          setPendingCount(json.data.length);
-          setPendingRequests(json.data);
+        const notifJson = await notifRes.json();
+        if (notifJson.ok && isMounted) {
+          setNotifications(notifJson.notifications || []);
+          setUnreadNotificationsCount(notifJson.unread_count || 0);
         }
       } catch (err: any) {
-        // Ignore abort errors and only log real errors
-        if (err.name !== 'AbortError' && isMounted) {
-          console.error('Failed to fetch pending count:', err);
-        }
+        if (isMounted) console.error('Failed to fetch notifications:', err);
       }
     };
 
     // Initial fetch
-    fetchPendingCount();
+    fetchAllNotifications();
 
-    // Refresh count every 30 seconds
+    // Refresh every 30 seconds
     intervalId = setInterval(() => {
-      if (isMounted) {
-        fetchPendingCount();
-      }
+      if (isMounted) fetchAllNotifications();
     }, 30000);
 
-    // Cleanup
     return () => {
       isMounted = false;
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-      if (abortController) {
-        abortController.abort();
-      }
+      if (intervalId) clearInterval(intervalId);
     };
   }, [mounted, userType]);
+
+  const markAsRead = async (notificationId?: number, markAll: boolean = false) => {
+    try {
+      const res = await fetch('/api/admin/notifications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          notification_id: notificationId,
+          mark_all_read: markAll
+        }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        if (markAll) {
+          setUnreadNotificationsCount(0);
+          setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+        } else if (notificationId) {
+          setUnreadNotificationsCount(prev => Math.max(0, prev - 1));
+          setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err);
+    }
+  };
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
@@ -324,98 +330,186 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           </div>
 
           <div className="d-flex align-items-center animate__animated animate__fadeInRight">
-            {/* Notification Bell - Only show for admin */}
-            {!isVerificationOfficer && (
-              <div className="notification-wrapper position-relative me-3" ref={notifRef}>
-                <button
-                  className="btn btn-link text-white position-relative"
-                  onClick={toggleNotifications}
-                  style={{ textDecoration: 'none', padding: '0.5rem' }}
-                  title="प्रवेश विनंत्या"
-                  aria-expanded={showNotifications}
-                >
-                  <i className={`bi ${showNotifications ? 'bi-bell-fill' : 'bi-bell'}`} style={{ fontSize: '1.5rem' }}></i>
-                  {pendingCount > 0 && (
-                    <span
-                      className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                      style={{
-                        fontSize: '0.7rem',
-                        padding: '0.25rem 0.5rem',
-                        minWidth: '1.5rem',
-                      }}
-                    >
-                      {pendingCount > 99 ? '99+' : pendingCount}
-                    </span>
-                  )}
-                </button>
-
-                {showNotifications && (
-                  <div
-                    className="card shadow notification-dropdown animate__animated animate__fadeIn"
+            {/* Notification Bell */}
+            <div className="notification-wrapper position-relative me-3" ref={notifRef}>
+              <button
+                className="btn btn-link text-white position-relative"
+                onClick={toggleNotifications}
+                style={{ textDecoration: 'none', padding: '0.5rem' }}
+                title="सूचना"
+                aria-expanded={showNotifications}
+              >
+                <i className={`bi ${showNotifications ? 'bi-bell-fill' : 'bi-bell'}`} style={{ fontSize: '1.5rem' }}></i>
+                {(pendingCount + unreadNotificationsCount) > 0 && (
+                  <span
+                    className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
                     style={{
-                      minWidth: '320px',
-                      position: 'absolute',
-                      right: 0,
-                      top: '120%',
-                      zIndex: 1050,
+                      fontSize: '0.7rem',
+                      padding: '0.25rem 0.5rem',
+                      minWidth: '1.5rem',
+                      zIndex: 2
                     }}
                   >
-                    <div className="card-header d-flex justify-content-between align-items-center py-2">
-                      <strong>प्रवेश विनंत्या</strong>
-                      <span className="badge bg-primary">{pendingCount}</span>
-                    </div>
-                    <div className="list-group list-group-flush" style={{ maxHeight: '260px', overflowY: 'auto' }}>
-                      {pendingRequests.length === 0 && (
-                        <div className="text-center py-3 text-muted">नवीन विनंत्या नाहीत</div>
-                      )}
-                      {pendingRequests.slice(0, 5).map((req) => (
-                        <div
-                          key={`notif-${req?.id || Math.random()}`}
-                          className="list-group-item"
-                          style={{
-                            cursor: 'pointer',
-                            transition: 'background-color 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#f8f9fa';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = '';
-                          }}
-                          onClick={() => {
-                            router.push('/access-requests');
-                            setShowNotifications(false);
-                          }}
-                        >
-                          <div className="fw-semibold">{req?.name || 'नाव उपलब्ध नाही'}</div>
-                          <div className="small text-muted">{req?.phone || ''}</div>
-                          <div className="text-muted small">
-                            {req?.created_at ? new Date(req.created_at).toLocaleString('mr-IN', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            }) : ''}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="card-footer text-center py-2">
-                      <button
-                        className="btn btn-sm btn-outline-primary"
-                        onClick={() => {
-                          router.push('/access-requests');
-                          setShowNotifications(false);
-                        }}
-                      >
-                        सर्व पहा
-                      </button>
+                    {(pendingCount + unreadNotificationsCount) > 99 ? '99+' : (pendingCount + unreadNotificationsCount)}
+                  </span>
+                )}
+              </button>
+
+              {showNotifications && (
+                <div
+                  className="card shadow notification-dropdown animate__animated animate__fadeIn"
+                  style={{
+                    minWidth: '350px',
+                    position: 'absolute',
+                    right: 0,
+                    top: '120%',
+                    zIndex: 1050,
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    border: 'none'
+                  }}
+                >
+                  <div className="card-header bg-white border-bottom py-3 px-3">
+                    <div className="d-flex justify-content-between align-items-center mb-0">
+                      <h6 className="mb-0 fw-bold">सूचना केंद्र</h6>
+                      <span className="badge bg-primary rounded-pill">
+                        {pendingCount + unreadNotificationsCount} नवीन
+                      </span>
                     </div>
                   </div>
-                )}
-              </div>
-            )}
+
+                  {/* Tabs */}
+                  {!isVerificationOfficer && (
+                    <div className="d-flex bg-light border-bottom">
+                      <button
+                        className={`btn btn-sm flex-fill py-2 rounded-0 border-0 ${activeTab === 'requests' ? 'bg-white fw-bold border-bottom border-primary border-2 text-primary' : 'text-muted'}`}
+                        onClick={() => setActiveTab('requests')}
+                      >
+                        <i className="bi bi-person-plus me-1"></i>
+                        प्रवेश विनंत्या ({pendingCount})
+                      </button>
+                      <button
+                        className={`btn btn-sm flex-fill py-2 rounded-0 border-0 ${activeTab === 'alerts' ? 'bg-white fw-bold border-bottom border-primary border-2 text-primary' : 'text-muted'}`}
+                        onClick={() => setActiveTab('alerts')}
+                      >
+                        <i className="bi bi-info-circle me-1"></i>
+                        सूचना ({unreadNotificationsCount})
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="list-group list-group-flush" style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                    {/* Access Requests Tab Content (Admin Only) */}
+                    {(activeTab === 'requests' && !isVerificationOfficer) && (
+                      <>
+                        {pendingRequests.length === 0 ? (
+                          <div className="text-center py-5 text-muted">
+                            <i className="bi bi-check2-circle d-block mb-2" style={{ fontSize: '2rem', opacity: 0.5 }}></i>
+                            नवीन विनंत्या नाहीत
+                          </div>
+                        ) : (
+                          pendingRequests.slice(0, 5).map((req) => (
+                            <div
+                              key={`notif-req-${req?.id || Math.random()}`}
+                              className="list-group-item list-group-item-action py-3 border-start border-4 border-warning"
+                              onClick={() => {
+                                router.push('/access-requests');
+                                setShowNotifications(false);
+                              }}
+                            >
+                              <div className="d-flex justify-content-between align-items-start">
+                                <div>
+                                  <div className="fw-bold text-dark">{req?.name || 'नवीन विनंती'}</div>
+                                  <div className="small text-muted mb-1"><i className="bi bi-telephone text-primary me-1"></i> {req?.phone || ''}</div>
+                                  <div className="small text-muted" style={{ fontSize: '0.75rem' }}>
+                                    <i className="bi bi-clock me-1"></i>
+                                    {req?.created_at ? new Date(req.created_at).toLocaleString('mr-IN', {
+                                      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                    }) : ''}
+                                  </div>
+                                </div>
+                                <span className="badge bg-warning text-dark px-2 py-1">प्रलंबित</span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                        {pendingRequests.length > 0 && (
+                          <div className="card-footer bg-light text-center py-2">
+                            <button className="btn btn-sm btn-link text-primary text-decoration-none fw-bold" onClick={() => { router.push('/access-requests'); setShowNotifications(false); }}>सर्व विनंत्या पहा</button>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {/* General Notifications Tab Content (Admin & VO) */}
+                    {(activeTab === 'alerts' || isVerificationOfficer) && (
+                      <>
+                        {(notifications || []).length === 0 ? (
+                          <div className="text-center py-5 text-muted">
+                            <i className="bi bi-bell-slash d-block mb-2" style={{ fontSize: '2rem', opacity: 0.5 }}></i>
+                            सूचना नाहीत
+                          </div>
+                        ) : (
+                          <>
+                            {notifications.map((notif: any) => (
+                              <div
+                                key={`notif-alert-${notif.id}`}
+                                className={`list-group-item list-group-item-action py-3 ${!notif.is_read ? 'bg-light border-start border-4 border-primary' : ''}`}
+                                style={{ cursor: 'pointer' }}
+                                onClick={async () => {
+                                  if (!notif.is_read) {
+                                    await markAsRead(notif.id);
+                                  }
+
+                                  // Mark as read and navigate if needed
+                                  if (notif.data?.survey_id) {
+                                    router.push(`/survekshan?id=${notif.data.survey_id}`);
+                                  } else if (notif.data?.aadhaar_id) {
+                                    // If we have aadhaar_id but not survey_id link, try to go to reports or surveys
+                                    router.push(`/survekshan?search=${notif.data.aadhaar_id}`);
+                                  } else {
+                                    router.push('/survekshan');
+                                  }
+                                  setShowNotifications(false);
+                                }}
+                              >
+                                <div className="d-flex gap-3">
+                                  <div className={`rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 ${notif.type.includes('accepted') ? 'bg-success-subtle text-success' : notif.type.includes('rejected') ? 'bg-danger-subtle text-danger' : 'bg-primary-subtle text-primary'}`} style={{ width: '40px', height: '40px' }}>
+                                    <i className={`bi ${notif.type.includes('accepted') ? 'bi-check-circle' : notif.type.includes('rejected') ? 'bi-x-circle' : 'bi-info-circle'}`}></i>
+                                  </div>
+                                  <div className="flex-grow-1">
+                                    <div className="d-flex justify-content-between">
+                                      <div className={`fw-bold ${!notif.is_read ? 'text-dark' : 'text-muted'}`}>{notif.title}</div>
+                                      {!notif.is_read && <span className="p-1 bg-primary border border-light rounded-circle" style={{ height: '8px', width: '8px' }}></span>}
+                                    </div>
+                                    <div className="small text-muted mb-1">{notif.message}</div>
+                                    <div className="small text-muted" style={{ fontSize: '0.75rem' }}>
+                                      {new Date(notif.created_at).toLocaleString('mr-IN', {
+                                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                      })}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                            {unreadNotificationsCount > 0 && (
+                              <div className="card-footer bg-light text-center py-2">
+                                <button
+                                  className="btn btn-sm btn-link text-primary text-decoration-none fw-bold"
+                                  onClick={() => markAsRead(undefined, true)}
+                                >
+                                  सर्व वाचल्या म्हणून चिन्हांकित करा
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Language Switch Button */}
             <button
