@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import { promises as fs } from 'fs';
 
-const MEDIA_ROOT = path.join(process.cwd(), 'public', 'uploads');
+const MEDIA_ROOT = path.join(process.cwd(), 'media_backups');
 const API_KEY = process.env.BACKUP_API_KEY || '';
 
 export const runtime = 'nodejs';

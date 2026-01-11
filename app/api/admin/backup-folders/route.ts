@@ -4,7 +4,7 @@ import path from 'path';
 import { promises as fs } from 'fs';
 import { Logger } from '@/lib/logger';
 
-const MEDIA_ROOT = path.join(process.cwd(), 'public', 'uploads');
+const MEDIA_ROOT = path.join(process.cwd(), 'media_backups');
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
 
 export const dynamic = 'force-dynamic';
