@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';
+import { logSignupStep } from '@/lib/signup-logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -266,6 +267,67 @@ export async function POST(request: NextRequest) {
         user_id: validatedUserId,
         is_complete: isComplete,
       });
+
+      // Log signup steps based on what was saved
+      const [userData]: any = await conn.query(
+        'SELECT contact_number FROM users WHERE id = ? LIMIT 1',
+        [validatedUserId]
+      );
+      const userPhone = Array.isArray(userData) && userData.length > 0 ? userData[0].contact_number : null;
+
+      if (userPhone) {
+        // Log selfie upload (Step 1) if profile photo is present
+        if (profile_photo) {
+          await logSignupStep({
+            phone: userPhone,
+            user_id: validatedUserId,
+            step: 'selfie_uploaded',
+            step_number: 1,
+            status: 'completed',
+            data: { profile_photo: profile_photo.substring(0, 100) + '...' },
+          });
+        }
+
+        // Log territory selection (Step 4) if taluka and gaav are present
+        if (taluka && primary_gaav) {
+          await logSignupStep({
+            phone: userPhone,
+            user_id: validatedUserId,
+            step: 'territory_selected',
+            step_number: 4,
+            status: 'completed',
+            data: { taluka, primary_gaav, additional_gaavs: additional_gaavs || [] },
+          });
+        }
+
+        // Log bank details (Step 5) if bank details are present
+        if (account_holder_name && account_number && bank_name && ifsc_code) {
+          await logSignupStep({
+            phone: userPhone,
+            user_id: validatedUserId,
+            step: 'bank_details_saved',
+            step_number: 5,
+            status: 'completed',
+            data: { 
+              has_account_details: true,
+              has_upi: !!upi_id,
+              has_qr_code: !!qr_code,
+            },
+          });
+        }
+
+        // Log profile completion if all steps are done
+        if (isComplete) {
+          await logSignupStep({
+            phone: userPhone,
+            user_id: validatedUserId,
+            step: 'profile_completed',
+            step_number: 5,
+            status: 'completed',
+            data: { profile_complete: true },
+          });
+        }
+      }
 
       return NextResponse.json({
         ok: true,

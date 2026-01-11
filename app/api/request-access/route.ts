@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 
 import { Logger } from '@/lib/logger';
 import { getDbPool } from '@/lib/db';
+import { logSignupStep } from '@/lib/signup-logger';
 
 export const maxDuration = 60; // 60 seconds for file uploads
 
@@ -121,18 +122,27 @@ export async function POST(request: NextRequest) {
     }
 
     const duration = Date.now() - startTime;
-    Logger.info('ACCESS_REQUEST_COMPLETED', {
-      id: requestId,
-      isUpdate,
-      duration_ms: duration,
-    });
+      Logger.info('ACCESS_REQUEST_COMPLETED', {
+        id: requestId,
+        isUpdate,
+        duration_ms: duration,
+      });
 
-    return NextResponse.json({ 
-      ok: true, 
-      id: requestId, 
-      selfie_url: relativeUrl,
-      updated: isUpdate 
-    });
+      // Log signup step: Selfie uploaded (Step 1)
+      await logSignupStep({
+        phone,
+        step: 'selfie_uploaded',
+        step_number: 1,
+        status: 'completed',
+        data: { selfie_url: relativeUrl, is_update: isUpdate },
+      });
+
+      return NextResponse.json({ 
+        ok: true, 
+        id: requestId, 
+        selfie_url: relativeUrl,
+        updated: isUpdate 
+      });
   } catch (error: any) {
     const duration = Date.now() - startTime;
     Logger.error('ACCESS_REQUEST_CREATE_ERROR', { 

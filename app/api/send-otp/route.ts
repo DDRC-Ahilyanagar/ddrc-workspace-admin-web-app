@@ -4,6 +4,7 @@ import { sendSMS, buildDLTMessage } from '@/lib/sms';
 import { Logger } from '@/lib/logger';
 import { CONFIG } from '@/lib/config';
 import { validatePhone, validateRequest } from '@/lib/validation';
+import { logSignupStep } from '@/lib/signup-logger';
 
 /**
  * @swagger
@@ -628,6 +629,19 @@ export async function POST(request: NextRequest) {
         console.log(`OTP ID: ${otpId}`);
         console.log('========================================\n');
         
+        // Log signup step: OTP sent (Step 2) - local dev mode
+        const isMobileOnboardingCheck = source !== 'web' && role === 'field_officer';
+        if (isMobileOnboardingCheck) {
+          await logSignupStep({
+            phone,
+            user_id: userData?.id,
+            step: 'otp_sent',
+            step_number: 2,
+            status: 'completed',
+            data: { otp_id: otpId, local_dev: true, otp: cleanOtp },
+          });
+        }
+        
         // Return OTP in response for local development
         return NextResponse.json({ 
           ok: true, 
@@ -660,6 +674,20 @@ export async function POST(request: NextRequest) {
         } catch (err: any) {
           Logger.error('send_otp_sms_failed', { phone, otp_id: otpId, error: err.message, stack: err.stack });
           smsResult = { ok: false, error: err.message || 'SMS sending unsuccessful. Please try again later.' };
+        }
+        
+        // Log signup step: OTP sent (Step 2)
+        const isMobileOnboardingCheck2 = source !== 'web' && role === 'field_officer';
+        if (isMobileOnboardingCheck2) {
+          await logSignupStep({
+            phone,
+            user_id: userData?.id,
+            step: 'otp_sent',
+            step_number: 2,
+            status: smsResult.ok ? 'completed' : 'failed',
+            data: { otp_id: otpId, sms_sent: smsResult.ok },
+            error_message: smsResult.ok ? undefined : smsResult.error,
+          });
         }
         
         // Return with actual SMS status

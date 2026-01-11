@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { dbQuery, dbQueryOne, getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';
 import { validatePhone, validateOTP, validateRequest } from '@/lib/validation';
+import { logSignupStep } from '@/lib/signup-logger';
 
 const normalizeRole = (value?: string | null) =>
   (value || '').toString().trim().toLowerCase().replace(/\s+/g, '_');
@@ -403,6 +404,18 @@ export async function POST(request: NextRequest) {
           user_type: effectiveRole, // Include user type in response
         }
       });
+
+      // Log signup step: OTP verified (Step 3)
+      if (isMobileOnboarding && role === 'field_officer') {
+        await logSignupStep({
+          phone,
+          user_id: finalUserData.id,
+          step: 'otp_verified',
+          step_number: 3,
+          status: 'completed',
+          data: { user_type: effectiveRole },
+        });
+      }
 
       const maxAge = 7 * 24 * 60 * 60; // 7 days
       response.cookies.set('session_token', phone, {
