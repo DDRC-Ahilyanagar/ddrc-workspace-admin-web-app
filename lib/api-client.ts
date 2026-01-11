@@ -84,8 +84,9 @@ export async function uploadImage(file: File): Promise<string | null> {
   }
 }
 
-export async function getQuestions(): Promise<ApiResponse> {
-  return apiCall('get-questions');
+export async function getQuestions(publicForm: boolean = false): Promise<ApiResponse> {
+  const endpoint = publicForm ? 'get-questions?public=true' : 'get-questions';
+  return apiCall(endpoint);
 }
 
 export async function createAadhar(aadharNo: string, frontImage?: string, backImage?: string): Promise<ApiResponse> {

@@ -568,11 +568,15 @@ export async function handleSubmit(request: NextRequest, user: any) {
               }
             }
 
-            Logger.info('submit_answers_survey_created_or_updated', {
+            // Log whether this was a new insert or an update
+            const wasNewInsert = !!(insertSurvey as any)?.insertId;
+            Logger.info(wasNewInsert ? 'submit_answers_survey_created' : 'submit_answers_survey_updated', {
               survey_id: surveyId,
               aadhaar_id: aadhaarId,
               answered: answeredCount,
               unanswered: unansweredCount,
+              was_new_insert: wasNewInsert,
+              insert_id: (insertSurvey as any)?.insertId || null
             });
           } catch (insertError: any) {
             // If duplicate key error occurs (race condition), try to update instead
@@ -738,13 +742,39 @@ export async function handleSubmit(request: NextRequest, user: any) {
 
       // Immediately trigger auto-assignment for public form submissions
       // (source = 'Divyang Self' and user_id = 1)
+      Logger.info('AUTO_ASSIGN_TRIGGER_CHECK', {
+        source,
+        userId,
+        surveyId,
+        condition_met: source === 'Divyang Self' && userId === 1 && surveyId ? 'YES' : 'NO',
+        reason: !surveyId ? 'surveyId is null/undefined' : 
+                source !== 'Divyang Self' ? 'source mismatch' :
+                userId !== 1 ? 'userId mismatch' : 'OK'
+      });
+      
       if (source === 'Divyang Self' && userId === 1 && surveyId) {
         // Call auto-assignment asynchronously (fire and forget) so it doesn't delay the response
-        autoAssignSurveys(surveyId).catch((error) => {
+        Logger.info('AUTO_ASSIGN_TRIGGERING', { survey_id: surveyId });
+        autoAssignSurveys(surveyId).then((result) => {
+          Logger.info('AUTO_ASSIGN_COMPLETED', {
+            survey_id: surveyId,
+            result: result
+          });
+        }).catch((error) => {
           Logger.error('IMMEDIATE_AUTO_ASSIGN_FAILED', {
             survey_id: surveyId,
-            error: error?.message || String(error)
+            error: error?.message || String(error),
+            stack: error?.stack
           });
+        });
+      } else {
+        Logger.warn('AUTO_ASSIGN_NOT_TRIGGERED', {
+          source,
+          userId,
+          surveyId,
+          reason: !surveyId ? 'surveyId is null' : 
+                  source !== 'Divyang Self' ? `source is '${source}' not 'Divyang Self'` :
+                  userId !== 1 ? `userId is ${userId} not 1` : 'unknown'
         });
       }
 

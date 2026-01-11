@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbQuery, getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';
+import fs from 'fs';
+import path from 'path';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +28,25 @@ export const dynamic = 'force-dynamic';
  *                     type: object
  */
 export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const isPublic = searchParams.get('public') === 'true';
+
+  if (isPublic) {
+    try {
+      const publicPath = path.join(process.cwd(), 'prisma', 'questions_public.json');
+      const data = fs.readFileSync(publicPath, 'utf8');
+      const questions = JSON.parse(data);
+
+      return NextResponse.json(
+        { ok: true, data: questions },
+        { headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+      );
+    } catch (error: any) {
+      Logger.error('get_public_questions_fail', { error: error.message });
+      return NextResponse.json({ ok: false, error: 'Failed to load public questions' }, { status: 500 });
+    }
+  }
+
   try {
     // Join with sections to include section names and titles
     // Only fetch active questions
@@ -55,27 +76,27 @@ export async function GET(request: NextRequest) {
         const [dtc]: any = await conn.query('SELECT COUNT(*) AS c FROM disability_types');
         if (((dtc as any[])?.[0]?.c || 0) === 0) {
           const seedVals = [
-            ['अंध','Blindness',JSON.stringify(['Blindness','Blind','अंध'])],
-            ['दृष्टिदोष','Low Vision',JSON.stringify(['Low Vision','Low-vision','दृष्टिदोष'])],
-            ['कर्णबधिर','Hearing Impairment',JSON.stringify(['Hearing Impairment','deaf and hard of hearing','कर्णबधिर'])],
-            ['वाचादोष','Speech and Language Disability',JSON.stringify(['Speech and Language Disability','Speech & Language','वाचादोष'])],
-            ['अस्थिव्यंग','Locomotor Disability',JSON.stringify(['Locomotor Disability','अस्थिव्यंग'])],
-            ['मानसिक आजार','Mental Illness',JSON.stringify(['Mental Illness','मानसिक आजार'])],
-            ['अध्ययन अक्षमता','Specific Learning Disabilities',JSON.stringify(['Specific Learning Disabilities','Learning Disability','अध्ययन अक्षमता'])],
-            ['सेरेब्रल पालसी - मेंदूचा पक्षाघात','Cerebral Palsy',JSON.stringify(['Cerebral Palsy','सेरेब्रल पालसी'])],
-            ['स्वमग्न','Autism Spectrum Disorder',JSON.stringify(['Autism Spectrum Disorder','Autism','स्वमग्न'])],
-            ['बहुविकलांग','Multiple Disabilities including Deafblindness',JSON.stringify(['Multiple Disabilities including deafblindness','Multiple Disabilities','बहुविकलांग'])],
-            ['कुष्ठरोग','Leprosy Cured Persons',JSON.stringify(['Leprosy Cured persons','Leprosy','कुष्ठरोग'])],
-            ['बुटकेपणा','Dwarfism',JSON.stringify(['Dwarfism','बुटकेपणा'])],
-            ['मतिमंद','Intellectual Disability',JSON.stringify(['Intellectual Disability','ID','मतिमंद'])],
-            ['अविकसित मांसपेशी','Muscular Dystrophy',JSON.stringify(['Muscular Dystrophy','अविकसित मांसपेशी'])],
-            ['मज्जासंस्थेचे तीव्र आजार','Chronic Neurological Conditions',JSON.stringify(['Chronic Neurological conditions','Neurological','मज्जासंस्थेचे तीव्र आजार'])],
-            ['मेंदूतील चेतासंस्था संबंधी आजार','Multiple Sclerosis',JSON.stringify(['Multiple Sclerosis','MS','मेंदूतील चेतासंस्था संबंधी आजार'])],
-            ['रक्ता संबंधी कॅन्सर','Thalassemia',JSON.stringify(['Thalassemia','थॅलेसेमिया','रक्ता संबंधी कॅन्सर'])],
-            ['रक्तवाहिन्या संबंधित आजार','Hemophilia',JSON.stringify(['Hemophilia','रक्तवाहिन्या संबंधित आजार'])],
-            ['रक्ता संबंधी रक्ताचे प्रमाण कमी','Sickle Cell Disease',JSON.stringify(['Sickle Cell disease','Sickle Cell','रक्ता संबंधी रक्ताचे प्रमाण कमी'])],
-            ['एसिड हल्लाग्रस्त पीडित','Acid Attack Victim',JSON.stringify(['Acid Attack victim','Acid Attack','एसिड हल्लाग्रस्त पीडित'])],
-            ['कंपावत रोग',"Parkinson's Disease",JSON.stringify(["Parkinson's disease","Parkinsons","कंपावत रोग"])]
+            ['अंध', 'Blindness', JSON.stringify(['Blindness', 'Blind', 'अंध'])],
+            ['दृष्टिदोष', 'Low Vision', JSON.stringify(['Low Vision', 'Low-vision', 'दृष्टिदोष'])],
+            ['कर्णबधिर', 'Hearing Impairment', JSON.stringify(['Hearing Impairment', 'deaf and hard of hearing', 'कर्णबधिर'])],
+            ['वाचादोष', 'Speech and Language Disability', JSON.stringify(['Speech and Language Disability', 'Speech & Language', 'वाचादोष'])],
+            ['अस्थिव्यंग', 'Locomotor Disability', JSON.stringify(['Locomotor Disability', 'अस्थिव्यंग'])],
+            ['मानसिक आजार', 'Mental Illness', JSON.stringify(['Mental Illness', 'मानसिक आजार'])],
+            ['अध्ययन अक्षमता', 'Specific Learning Disabilities', JSON.stringify(['Specific Learning Disabilities', 'Learning Disability', 'अध्ययन अक्षमता'])],
+            ['सेरेब्रल पालसी - मेंदूचा पक्षाघात', 'Cerebral Palsy', JSON.stringify(['Cerebral Palsy', 'सेरेब्रल पालसी'])],
+            ['स्वमग्न', 'Autism Spectrum Disorder', JSON.stringify(['Autism Spectrum Disorder', 'Autism', 'स्वमग्न'])],
+            ['बहुविकलांग', 'Multiple Disabilities including Deafblindness', JSON.stringify(['Multiple Disabilities including deafblindness', 'Multiple Disabilities', 'बहुविकलांग'])],
+            ['कुष्ठरोग', 'Leprosy Cured Persons', JSON.stringify(['Leprosy Cured persons', 'Leprosy', 'कुष्ठरोग'])],
+            ['बुटकेपणा', 'Dwarfism', JSON.stringify(['Dwarfism', 'बुटकेपणा'])],
+            ['मतिमंद', 'Intellectual Disability', JSON.stringify(['Intellectual Disability', 'ID', 'मतिमंद'])],
+            ['अविकसित मांसपेशी', 'Muscular Dystrophy', JSON.stringify(['Muscular Dystrophy', 'अविकसित मांसपेशी'])],
+            ['मज्जासंस्थेचे तीव्र आजार', 'Chronic Neurological Conditions', JSON.stringify(['Chronic Neurological conditions', 'Neurological', 'मज्जासंस्थेचे तीव्र आजार'])],
+            ['मेंदूतील चेतासंस्था संबंधी आजार', 'Multiple Sclerosis', JSON.stringify(['Multiple Sclerosis', 'MS', 'मेंदूतील चेतासंस्था संबंधी आजार'])],
+            ['रक्ता संबंधी कॅन्सर', 'Thalassemia', JSON.stringify(['Thalassemia', 'थॅलेसेमिया', 'रक्ता संबंधी कॅन्सर'])],
+            ['रक्तवाहिन्या संबंधित आजार', 'Hemophilia', JSON.stringify(['Hemophilia', 'रक्तवाहिन्या संबंधित आजार'])],
+            ['रक्ता संबंधी रक्ताचे प्रमाण कमी', 'Sickle Cell Disease', JSON.stringify(['Sickle Cell disease', 'Sickle Cell', 'रक्ता संबंधी रक्ताचे प्रमाण कमी'])],
+            ['एसिड हल्लाग्रस्त पीडित', 'Acid Attack Victim', JSON.stringify(['Acid Attack victim', 'Acid Attack', 'एसिड हल्लाग्रस्त पीडित'])],
+            ['कंपावत रोग', "Parkinson's Disease", JSON.stringify(["Parkinson's disease", "Parkinsons", "कंपावत रोग"])]
           ];
           await conn.query('INSERT INTO disability_types (label_marathi, label_english, aliases) VALUES ?', [seedVals]);
         }
@@ -85,9 +106,9 @@ export async function GET(request: NextRequest) {
         );
         const options = Array.isArray(types)
           ? (types as any[])
-              .map((t: any) => String(t.label_english || '').trim())
-              .filter((s: string) => s.length > 0)
-              .join(',')
+            .map((t: any) => String(t.label_english || '').trim())
+            .filter((s: string) => s.length > 0)
+            .join(',')
           : '';
 
         if (options) {
@@ -95,9 +116,9 @@ export async function GET(request: NextRequest) {
             const questionText = String(r.question || '').trim();
             const questionId = parseInt(r.id || '0');
             // Inject for question 69 or any question containing "दिव्यांगता प्रकार" or "Disability Type"
-            if (questionId === 69 || 
-                questionText.includes('दिव्यांगता प्रकार') || 
-                questionText.toLowerCase().includes('disability type')) {
+            if (questionId === 69 ||
+              questionText.includes('दिव्यांगता प्रकार') ||
+              questionText.toLowerCase().includes('disability type')) {
               r.options = options; // inject English options list
             }
           }
@@ -119,7 +140,7 @@ export async function GET(request: NextRequest) {
 
         if (Array.isArray(sportsTypes) && Array.isArray(sportNames)) {
           const sportsMap: Record<string, string[]> = {};
-          
+
           for (const type of sportsTypes) {
             const names = sportNames
               .filter((n: any) => n.sports_type_id === type.id)
@@ -132,7 +153,7 @@ export async function GET(request: NextRequest) {
 
           // Inject sports map as JSON string for questions 22 and 23
           const sportsMapJson = JSON.stringify(sportsMap);
-          
+
           for (const r of rows as any[]) {
             const qid = parseInt(r.id || '0');
             // Question 22: "खेळ प्रकार" - inject comma-separated types
@@ -167,9 +188,9 @@ export async function GET(request: NextRequest) {
 
         const organOptions = Array.isArray(organs)
           ? (organs as any[])
-              .map((o: any) => String(o.label_marathi || '').trim())
-              .filter((s: string) => s.length > 0)
-              .join(',')
+            .map((o: any) => String(o.label_marathi || '').trim())
+            .filter((s: string) => s.length > 0)
+            .join(',')
           : '';
 
         if (organOptions) {
@@ -180,9 +201,9 @@ export async function GET(request: NextRequest) {
             const qid = parseInt(r.id || '0');
             const questionText = String(r.question || '').trim();
             // Only inject if question text EXACTLY contains "दिव्यांगता अवयव" (not just "दिव्यांगता")
-            const isOrganQuestion = questionText.includes('दिव्यांगता अवयव') && 
-                                    !questionText.includes('उपचार') && 
-                                    !questionText.includes('बरे होण्यासाठी');
+            const isOrganQuestion = questionText.includes('दिव्यांगता अवयव') &&
+              !questionText.includes('उपचार') &&
+              !questionText.includes('बरे होण्यासाठी');
             if (
               qid === 73 ||
               qid === 101 ||

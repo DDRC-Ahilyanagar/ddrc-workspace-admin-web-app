@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
           taluka VARCHAR(255) DEFAULT NULL,
           primary_gaav VARCHAR(255) DEFAULT NULL,
           additional_gaavs JSON DEFAULT NULL,
+          current_gaav VARCHAR(255) DEFAULT NULL,
           account_holder_name VARCHAR(255) DEFAULT NULL,
           account_number VARCHAR(50) DEFAULT NULL,
           bank_name VARCHAR(255) DEFAULT NULL,
@@ -67,9 +68,24 @@ export async function POST(request: NextRequest) {
           PRIMARY KEY (id),
           UNIQUE KEY unique_user_id (user_id),
           KEY idx_user_id (user_id),
+          KEY idx_current_gaav (current_gaav),
           CONSTRAINT fk_profile_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
       `);
+      
+      // Add current_gaav column if it doesn't exist (for existing tables)
+      try {
+        await conn.execute(`
+          ALTER TABLE field_officer_profiles 
+          ADD COLUMN current_gaav VARCHAR(255) DEFAULT NULL,
+          ADD INDEX idx_current_gaav (current_gaav)
+        `);
+      } catch (e: any) {
+        // Ignore if column already exists
+        if (!e.message?.includes('Duplicate column name') && !e.message?.includes('Duplicate key name')) {
+          Logger.info('field_officer_profile_add_current_gaav_failed', { error: e.message });
+        }
+      }
 
       // Use validated user_id
       const validatedUserId = userIdNum;

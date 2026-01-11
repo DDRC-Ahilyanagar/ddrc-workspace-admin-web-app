@@ -3,9 +3,9 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { sendOTP, verifyOTP, fetchUserByPhone } from '@/lib/api-client';
-import { getAbsoluteImageUrl } from '@/lib/config';
 
-const LOGO_URL = getAbsoluteImageUrl('/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png');
+// Use relative path for static assets to avoid hydration mismatch
+const LOGO_URL = '/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png';
 
 function OTPContent() {
   const router = useRouter();

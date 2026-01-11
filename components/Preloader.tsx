@@ -2,9 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { getAbsoluteImageUrl } from '@/lib/config';
 
-const LOGO_URL = getAbsoluteImageUrl('/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png');
+// Use relative path for static assets to avoid hydration mismatch
+const LOGO_URL = '/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png';
 
 export default function Preloader() {
   const pathname = usePathname();

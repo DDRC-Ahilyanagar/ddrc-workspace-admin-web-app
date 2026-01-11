@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { sendOTP, fetchUserByPhone } from '@/lib/api-client';
-import { BASE_URL, getAbsoluteImageUrl } from '@/lib/config';
+import { BASE_URL } from '@/lib/config';
 
-const LOGO_URL = getAbsoluteImageUrl('/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png');
+// Use relative path for static assets to avoid hydration mismatch
+const LOGO_URL = '/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png';
 
 export default function LoginPage() {
   const router = useRouter();

@@ -5,20 +5,25 @@ import { apiCall, getQuestions, submitAnswers, uploadImage } from '@/lib/api-cli
 import { getAbsoluteImageUrl } from '@/lib/config';
 
 interface Question {
-  id: number;
+  id: number | string;
   section_id?: number;
   title?: string;
   question: string;
   question_type: string;
   multi_select?: number | string;
-  options?: string;
+  options?: string | null;
   rendering_condition?: string;
-  rendering_question?: string;
-  rendering_value?: string;
+  rendering_question?: string | null;
+  rendering_value?: string | null;
   regex?: string;
   valid_input?: string;
   max_length?: number;
   status?: string;
+}
+
+interface QuestionSection {
+  title: string;
+  questions: Question[];
 }
 
 type Step = 'upload-front' | 'upload-back' | 'aadhar-info' | 'personal-info' | 'address' | 'complete';
@@ -35,19 +40,27 @@ export default function PublicFormPage() {
   const [existingSurveyData, setExistingSurveyData] = useState<any>(null);
   const [checkingExisting, setCheckingExisting] = useState(false);
   const [allQuestions, setAllQuestions] = useState<Question[]>([]);
-  const [personalInfoQuestions, setPersonalInfoQuestions] = useState<Question[]>([]);
-  const [addressQuestions, setAddressQuestions] = useState<Question[]>([]);
-  const [answers, setAnswers] = useState<Record<number, any>>({});
+  const [questionSections, setQuestionSections] = useState<QuestionSection[]>([]);
+  const [answers, setAnswers] = useState<Record<number | string, any>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Address section state (for dynamic loading)
+  // State for dynamic address fields used in renderQuestion
   const [talukas, setTalukas] = useState<string[]>([]);
   const [villages, setVillages] = useState<string[]>([]);
   const [grams, setGrams] = useState<string[]>([]);
   const [talathi, setTalathi] = useState<string[]>([]);
   const [phc, setPhc] = useState<string[]>([]);
+  
+  // State for disability types (loaded from API for "दिव्यांगता प्रकार" question)
+  const [disabilityTypes, setDisabilityTypes] = useState<string[]>([]);
+  const [loadingDisabilityTypes, setLoadingDisabilityTypes] = useState(false);
+
+  // Helper to convert question ID to number for consistent handling
+  const getQuestionIdNumber = (id: number | string): number => {
+    return typeof id === 'string' ? parseInt(id, 10) : id;
+  };
 
   // Calculate age from date of birth
   const calculateAge = (dob: string): string => {
@@ -68,7 +81,7 @@ export default function PublicFormPage() {
   };
 
   // Find question IDs by question text
-  const getQuestionIdByText = (questionText: string): number | null => {
+  const getQuestionIdByText = (questionText: string): number | string | null => {
     const question = allQuestions.find(q => q.question?.trim() === questionText.trim());
     return question?.id || null;
   };
@@ -98,7 +111,7 @@ export default function PublicFormPage() {
 
     // Second pass: rebuild the list ensuring conditional questions appear immediately after their parent
     const reordered: Question[] = [];
-    const processed = new Set<number>();
+    const processed = new Set<number | string>();
 
     // Helper function to recursively add a question and all its dependents
     const addQuestionAndDependents = (q: Question) => {
@@ -149,7 +162,11 @@ export default function PublicFormPage() {
 
     // If reordering didn't work or resulted in different length, fall back to original order
     if (reordered.length !== questions.length) {
-      return questions.sort((a, b) => (a.id || 0) - (b.id || 0));
+      return questions.sort((a, b) => {
+        const aId = getQuestionIdNumber(a.id);
+        const bId = getQuestionIdNumber(b.id);
+        return aId - bId;
+      });
     }
 
     return reordered;
@@ -161,6 +178,13 @@ export default function PublicFormPage() {
     loadTalukas();
   }, []);
 
+  // Load disability types after questions are loaded
+  useEffect(() => {
+    if (allQuestions.length > 0) {
+      loadDisabilityTypes();
+    }
+  }, [allQuestions.length]);
+
   // Load talukas
   const loadTalukas = async () => {
     try {
@@ -171,6 +195,47 @@ export default function PublicFormPage() {
       }
     } catch (err) {
       console.error('Failed to load talukas:', err);
+    }
+  };
+
+  // Load disability types from API (matching field officer app logic)
+  // This loads disability types for "दिव्यांगता प्रकार (Disability Type)" question
+  const loadDisabilityTypes = async () => {
+    if (loadingDisabilityTypes || disabilityTypes.length > 0) return;
+    
+    setLoadingDisabilityTypes(true);
+    try {
+      // Fetch from the same source that get-questions uses - disability_types table
+      // We'll fetch a question that has disability types injected to get the options
+      const response = await fetch('/api/get-questions');
+      const data = await response.json();
+      
+      if (data.ok && data.data) {
+        // Find the disability type question (ID 69 or contains "दिव्यांगता प्रकार")
+        const disabilityTypeQuestion = data.data.find((q: any) => {
+          const qid = parseInt(q.id || '0');
+          const label = (q.question || '').toString().trim();
+          return qid === 69 || 
+                 label.includes('दिव्यांगता प्रकार') || 
+                 label.toLowerCase().includes('disability type');
+        });
+
+        if (disabilityTypeQuestion && disabilityTypeQuestion.options) {
+          // Parse options (comma-separated, same format as get-questions route returns)
+          const options = disabilityTypeQuestion.options
+            .split(',')
+            .map((opt: string) => opt.trim())
+            .filter((opt: string) => opt && opt !== 'NULL' && opt !== 'null' && opt.length > 0);
+          setDisabilityTypes(options);
+          console.log('✅ Loaded disability types:', options.length, 'types');
+        } else {
+          console.warn('⚠️ Disability type question not found or has no options');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load disability types:', err);
+    } finally {
+      setLoadingDisabilityTypes(false);
     }
   };
 
@@ -197,12 +262,50 @@ export default function PublicFormPage() {
       const talathiData = await talathiRes.json();
       const phcData = await phcRes.json();
 
-      if (villagesData.ok) setVillages(villagesData.villages || []);
-      if (gramsData.ok) setGrams(gramsData.grams || []);
-      if (talathiData.ok) setTalathi(talathiData.talathi || []);
-      if (phcData.ok) setPhc(phcData.phc || []);
+      // Match the field officer app logic: check ok and extract data
+      if (villagesRes.ok && villagesData.ok && villagesData.villages) {
+        const villagesList = Array.isArray(villagesData.villages) 
+          ? villagesData.villages.map((v: any) => String(v).trim()).filter(Boolean)
+          : [];
+        setVillages(villagesList);
+        console.log('Loaded villages:', villagesList.length, villagesList);
+      } else {
+        setVillages([]);
+      }
+
+      if (gramsRes.ok && gramsData.ok && gramsData.grams) {
+        const gramsList = Array.isArray(gramsData.grams)
+          ? gramsData.grams.map((g: any) => String(g).trim()).filter(Boolean)
+          : [];
+        setGrams(gramsList);
+      } else {
+        setGrams([]);
+      }
+
+      if (talathiRes.ok && talathiData.ok && talathiData.talathi) {
+        const talathiList = Array.isArray(talathiData.talathi)
+          ? talathiData.talathi.map((t: any) => String(t).trim()).filter(Boolean)
+          : [];
+        setTalathi(talathiList);
+        console.log('Loaded talathi:', talathiList.length, talathiList);
+      } else {
+        setTalathi([]);
+      }
+
+      if (phcRes.ok && phcData.ok && phcData.phc) {
+        const phcList = Array.isArray(phcData.phc)
+          ? phcData.phc.map((p: any) => String(p).trim()).filter(Boolean)
+          : [];
+        setPhc(phcList);
+      } else {
+        setPhc([]);
+      }
     } catch (err) {
       console.error('Failed to load dependent data:', err);
+      setVillages([]);
+      setGrams([]);
+      setTalathi([]);
+      setPhc([]);
     }
   };
 
@@ -251,46 +354,6 @@ export default function PublicFormPage() {
     }
   }, [currentStep, divyangName, allQuestions.length]);
 
-  // Pre-fill district and load dependent data when address step loads
-  useEffect(() => {
-    if (currentStep === 'address' && allQuestions.length > 0) {
-      const updates: Record<number, any> = {};
-
-      // Pre-fill district with "Ahilyanagar" if not set
-      const districtQuestionId = getQuestionIdByText('सध्याचा जि.') || getQuestionIdByText('जि.');
-      if (districtQuestionId && !answers[districtQuestionId]) {
-        updates[districtQuestionId] = 'Ahilyanagar';
-      }
-
-      // Pre-fill Taluka as 'Parner'
-      const talukaQuestionId = getQuestionIdByText('सध्याचा ता.') || getQuestionIdByText('ता.');
-      if (talukaQuestionId) {
-        updates[talukaQuestionId] = 'Parner';
-        // Load dependent data for Parner
-        loadDependentData('Parner');
-      }
-
-      // Pre-fill Village as 'Bhalawani'
-      const villageQuestionId = getQuestionIdByText('सध्याचा गाव') || getQuestionIdByText('गाव');
-      if (villageQuestionId) {
-        updates[villageQuestionId] = 'Bhalawani';
-      }
-
-      // Apply all updates
-      if (Object.keys(updates).length > 0) {
-        setAnswers((prev) => ({ ...prev, ...updates }));
-      }
-
-      // Load dependent data if taluka is already selected (existing logic)
-      if (talukaQuestionId && answers[talukaQuestionId] && !updates[talukaQuestionId]) {
-        const selectedTaluka = answers[talukaQuestionId];
-        if (selectedTaluka && (villages.length === 0 || grams.length === 0)) {
-          loadDependentData(selectedTaluka);
-        }
-      }
-    }
-  }, [currentStep, allQuestions.length]);
-
   // TEMP: Prefill form data for testing
   useEffect(() => {
     // Only prefill if we haven't already (check if aadhar is empty)
@@ -316,7 +379,7 @@ export default function PublicFormPage() {
     }
 
     if (allQuestions.length > 0) {
-      const updates: Record<number, any> = {};
+      const updates: Record<number | string, any> = {};
 
       // Helper to safely add answer if question exists
       const addAnswer = (text: string, value: any) => {
@@ -390,79 +453,44 @@ export default function PublicFormPage() {
   const loadQuestions = async () => {
     setLoading(true);
     try {
-      const response = await getQuestions();
+      // Load public questions from JSON file
+      const response = await getQuestions(true);
       if (response.ok && response.data) {
         const questions = response.data as Question[];
-        setAllQuestions(questions);
+        
+        // Convert string IDs to numbers for consistency, but keep original for answers
+        const normalizedQuestions = questions.map(q => ({
+          ...q,
+          id: typeof q.id === 'string' ? parseInt(q.id, 10) : q.id,
+        }));
+        
+        setAllQuestions(normalizedQuestions);
 
-        // Filter personal info questions (title = "वैयक्तिक माहिती" OR section_id = 1)
-        // Also filter out inactive questions (status !== 'Active')
-        const personalInfo = questions.filter(
-          (q) => (q.title === 'वैयक्तिक माहिती' || q.section_id === 1) &&
-            (q.status === 'Active' || !q.status || q.status === null)
-        );
-
-        // Add disability type, percentage, and UDID questions
-        const disabilityQuestions = questions.filter(
-          (q) =>
-            q.title === 'दिव्यांगता तपशील' && (
-              q.question.includes('दिव्यांगता प्रकार') ||
-              q.question.includes('दिव्यांगता टक्केवारी') ||
-              q.question.includes('वैश्विक कार्ड (UDID)') ||
-              q.question === 'वैश्विक कार्ड (UDID)'
-            )
-        );
-
-        // Find questions from other sections that have rendering conditions based on personal info questions
-        // Get all question texts and IDs from personal info section
-        const personalInfoQuestionTexts = new Set(
-          personalInfo.map(q => q.question?.trim()).filter(Boolean)
-        );
-        const personalInfoQuestionIds = new Set(
-          personalInfo.map(q => q.id).filter(Boolean)
-        );
-
-        // Include questions from other sections that depend on personal info questions
-        const conditionalQuestions = questions.filter((q) => {
-          // Skip if already in personalInfo or disabilityQuestions
-          if (personalInfo.some(pq => pq.id === q.id) ||
-            disabilityQuestions.some(dq => dq.id === q.id)) {
-            return false;
+        // Group questions by their title (section)
+        const sectionsMap = new Map<string, Question[]>();
+        
+        for (const q of normalizedQuestions) {
+          const sectionTitle = q.title || 'Other';
+          if (!sectionsMap.has(sectionTitle)) {
+            sectionsMap.set(sectionTitle, []);
           }
+          sectionsMap.get(sectionTitle)!.push(q);
+        }
 
-          // Include if it has a rendering condition pointing to a personal info question
-          const rawCondition = (q.rendering_condition || '').toString().trim().toLowerCase();
-          if (rawCondition === 'yes' || rawCondition === 'true' || rawCondition === '1') {
-            const renderingQ = q.rendering_question?.trim();
-            if (renderingQ) {
-              // Check by question text
-              if (personalInfoQuestionTexts.has(renderingQ)) {
-                return true;
-              }
-              // Check by question ID
-              const renderingQId = parseInt(renderingQ);
-              if (renderingQId > 0 && personalInfoQuestionIds.has(renderingQId)) {
-                return true;
-              }
-            }
-          }
-          return false;
+        // Convert map to array and reorder questions within each section
+        const sections: QuestionSection[] = Array.from(sectionsMap.entries()).map(([title, questions]) => ({
+          title,
+          questions: reorderQuestionsWithConditionals(questions),
+        }));
+
+        // Sort sections by the first question ID in each section to maintain order
+        sections.sort((a, b) => {
+          const aFirstId = a.questions.length > 0 ? getQuestionIdNumber(a.questions[0].id) : 0;
+          const bFirstId = b.questions.length > 0 ? getQuestionIdNumber(b.questions[0].id) : 0;
+          return aFirstId - bFirstId;
         });
 
-        // Combine all questions
-        const allPersonalInfo = [...personalInfo, ...disabilityQuestions, ...conditionalQuestions];
-
-        // Reorder questions so conditional questions appear immediately after their parent
-        const reorderedQuestions = reorderQuestionsWithConditionals(allPersonalInfo);
-
-        setPersonalInfoQuestions(reorderedQuestions);
-
-        // Filter current address questions (title = "पत्ता")
-        // Exclude Permanent address questions to avoid confusion
-        const currentAddress = questions.filter(
-          (q) => q.title === 'पत्ता' && !q.question.includes('स्थायी') && !q.question.toLowerCase().includes('permanent')
-        );
-        setAddressQuestions(currentAddress);
+        setQuestionSections(sections);
       }
     } catch (err: any) {
       setError('Questions लोड करण्यात अडचण: ' + err.message);
@@ -518,8 +546,16 @@ export default function PublicFormPage() {
       await createAadharRecord();
     } else if (currentStep === 'personal-info') {
       // Validate ALL visible questions are required
-      const visibleQuestions = personalInfoQuestions.filter((q) => shouldShowQuestion(q));
-      const missing = visibleQuestions.find((q) => {
+      const allVisibleQuestions: Question[] = [];
+      questionSections.forEach(section => {
+        section.questions.forEach(q => {
+          if (shouldShowQuestion(q)) {
+            allVisibleQuestions.push(q);
+          }
+        });
+      });
+
+      const missing = allVisibleQuestions.find((q) => {
         const answer = answers[q.id];
         // Check if answer is empty, null, undefined, or empty array
         if (answer === null || answer === undefined || answer === '') return true;
@@ -533,7 +569,7 @@ export default function PublicFormPage() {
       }
 
       // Validate mobile numbers (must be exactly 10 digits)
-      for (const q of visibleQuestions) {
+      for (const q of allVisibleQuestions) {
         if (q.question?.includes('मोबाईल') || q.question?.includes('Mobile')) {
           const mobileValue = answers[q.id];
           if (mobileValue && mobileValue.toString().trim()) {
@@ -558,24 +594,6 @@ export default function PublicFormPage() {
         }
       }
 
-      setCurrentStep('address');
-      setError('');
-    } else if (currentStep === 'address') {
-      // Validate ALL visible address questions are required
-      const visibleAddressQuestions = addressQuestions.filter((q) => shouldShowQuestion(q));
-      const missing = visibleAddressQuestions.find((q) => {
-        const answer = answers[q.id];
-        // Check if answer is empty, null, undefined, or empty array
-        if (answer === null || answer === undefined || answer === '') return true;
-        if (Array.isArray(answer) && answer.length === 0) return true;
-        if (typeof answer === 'string' && answer.trim() === '') return true;
-        return false;
-      });
-      if (missing) {
-        setError(`कृपया सर्व आवश्यक फील्ड भरा: ${missing.question}`);
-        return;
-      }
-
       await submitForm();
     }
   };
@@ -587,8 +605,6 @@ export default function PublicFormPage() {
       setCurrentStep('upload-back');
     } else if (currentStep === 'personal-info') {
       setCurrentStep('aadhar-info');
-    } else if (currentStep === 'address') {
-      setCurrentStep('personal-info');
     }
     setError('');
   };
@@ -709,8 +725,14 @@ export default function PublicFormPage() {
       }
 
       // Final validation: Ensure all visible questions have answers
-      const allVisibleQuestions = [...personalInfoQuestions, ...addressQuestions]
-        .filter((q) => shouldShowQuestion(q));
+      const allVisibleQuestions: Question[] = [];
+      questionSections.forEach(section => {
+        section.questions.forEach(q => {
+          if (shouldShowQuestion(q)) {
+            allVisibleQuestions.push(q);
+          }
+        });
+      });
 
       const missingAnswers = allVisibleQuestions.find((q) => {
         const answer = answers[q.id];
@@ -747,7 +769,7 @@ export default function PublicFormPage() {
     }
   };
 
-  const handleAnswerChange = (questionId: number, value: any) => {
+  const handleAnswerChange = (questionId: number | string, value: any) => {
     setAnswers((prev) => {
       const newAnswers = { ...prev, [questionId]: value };
 
@@ -789,7 +811,7 @@ export default function PublicFormPage() {
     // The shouldShowQuestion function will be called during render
   };
 
-  const handleFileUpload = async (questionId: number, file: File) => {
+  const handleFileUpload = async (questionId: number | string, file: File) => {
     // Create immediate preview URL for instant feedback
     const previewUrl = URL.createObjectURL(file);
 
@@ -876,7 +898,7 @@ export default function PublicFormPage() {
     }
 
     // Exclude current question ID when searching for rendering question to avoid self-reference
-    const currentQid = q.id || 0;
+    const currentQid = q.id;
 
     // Try to find the rendering question by ID first, then by question text
     const renderingQuestion = allQuestions.find((x) => {
@@ -885,8 +907,11 @@ export default function PublicFormPage() {
 
       // Match by ID if rendering_question is a number
       const renderingQId = parseInt(targetLabel);
-      if (renderingQId > 0 && x.id === renderingQId) {
-        return true;
+      if (renderingQId > 0) {
+        const xIdNum = getQuestionIdNumber(x.id);
+        if (xIdNum === renderingQId) {
+          return true;
+        }
       }
 
       // Match by exact question text
@@ -937,6 +962,11 @@ export default function PublicFormPage() {
     const isGram = label.includes('ग्रामपंचायत');
     const isTalathi = label.includes('तलाठी कार्यालय');
     const isPhc = label.includes('PHC') || label.includes('प्राथमिक आरोग्य केंद्र');
+    
+    // Check if this is a disability type question (matching field officer app logic)
+    const isDisabilityTypeQuestion = 
+      (label.includes('दिव्यांगता प्रकार') || label.toLowerCase().includes('disability type')) &&
+      (q.title?.includes('दिव्यांगता') || q.section_id);
 
     switch (q.question_type.toLowerCase()) {
       case 'mcq':
@@ -944,7 +974,7 @@ export default function PublicFormPage() {
         let options: string[] = [];
         if (isTaluka) {
           // Use loaded talukas if available, otherwise fall back to question options
-          options = talukas.length > 0 ? talukas : (q.options?.split(',').map((o) => o.trim()).filter(o => o && o !== '--Select--') || []);
+          options = talukas.length > 0 ? talukas : (q.options && q.options !== 'NULL' && q.options !== 'null' ? q.options.split(',').map((o) => o.trim()).filter(o => o && o !== '--Select--') : []);
         } else if (isVillage && villages.length > 0) {
           options = villages;
         } else if (isGram && grams.length > 0) {
@@ -953,8 +983,16 @@ export default function PublicFormPage() {
           options = talathi;
         } else if (isPhc && phc.length > 0) {
           options = phc;
+        } else if (isDisabilityTypeQuestion && disabilityTypes.length > 0) {
+          // Use loaded disability types (matching field officer app logic)
+          options = disabilityTypes;
         } else {
-          options = q.options?.split(',').map((o) => o.trim()).filter(o => o && o !== '--Select--') || [];
+          // Handle null, undefined, or "NULL" string
+          if (q.options && q.options !== 'NULL' && q.options !== 'null') {
+            options = q.options.split(',').map((o) => o.trim()).filter(o => o && o !== '--Select--');
+          } else {
+            options = [];
+          }
         }
 
         const isMultiSelect = q.multi_select === 1 || q.multi_select === '1';
@@ -988,6 +1026,9 @@ export default function PublicFormPage() {
             </div>
           );
         } else {
+          // Show loading state for disability type if options are being loaded
+          const showLoading = isDisabilityTypeQuestion && loadingDisabilityTypes && options.length === 0;
+          
           return (
             <div key={q.id} className="mb-3 mb-md-4">
               <label className="form-label fw-semibold mb-2 d-block">{q.question}</label>
@@ -996,15 +1037,21 @@ export default function PublicFormPage() {
                 value={currentAnswer || ''}
                 onChange={(e) => handleAnswerChange(q.id, e.target.value)}
                 required
+                disabled={showLoading}
                 style={{ fontSize: '1rem', minHeight: '48px' }}
               >
-                <option value="">-- निवडा --</option>
+                <option value="">
+                  {showLoading ? 'लोड होत आहे...' : '-- निवडा --'}
+                </option>
                 {options.map((opt, idx) => (
                   <option key={idx} value={opt}>
                     {opt}
                   </option>
                 ))}
               </select>
+              {isDisabilityTypeQuestion && loadingDisabilityTypes && options.length === 0 && (
+                <small className="form-text text-muted d-block mt-1">दिव्यांगता प्रकार लोड होत आहे...</small>
+              )}
             </div>
           );
         }
@@ -1584,31 +1631,32 @@ export default function PublicFormPage() {
                 </div>
               )}
 
-              {/* Step 4: Personal Info */}
               {currentStep === 'personal-info' && (
                 <div>
                   <h4 className="mb-3 mb-md-4 text-center text-md-start" style={{ fontSize: '1.1rem' }}>
                     चरण 4: वैयक्तिक माहिती
                   </h4>
                   <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-                    {(() => {
-                      // Filter visible questions and reorder them dynamically based on current answers
-                      const visibleQuestions = personalInfoQuestions.filter(q => shouldShowQuestion(q));
-                      const reordered = reorderQuestionsWithConditionals(visibleQuestions);
-                      return reordered.map((q) => renderQuestion(q));
-                    })()}
-                  </div>
-                </div>
-              )}
+                    {questionSections.map((section, sectionIndex) => {
+                      // Filter visible questions in this section
+                      const visibleQuestions = section.questions.filter(q => shouldShowQuestion(q));
+                      
+                      if (visibleQuestions.length === 0) return null;
 
-              {/* Step 5: Current Address */}
-              {currentStep === 'address' && (
-                <div>
-                  <h4 className="mb-3 mb-md-4 text-center text-md-start" style={{ fontSize: '1.1rem' }}>
-                    चरण 5: सध्याचा पत्ता
-                  </h4>
-                  <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-                    {addressQuestions.map((q) => renderQuestion(q))}
+                      return (
+                        <div key={sectionIndex} className="mb-4">
+                          {/* Section Header */}
+                          <div className="mb-3 pb-2 border-bottom">
+                            <h5 className="fw-bold text-primary mb-0" style={{ fontSize: '1.05rem' }}>
+                              {section.title}
+                            </h5>
+                          </div>
+                          
+                          {/* Section Questions */}
+                          {visibleQuestions.map((q) => renderQuestion(q))}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -1637,7 +1685,7 @@ export default function PublicFormPage() {
                         <span className="spinner-border spinner-border-sm me-2" />
                         प्रक्रिया होत आहे...
                       </>
-                    ) : currentStep === 'address' ? (
+                    ) : currentStep === 'personal-info' ? (
                       <>
                         ✓ सबमिट करा
                       </>

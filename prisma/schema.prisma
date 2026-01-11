@@ -126,6 +126,7 @@ model FieldOfficerProfile {
   taluka              String?   @db.VarChar(255)
   primaryGaav         String?   @map("primary_gaav") @db.VarChar(255)
   additionalGaavs     Json?     @map("additional_gaavs")
+  currentGaav         String?   @map("current_gaav") @db.VarChar(255)
   accountHolderName   String?   @map("account_holder_name") @db.VarChar(255)
   accountNumber       String?   @map("account_number") @db.VarChar(50)
   bankName            String?   @map("bank_name") @db.VarChar(255)
@@ -139,6 +140,7 @@ model FieldOfficerProfile {
   user User @relation("FieldOfficerProfile", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId], map: "idx_user_id")
+  @@index([currentGaav], map: "idx_current_gaav")
   @@map("field_officer_profiles")
 }
 

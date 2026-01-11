@@ -48,11 +48,51 @@ export async function POST(request: NextRequest) {
       } catch (updateError: any) {
         // If column doesn't exist, create a separate table
         if (updateError.code === 'ER_BAD_FIELD_ERROR') {
+          // Check if fcm_tokens table exists and has correct structure
+          try {
+            const [tableInfo]: any = await conn.query(`
+              SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE 
+              FROM INFORMATION_SCHEMA.COLUMNS 
+              WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'fcm_tokens' 
+              AND COLUMN_NAME = 'user_id'
+            `);
+            
+            // If table exists but has wrong data type, drop and recreate
+            if (Array.isArray(tableInfo) && tableInfo.length > 0) {
+              const columnType = tableInfo[0].COLUMN_TYPE?.toLowerCase() || '';
+              if (!columnType.includes('bigint') || !columnType.includes('unsigned')) {
+                Logger.info('fcm_tokens_table_wrong_structure', {
+                  current_type: columnType,
+                  fixing: 'dropping and recreating table'
+                });
+                // Drop foreign key constraint first if it exists
+                try {
+                  await conn.query(`ALTER TABLE fcm_tokens DROP FOREIGN KEY fcm_tokens_ibfk_1`);
+                } catch (e: any) {
+                  // Ignore if constraint doesn't exist
+                  if (!e.message?.includes("doesn't exist")) {
+                    Logger.warn('fcm_tokens_drop_fk_error', { error: e.message });
+                  }
+                }
+                // Drop table
+                await conn.query(`DROP TABLE IF EXISTS fcm_tokens`);
+              }
+            }
+          } catch (checkError: any) {
+            // If table doesn't exist or check fails, we'll create it below
+            Logger.info('fcm_tokens_table_check', { 
+              error: checkError.message,
+              action: 'will create table'
+            });
+          }
+          
           // Create fcm_tokens table if it doesn't exist
+          // Note: user_id must be BIGINT UNSIGNED to match users.id type
           await conn.query(`
             CREATE TABLE IF NOT EXISTS fcm_tokens (
-              id INT AUTO_INCREMENT PRIMARY KEY,
-              user_id INT NOT NULL,
+              id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+              user_id BIGINT UNSIGNED NOT NULL,
               fcm_token VARCHAR(255) NOT NULL,
               device_info TEXT,
               created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

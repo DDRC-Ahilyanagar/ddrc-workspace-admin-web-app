@@ -3,9 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Image from 'next/image';
-import { getAbsoluteImageUrl } from '@/lib/config';
 
-const LOGO_URL = getAbsoluteImageUrl('/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png');
+// Use relative path for static assets to avoid hydration mismatch
+const LOGO_URL = '/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
