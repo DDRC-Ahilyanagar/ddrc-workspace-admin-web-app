@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
         
         // Determine if this is a sign-up attempt (mobile onboarding) vs login attempt
         const isMobileOnboarding = !isWebRequest && role === 'field_officer';
-        const needsOnboardingSetup = !userExists || (existingStatus === '' || existingStatus === 'pending');
+        const needsOnboardingSetup = !userExists || (existingStatus === '' || existingStatus === 'inactive');
         
         // Only block active users if they're trying to SIGN UP (not login)
         // For login attempts, active users should be allowed to send OTP
@@ -245,12 +245,12 @@ export async function POST(request: NextRequest) {
             );
             const fieldOfficerTypeId = Array.isArray(foType) && foType.length > 0 ? foType[0]?.id ?? null : null;
             
-            // Create user with pending status (will be activated after profile completion)
+            // Create user with inactive status (will be activated after profile completion)
             const DEFAULT_MOBILE_ROLE = 'field_officer';
             try {
               await existConn.execute(
                 `INSERT INTO users (name, contact_number, email, user_type, user_type_id, status, is_active, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, 'pending', 0, NOW(), NOW())`,
+                 VALUES (?, ?, ?, ?, ?, 'inactive', 0, NOW(), NOW())`,
                 [name, phone, email || null, DEFAULT_MOBILE_ROLE, fieldOfficerTypeId]
               );
             } catch (insertError: any) {
@@ -327,7 +327,7 @@ export async function POST(request: NextRequest) {
               );
             }
           } else {
-            // User exists but has empty/pending status - use existing user for onboarding
+            // User exists but has empty/inactive status - use existing user for onboarding
             Logger.info('send_otp_using_existing_user_for_onboarding', { phone, existingStatus });
             userData = existingUser;
           }
@@ -367,7 +367,7 @@ export async function POST(request: NextRequest) {
 
       const status = (userData.status || '').toLowerCase().trim();
       const statusAllowsOtp = status === 'active' || status === 'approved';
-      const isPending = status === 'pending' || status === ''; // Allow empty status for newly created users
+      const isPending = status === 'inactive' || status === ''; // Allow empty/inactive status for newly created users
       const hasActiveFlag = Number(userData.is_active) === 1;
 
       // Allow OTP for pending/empty status users during mobile onboarding (they're in the process of completing profile)
