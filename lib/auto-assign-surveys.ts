@@ -637,7 +637,7 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
 
           if (hasVillageMatch) {
             matchingOfficers.push(officerId);
-            const matchedGaavs = officerData.villages.filter(v => {
+            const matchedGaavs = officerData.villages.filter((v: string) => {
               const normalizedV = normalizeVillage(v);
               return surveyVillageNormalized === normalizedV ||
                      surveyVillageNormalized.includes(normalizedV) ||

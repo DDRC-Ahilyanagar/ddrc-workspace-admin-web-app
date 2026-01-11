@@ -492,7 +492,7 @@ export default function LandingPage() {
             key={slide.id}
             className={`carousel-slide ${index === currentSlide ? 'active' : ''}`}
             style={{
-              backgroundImage: `url(${getAbsoluteImageUrl(slide.bgImage)})`,
+              backgroundImage: `url(${slide.bgImage})`,
             }}
           >
             <div className="carousel-overlay"></div>

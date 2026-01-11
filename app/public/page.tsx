@@ -1027,7 +1027,7 @@ export default function PublicFormPage() {
           );
         } else {
           // Show loading state for disability type if options are being loaded
-          const showLoading = isDisabilityTypeQuestion && loadingDisabilityTypes && options.length === 0;
+          const showLoading = Boolean(isDisabilityTypeQuestion && loadingDisabilityTypes && options.length === 0);
           
           return (
             <div key={q.id} className="mb-3 mb-md-4">
