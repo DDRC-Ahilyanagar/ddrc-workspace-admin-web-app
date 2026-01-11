@@ -312,7 +312,7 @@ export async function POST(request: NextRequest) {
             
             if (Array.isArray(newUserCheck) && newUserCheck.length > 0) {
               userData = newUserCheck[0];
-              // Allow OTP for newly created pending users during onboarding
+              // Allow OTP for newly created inactive users during onboarding
               Logger.info('send_otp_allowing_otp_for_new_user', { phone, user_id: userData.id });
             } else {
               Logger.error('send_otp_user_creation_failed', { phone });
@@ -370,7 +370,7 @@ export async function POST(request: NextRequest) {
       const isPending = status === 'inactive' || status === ''; // Allow empty/inactive status for newly created users
       const hasActiveFlag = Number(userData.is_active) === 1;
 
-      // Allow OTP for pending/empty status users during mobile onboarding (they're in the process of completing profile)
+      // Allow OTP for inactive/empty status users during mobile onboarding (they're in the process of completing profile)
       // Also allow OTP for active/approved users (for login)
       const allowOtpForOnboarding = isPending && !isWebRequest && role === 'field_officer';
       const allowOtpForActiveUser = statusAllowsOtp && hasActiveFlag;

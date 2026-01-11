@@ -291,10 +291,10 @@ export async function POST(request: NextRequest) {
 
       // First, get the user's actual role from the database so that mobile/web
       // clients cannot spoof their role via request payloads.
-      // For mobile onboarding, also allow pending users and empty status
+      // For mobile onboarding, also allow inactive users (new signups) and empty status
       const isMobileOnboarding = !isWebRequest && role === 'field_officer';
       const statusCondition = isMobileOnboarding 
-        ? `(COALESCE(u.status, '') = 'active' OR COALESCE(u.is_active, 0) = 1 OR COALESCE(u.status, '') = 'pending' OR COALESCE(u.status, '') = '')`
+        ? `(COALESCE(u.status, '') = 'active' OR COALESCE(u.is_active, 0) = 1 OR COALESCE(u.status, '') = 'inactive' OR COALESCE(u.status, '') = '')`
         : `(COALESCE(u.status, '') = 'active' OR COALESCE(u.is_active, 0) = 1)`;
       
       const [userCheck] = await connection.execute(

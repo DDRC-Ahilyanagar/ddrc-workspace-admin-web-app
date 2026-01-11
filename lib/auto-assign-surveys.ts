@@ -303,11 +303,12 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
       });
 
       // Query with flexible conditions - handle both boolean and integer is_active, and empty status
+      // Include both field_officer and verification_officer (they can both be assigned surveys)
       let [activeOfficers]: any = await conn.query(`
         SELECT u.id, p.primary_gaav, p.additional_gaavs, p.taluka, p.current_gaav
         FROM users u
         JOIN field_officer_profiles p ON u.id = p.user_id
-        WHERE (u.user_type = 'field_officer' OR u.user_type = 'field officer')
+        WHERE (u.user_type = 'field_officer' OR u.user_type = 'field officer' OR u.user_type = 'verification_officer')
         AND (u.status = 'active' OR u.status IS NULL OR u.status = '')
         AND (u.is_active = 1 OR u.is_active = true OR u.is_active IS NULL)
       `);
@@ -323,7 +324,7 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
           SELECT u.id, p.primary_gaav, p.additional_gaavs, p.taluka, p.current_gaav
           FROM users u
           JOIN field_officer_profiles p ON u.id = p.user_id
-          WHERE (u.user_type = 'field_officer' OR u.user_type = 'field officer')
+          WHERE (u.user_type = 'field_officer' OR u.user_type = 'field officer' OR u.user_type = 'verification_officer')
           AND (u.status = 'active' OR u.status IS NULL OR u.status = '')
         `);
         
