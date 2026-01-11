@@ -457,9 +457,10 @@ export default function PublicFormPage() {
 
         setPersonalInfoQuestions(reorderedQuestions);
 
-        // Filter current address questions (title = "पत्ता" AND question starts with "सध्याचा")
+        // Filter current address questions (title = "पत्ता")
+        // Exclude Permanent address questions to avoid confusion
         const currentAddress = questions.filter(
-          (q) => q.title === 'पत्ता' && q.question.trim().startsWith('सध्याचा')
+          (q) => q.title === 'पत्ता' && !q.question.includes('स्थायी') && !q.question.toLowerCase().includes('permanent')
         );
         setAddressQuestions(currentAddress);
       }

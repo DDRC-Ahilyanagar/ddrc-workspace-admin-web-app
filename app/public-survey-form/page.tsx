@@ -65,24 +65,24 @@ function PublicSurveyFormContent() {
     try {
       const res = await fetch('/api/get-questions');
       const data = await res.json();
-      
+
       if (data.ok && data.data) {
         // Filter questions to only show:
         // 1. वैयक्तिक माहिती (Personal Information) - all questions
         // 2. पत्ता (Address) - Current only (questions without "स्थायी" or "permanent")
         // 3. दिव्यांगता तपशील (Disability Details) - only Type (69), percentage (70), UDID yes/no (66)
-        
+
         const allowedSections = ['वैयक्तिक माहिती', 'पत्ता', 'दिव्यांगता तपशील'];
         const allowedDisabilityQuestions = [66, 69, 70]; // UDID yes/no, Type, Percentage
-        
+
         const filteredQuestions = data.data.filter((q: Question) => {
           const sectionName = q.section_name || '';
-          
+
           // Check if section is allowed
           if (!allowedSections.includes(sectionName)) {
             return false;
           }
-          
+
           // For पत्ता section, only show "Current" address (exclude permanent)
           if (sectionName === 'पत्ता') {
             const questionText = (q.question || '').toLowerCase();
@@ -91,18 +91,18 @@ function PublicSurveyFormContent() {
               return false;
             }
           }
-          
+
           // For दिव्यांगता तपशील section, only show specific questions
           if (sectionName === 'दिव्यांगता तपशील') {
             return allowedDisabilityQuestions.includes(q.id);
           }
-          
+
           return true;
         });
-        
+
         // Group filtered questions by section
         const sectionsMap: Record<number, Section> = {};
-        
+
         filteredQuestions.forEach((q: Question) => {
           if (!sectionsMap[q.section_id]) {
             sectionsMap[q.section_id] = {
@@ -125,35 +125,74 @@ function PublicSurveyFormContent() {
           return aIndex - bIndex;
         });
 
-        // Prefill Aadhaar number if available
-        const prefillAadhaar = sessionStorage.getItem('prefill_aadhaar');
-        if (prefillAadhaar) {
-          // Find Aadhaar number question (question ID 54 "आधार कार्ड नंबर")
-          const allAadhaarQuestion = data.data.find((q: Question) => {
-            const questionText = (q.question || '').toLowerCase();
-            return q.id === 54 || 
-                   ((questionText.includes('आधार') || questionText.includes('aadhaar') || questionText.includes('aadhar')) && 
+
+        // Prefill Aadhaar number and Address fields if available
+        const savedAadhaarInfo = sessionStorage.getItem('public_aadhaar_info');
+        if (savedAadhaarInfo) {
+          try {
+            const aadhaarInfo = JSON.parse(savedAadhaarInfo);
+            const prefillUpdates: Record<number, string> = {};
+
+            // 1. Prefill Aadhaar Number
+            if (aadhaarInfo.aadhaar) {
+              const aadhaarNumber = aadhaarInfo.aadhaar.replace(/\D/g, '');
+              const allAadhaarQuestion = data.data.find((q: Question) => {
+                const questionText = (q.question || '').toLowerCase();
+                return q.id === 54 ||
+                  ((questionText.includes('आधार') || questionText.includes('aadhaar') || questionText.includes('aadhar')) &&
                     (questionText.includes('नंबर') || questionText.includes('number')));
-          });
-          
-          if (allAadhaarQuestion) {
-            // Add Aadhaar number question to the first section (वैयक्तिक माहिती) if not already included
-            const isAlreadyIncluded = filteredQuestions.find((q: Question) => q.id === allAadhaarQuestion.id);
-            if (!isAlreadyIncluded && sortedSections.length > 0) {
-              // Find वैयक्तिक माहिती section
-              const personalInfoSection = sortedSections.find(s => s.name === 'वैयक्तिक माहिती');
-              if (personalInfoSection) {
-                // Add at the beginning of the section
-                personalInfoSection.questions.unshift(allAadhaarQuestion);
+              });
+
+              if (allAadhaarQuestion) {
+                // Add Aadhaar number question to the first section (वैयक्तिक माहिती) if not already included
+                const isAlreadyIncluded = filteredQuestions.find((q: Question) => q.id === allAadhaarQuestion.id);
+                if (!isAlreadyIncluded && sortedSections.length > 0) {
+                  const personalInfoSection = sortedSections.find(s => s.name === 'वैयक्तिक माहिती');
+                  if (personalInfoSection) {
+                    personalInfoSection.questions.unshift(allAadhaarQuestion);
+                  }
+                }
+                prefillUpdates[allAadhaarQuestion.id] = aadhaarNumber;
               }
             }
-            
-            // Prefill the answer
-            setAnswers((prev) => ({
-              ...prev,
-              [allAadhaarQuestion.id]: prefillAadhaar,
-            }));
-            console.log('Prefilled Aadhaar number:', prefillAadhaar, 'in question:', allAadhaarQuestion.id);
+
+            // 2. Prefill Address Fields (Village, Taluka, District)
+            // Common Question IDs: 47=Taluka, 48=District, 49=Village (based on submit-answers API)
+            // But we should also search by text to be safe
+
+            if (aadhaarInfo.village) {
+              const villageQ = data.data.find((q: Question) => q.id === 49 || q.question.includes('गाव') || q.question.toLowerCase().includes('village'));
+              if (villageQ) prefillUpdates[villageQ.id] = aadhaarInfo.village;
+            }
+
+            if (aadhaarInfo.taluka) {
+              const talukaQ = data.data.find((q: Question) => q.id === 47 || q.question.includes('तालुका') || q.question.toLowerCase().includes('taluka'));
+              if (talukaQ) prefillUpdates[talukaQ.id] = aadhaarInfo.taluka;
+            }
+
+            if (aadhaarInfo.district) {
+              const districtQ = data.data.find((q: Question) => q.id === 48 || q.question.includes('जिल्हा') || q.question.toLowerCase().includes('district'));
+              if (districtQ) prefillUpdates[districtQ.id] = aadhaarInfo.district;
+            }
+
+            // Update answers state with all prefilled values
+            if (Object.keys(prefillUpdates).length > 0) {
+              setAnswers(prev => ({ ...prev, ...prefillUpdates }));
+              console.log('Prefilled fields:', prefillUpdates);
+
+              // If village is prefilled, fetch field officer immediately
+              const villageId = Object.keys(prefillUpdates).find(id => {
+                const q = data.data.find((q: Question) => q.id === Number(id));
+                return q && (q.question.includes('गाव') || q.question.toLowerCase().includes('village'));
+              });
+
+              if (villageId) {
+                fetchFieldOfficer(prefillUpdates[Number(villageId)], { ...answers, ...prefillUpdates });
+              }
+            }
+
+          } catch (e) {
+            console.error('Failed to parse/prefill Aadhaar info:', e);
           }
         }
 
@@ -171,14 +210,14 @@ function PublicSurveyFormContent() {
   const handleAnswerChange = (questionId: number, value: string) => {
     setAnswers((prev) => {
       const newAnswers = { ...prev, [questionId]: value };
-      
+
       // Check if village question was answered and fetch field officer
       const question = sections.flatMap(s => s.questions).find(q => q.id === questionId);
       if (question && (question.question?.toLowerCase().includes('गाव') || question.question?.toLowerCase().includes('village'))) {
         // Village was updated, fetch field officer
         fetchFieldOfficer(value, newAnswers);
       }
-      
+
       return newAnswers;
     });
   };
@@ -234,7 +273,7 @@ function PublicSurveyFormContent() {
 
   const handleNext = () => {
     if (!validateCurrentSection()) return;
-    
+
     if (currentSectionIndex < sections.length - 1) {
       setCurrentSectionIndex(currentSectionIndex + 1);
       setError('');
@@ -260,7 +299,7 @@ function PublicSurveyFormContent() {
         const question = sections
           .flatMap(s => s.questions)
           .find(q => q.id === parseInt(questionId));
-        
+
         return {
           section_id: question?.section_id || 0,
           question_id: parseInt(questionId),
@@ -365,7 +404,7 @@ function PublicSurveyFormContent() {
                 {currentSection && (
                   <>
                     <h5 className="mb-4">{currentSection.name}</h5>
-                    
+
                     <div className="row g-3">
                       {currentSection.questions.map((question) => (
                         <div key={question.id} className="col-12">
@@ -382,7 +421,7 @@ function PublicSurveyFormContent() {
                                 const opt = option.trim();
                                 const answerKey = `${question.id}_${idx}`;
                                 const isSelected = answers[question.id] === opt;
-                                
+
                                 return (
                                   <div key={idx} className="form-check mb-2">
                                     <input
@@ -429,7 +468,7 @@ function PublicSurveyFormContent() {
                       >
                         <i className="bi bi-arrow-left me-2"></i>मागे
                       </button>
-                      
+
                       {isLastSection ? (
                         <button
                           className="btn btn-success"
