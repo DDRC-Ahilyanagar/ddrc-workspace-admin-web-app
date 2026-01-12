@@ -5,6 +5,60 @@ import ExcelJS from 'exceljs';
 import { requireAuth } from '@/lib/auth';
 import { autoAssignSurveys } from '@/lib/auto-assign-surveys';
 
+/**
+ * Generate short form for village/taluka name
+ * Takes first 4-6 uppercase characters, removes spaces and special characters
+ */
+function generateShortForm(name: string): string {
+  if (!name || typeof name !== 'string') return 'XXXX';
+  
+  // Remove spaces, special characters, and convert to uppercase
+  let cleaned = name
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '') // Remove all non-alphanumeric
+    .replace(/\s+/g, ''); // Remove spaces
+  
+  // Take first 4-6 characters
+  if (cleaned.length <= 4) {
+    return cleaned.padEnd(4, 'X'); // Pad if too short
+  } else if (cleaned.length >= 6) {
+    return cleaned.substring(0, 6);
+  } else {
+    return cleaned;
+  }
+}
+
+/**
+ * Generate registration number for Excel import submissions
+ * Format: DDRC/DIVYANG/MMYY/GAAV_SHORT/TALUKA_SHORT/AADHAR_LAST4
+ * Example: DDRC/DIVYANG/0224/SHIRD/RAHAT/5678
+ */
+function generateRegistrationNumber(
+  aadhaarId: number,
+  village: string | null,
+  taluka: string | null
+): string {
+  // Get current month and year (MMYY format)
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0'); // 01-12
+  const year = String(now.getFullYear()).slice(-2); // Last 2 digits
+  const mmYY = `${month}${year}`;
+  
+  // Get last 4 digits of Aadhaar
+  const aadhaarStr = String(aadhaarId);
+  const aadhaarLast4 = aadhaarStr.length >= 4 
+    ? aadhaarStr.slice(-4) 
+    : aadhaarStr.padStart(4, '0');
+  
+  // Generate short forms
+  const villageShort = village ? generateShortForm(village) : 'XXXX';
+  const talukaShort = taluka ? generateShortForm(taluka) : 'XXXX';
+  
+  // Format: DDRC/DIVYANG/MMYY/GAAV_SHORT/TALUKA_SHORT/AADHAR_LAST4
+  return `DDRC/DIVYANG/${mmYY}/${villageShort}/${talukaShort}/${aadhaarLast4}`;
+}
+
 export const dynamic = 'force-dynamic';
 
 /**
@@ -214,10 +268,48 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
           const answeredQuestions = answersArray.length;
           const surveyJson = JSON.stringify({ answers: answersArray });
 
+          // Extract village and taluka from answers for registration number generation
+          // Question 47 = सध्याचा ता. (Current Taluka)
+          // Question 49 = गाव (Village)
+          let village: string | null = null;
+          let taluka: string | null = null;
+          
+          // Extract village (Question 49)
+          const villageAnswer = answersArray.find(a => a.question_id === 49);
+          if (villageAnswer && villageAnswer.answer) {
+            village = String(villageAnswer.answer).trim();
+            if (village === '' || village === '--') village = null;
+          }
+          
+          // Extract taluka (Question 47)
+          const talukaAnswer = answersArray.find(a => a.question_id === 47);
+          if (talukaAnswer && talukaAnswer.answer) {
+            taluka = String(talukaAnswer.answer).trim();
+            if (taluka === '' || taluka === '--') taluka = null;
+          }
+          
+          // Fallback: Try to find village by question text if not found by ID
+          if (!village) {
+            for (const [questionId, answerValue] of row.answers.entries()) {
+              const questionInfo = questionMap.get(questionId);
+              if (questionInfo) {
+                const questionText = questionInfo.question.toLowerCase();
+                // Check if this is a village question (गाव, village, ग्राम)
+                if (questionText.includes('गाव') || 
+                    questionText.includes('village') || 
+                    questionText.includes('ग्राम') ||
+                    questionText.includes('ग्रामपंचायत')) {
+                  village = answerValue.trim();
+                  break;
+                }
+              }
+            }
+          }
+
           // Create or update survey record
           let surveyId: number | null = null;
           const [existingSurvey]: any = await conn.query(
-            `SELECT id, survey_json FROM surveys WHERE aadhaar_id = ? LIMIT 1`,
+            `SELECT id, survey_json, source FROM surveys WHERE aadhaar_id = ? LIMIT 1`,
             [aadharId]
           );
 
@@ -260,54 +352,79 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
             const isUnassigned = !existingUserId || existingUserId === 1;
             const existingSource = existingSurvey[0]?.source;
 
+            // Generate registration number for Excel imports (only if source is Excel Import or Divyang Self)
+            let registrationNumber: string | null = null;
+            const shouldSetSource = !existingSource || existingSource === 'Divyang Self' || existingSource === 'Excel Import';
+            if (shouldSetSource) {
+              registrationNumber = generateRegistrationNumber(aadharId, village, taluka);
+              Logger.info('EXCEL_IMPORT_REGISTRATION_NUMBER_GENERATED', {
+                registration_number: registrationNumber,
+                aadhaar_id: aadharId,
+                village: village,
+                taluka: taluka,
+                survey_id: surveyId
+              });
+            }
+            
             // Update survey
             // If survey was unassigned, ensure it stays unassigned (user_id = 1) so auto-assignment can run
             // If survey was already assigned, keep the existing assignment
             // Always set source to 'Excel Import' if it's not already set or if it's a public form submission
-            const shouldSetSource = !existingSource || existingSource === 'Divyang Self' || existingSource === 'Excel Import';
-            
             await conn.query(
               `UPDATE surveys 
                SET survey_json = ?, 
                    no_of_questions_answered = ?,
                    ${isUnassigned ? 'user_id = 1,' : ''}
                    ${shouldSetSource ? "source = 'Excel Import'," : ''}
+                   ${registrationNumber ? 'registration_number = COALESCE(?, registration_number),' : ''}
                    updated_at = NOW()
                WHERE id = ?`,
-              [mergedJson, totalAnswered, surveyId]
+              registrationNumber 
+                ? [mergedJson, totalAnswered, registrationNumber, surveyId]
+                : [mergedJson, totalAnswered, surveyId]
             );
           } else {
+            // Generate registration number for new Excel import surveys
+            const registrationNumber = generateRegistrationNumber(aadharId, village, taluka);
+            Logger.info('EXCEL_IMPORT_REGISTRATION_NUMBER_GENERATED', {
+              registration_number: registrationNumber,
+              aadhaar_id: aadharId,
+              village: village,
+              taluka: taluka
+            });
+
             // Create new survey with system user_id (1) initially
             // Will be assigned to field officer based on village below
             const [surveyResult]: any = await conn.query(
-              `INSERT INTO surveys (user_id, aadhaar_id, no_of_questions_answered, no_of_questions_unanswered, survey_json, source, created_at, updated_at)
-               VALUES (1, ?, ?, 0, ?, 'Excel Import', NOW(), NOW())`,
-              [aadharId, answeredQuestions, surveyJson]
+              `INSERT INTO surveys (user_id, aadhaar_id, no_of_questions_answered, no_of_questions_unanswered, survey_json, source, registration_number, created_at, updated_at)
+               VALUES (1, ?, ?, 0, ?, 'Excel Import', ?, NOW(), NOW())`,
+              [aadharId, answeredQuestions, surveyJson, registrationNumber]
             );
             surveyId = surveyResult.insertId;
+          }
+
+          // Fallback: Try to find village by question text if not found by ID
+          if (!village) {
+            for (const [questionId, answerValue] of row.answers.entries()) {
+              const questionInfo = questionMap.get(questionId);
+              if (questionInfo) {
+                const questionText = questionInfo.question.toLowerCase();
+                // Check if this is a village question (गाव, village, ग्राम)
+                if (questionText.includes('गाव') || 
+                    questionText.includes('village') || 
+                    questionText.includes('ग्राम') ||
+                    questionText.includes('ग्रामपंचायत')) {
+                  village = answerValue.trim();
+                  break;
+                }
+              }
+            }
           }
 
           if (!surveyId) {
             await conn.rollback();
             errors.push(`Failed to create/update survey for ${row.name}`);
             continue;
-          }
-
-          // Extract village from answers (look for village question) for logging
-          let village: string | null = null;
-          for (const [questionId, answerValue] of row.answers.entries()) {
-            const questionInfo = questionMap.get(questionId);
-            if (questionInfo) {
-              const questionText = questionInfo.question.toLowerCase();
-              // Check if this is a village question (गाव, village, ग्राम)
-              if (questionText.includes('गाव') || 
-                  questionText.includes('village') || 
-                  questionText.includes('ग्राम') ||
-                  questionText.includes('ग्रामपंचायत')) {
-                village = answerValue.trim();
-                break;
-              }
-            }
           }
 
           await conn.commit();

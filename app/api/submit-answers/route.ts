@@ -5,6 +5,61 @@ import { requireAuth, verifyAuth } from '@/lib/auth';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { autoAssignSurveys } from '@/lib/auto-assign-surveys';
+import { sendFormCompletionSMS } from '@/lib/sms';
+
+/**
+ * Generate short form for village/taluka name
+ * Takes first 4-6 uppercase characters, removes spaces and special characters
+ */
+function generateShortForm(name: string): string {
+  if (!name || typeof name !== 'string') return 'XXXX';
+  
+  // Remove spaces, special characters, and convert to uppercase
+  let cleaned = name
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '') // Remove all non-alphanumeric
+    .replace(/\s+/g, ''); // Remove spaces
+  
+  // Take first 4-6 characters
+  if (cleaned.length <= 4) {
+    return cleaned.padEnd(4, 'X'); // Pad if too short
+  } else if (cleaned.length >= 6) {
+    return cleaned.substring(0, 6);
+  } else {
+    return cleaned;
+  }
+}
+
+/**
+ * Generate registration number for public form submissions
+ * Format: DDRC/DIVYANG/MMYY/GAAV_SHORT/TALUKA_SHORT/AADHAR_LAST4
+ * Example: DDRC/DIVYANG/0224/SHIRD/RAHAT/5678
+ */
+function generateRegistrationNumber(
+  aadhaarId: number,
+  village: string | null,
+  taluka: string | null
+): string {
+  // Get current month and year (MMYY format)
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0'); // 01-12
+  const year = String(now.getFullYear()).slice(-2); // Last 2 digits
+  const mmYY = `${month}${year}`;
+  
+  // Get last 4 digits of Aadhaar
+  const aadhaarStr = String(aadhaarId);
+  const aadhaarLast4 = aadhaarStr.length >= 4 
+    ? aadhaarStr.slice(-4) 
+    : aadhaarStr.padStart(4, '0');
+  
+  // Generate short forms
+  const villageShort = village ? generateShortForm(village) : 'XXXX';
+  const talukaShort = taluka ? generateShortForm(taluka) : 'XXXX';
+  
+  // Format: DDRC/DIVYANG/MMYY/GAAV_SHORT/TALUKA_SHORT/AADHAR_LAST4
+  return `DDRC/DIVYANG/${mmYY}/${villageShort}/${talukaShort}/${aadhaarLast4}`;
+}
 
 /**
  * @swagger
@@ -394,6 +449,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
         await ensureColumn('survey_json', 'survey_json LONGTEXT NULL');
         await ensureColumn('json_path', 'json_path VARCHAR(255) NULL');
         await ensureColumn('source', 'source VARCHAR(255) NULL');
+        await ensureColumn('registration_number', 'registration_number VARCHAR(100) NULL');
 
         // Add unique constraint if it doesn't exist
         try {
@@ -540,19 +596,32 @@ export async function handleSubmit(request: NextRequest, user: any) {
             unanswered: totalUnanswered,
           });
         } else {
+          // Generate registration number for public form submissions
+          let registrationNumber: string | null = null;
+          if (source === 'Divyang Self' && userId === 1) {
+            registrationNumber = generateRegistrationNumber(aadhaarId, logVillage, logTaluka);
+            Logger.info('REGISTRATION_NUMBER_GENERATED', {
+              registration_number: registrationNumber,
+              aadhaar_id: aadhaarId,
+              village: logVillage,
+              taluka: logTaluka
+            });
+          }
+
           // Insert new survey record with JSON (with ON DUPLICATE KEY UPDATE as safety)
           try {
             const [insertSurvey] = await connection.execute(
-              `INSERT INTO surveys (user_id, aadhaar_id, no_of_questions_answered, no_of_questions_unanswered, survey_json, json_path, source, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+              `INSERT INTO surveys (user_id, aadhaar_id, no_of_questions_answered, no_of_questions_unanswered, survey_json, json_path, source, registration_number, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
                ON DUPLICATE KEY UPDATE
                  no_of_questions_answered = VALUES(no_of_questions_answered),
                  no_of_questions_unanswered = VALUES(no_of_questions_unanswered),
                  survey_json = VALUES(survey_json),
                  json_path = VALUES(json_path),
                  source = VALUES(source),
+                 registration_number = COALESCE(VALUES(registration_number), registration_number),
                  updated_at = NOW()`,
-              [userId, aadhaarId, answeredCount, unansweredCount, responseJson, relativePath, source]
+              [userId, aadhaarId, answeredCount, unansweredCount, responseJson, relativePath, source, registrationNumber]
             );
 
             if ((insertSurvey as any)?.insertId) {
@@ -752,6 +821,11 @@ export async function handleSubmit(request: NextRequest, user: any) {
                 userId !== 1 ? 'userId mismatch' : 'OK'
       });
       
+      // Determine if this is a field officer submission (fully completed form)
+      const isFieldOfficerSubmission = source !== 'Divyang Self' && userId !== 1 && user && 
+                                       ((user.user_type || '').toLowerCase() === 'field_officer' || 
+                                        (user.user_type || '').toLowerCase() === 'field officer');
+
       if (source === 'Divyang Self' && userId === 1 && surveyId) {
         // Call auto-assignment asynchronously (fire and forget) so it doesn't delay the response
         Logger.info('AUTO_ASSIGN_TRIGGERING', { survey_id: surveyId });
@@ -767,6 +841,96 @@ export async function handleSubmit(request: NextRequest, user: any) {
             stack: error?.stack
           });
         });
+
+        // Get registration number for SMS (for public forms only)
+        let registrationNumberForSMS: string | undefined = undefined;
+        try {
+          const [regNumResult] = await connection.query(
+            'SELECT registration_number FROM surveys WHERE id = ? LIMIT 1',
+            [surveyId]
+          );
+          if (Array.isArray(regNumResult) && (regNumResult as any[]).length > 0) {
+            registrationNumberForSMS = (regNumResult as any[])[0].registration_number || undefined;
+          }
+        } catch (regNumError) {
+          Logger.warn('REGISTRATION_NUMBER_FETCH_FAILED', { survey_id: surveyId, error: regNumError });
+        }
+
+        // Send SMS to divyang after successful public form submission (fire and forget)
+        // Use responsePayload which contains the survey data with answers
+        try {
+          if (responsePayload) {
+            sendFormCompletionSMS(responsePayload, surveyId, false, registrationNumberForSMS).then((smsResult) => {
+              if (smsResult.ok) {
+                Logger.info('FORM_COMPLETION_SMS_SENT', {
+                  survey_id: surveyId,
+                  source: 'public',
+                  phone: smsResult.phone ? smsResult.phone.substring(0, 3) + '****' + smsResult.phone.substring(7) : 'unknown'
+                });
+              } else {
+                Logger.warn('FORM_COMPLETION_SMS_FAILED', {
+                  survey_id: surveyId,
+                  source: 'public',
+                  error: smsResult.error,
+                  phone: smsResult.phone ? smsResult.phone.substring(0, 3) + '****' + smsResult.phone.substring(7) : 'unknown'
+                });
+              }
+            }).catch((smsError) => {
+              Logger.error('FORM_COMPLETION_SMS_ERROR', {
+                survey_id: surveyId,
+                source: 'public',
+                error: smsError?.message || String(smsError),
+                stack: smsError?.stack
+              });
+            });
+          } else {
+            Logger.warn('FORM_COMPLETION_SMS_SKIPPED_NO_DATA', { survey_id: surveyId, source: 'public' });
+          }
+        } catch (smsInitError) {
+          Logger.error('FORM_COMPLETION_SMS_INIT_ERROR', {
+            survey_id: surveyId,
+            source: 'public',
+            error: smsInitError?.message || String(smsInitError)
+          });
+        }
+      } else if (isFieldOfficerSubmission && surveyId) {
+        // Send SMS to divyang after successful field officer form submission (fully completed)
+        // Use responsePayload which contains the survey data with answers
+        try {
+          if (responsePayload) {
+            sendFormCompletionSMS(responsePayload, surveyId, true).then((smsResult) => {
+              if (smsResult.ok) {
+                Logger.info('FORM_COMPLETION_SMS_SENT', {
+                  survey_id: surveyId,
+                  source: 'field_officer',
+                  phone: smsResult.phone ? smsResult.phone.substring(0, 3) + '****' + smsResult.phone.substring(7) : 'unknown'
+                });
+              } else {
+                Logger.warn('FORM_COMPLETION_SMS_FAILED', {
+                  survey_id: surveyId,
+                  source: 'field_officer',
+                  error: smsResult.error,
+                  phone: smsResult.phone ? smsResult.phone.substring(0, 3) + '****' + smsResult.phone.substring(7) : 'unknown'
+                });
+              }
+            }).catch((smsError) => {
+              Logger.error('FORM_COMPLETION_SMS_ERROR', {
+                survey_id: surveyId,
+                source: 'field_officer',
+                error: smsError?.message || String(smsError),
+                stack: smsError?.stack
+              });
+            });
+          } else {
+            Logger.warn('FORM_COMPLETION_SMS_SKIPPED_NO_DATA', { survey_id: surveyId, source: 'field_officer' });
+          }
+        } catch (smsInitError) {
+          Logger.error('FORM_COMPLETION_SMS_INIT_ERROR', {
+            survey_id: surveyId,
+            source: 'field_officer',
+            error: smsInitError?.message || String(smsInitError)
+          });
+        }
       } else {
         Logger.warn('AUTO_ASSIGN_NOT_TRIGGERED', {
           source,

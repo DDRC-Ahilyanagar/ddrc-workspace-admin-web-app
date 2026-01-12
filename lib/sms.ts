@@ -168,4 +168,181 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
   }
 }
 
+/**
+ * Get the form completion SMS template for public form submissions
+ * Can be configured via SMS_FORM_COMPLETION_TEMPLATE environment variable
+ * If not set, returns a default Marathi message for partial submissions
+ */
+function getPublicFormCompletionTemplate(registrationNumber?: string): string {
+  // Default Marathi message informing divyang about successful submission
+  // and that survey officer (सर्वेक्षण अधिकारी) will contact them
+  // Uses same entity name as OTP SMS: VIKHE PATIL FOUNDATION
+  // Includes contact number for queries and registration number if provided
+  let DEFAULT_TEMPLATE = 'आपला फॉर्म यशस्वीरित्या सादर करण्यात आला आहे. पुढील प्रक्रियेसाठी आमचे सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधतील.';
+  
+  if (registrationNumber) {
+    DEFAULT_TEMPLATE += ` आपला नोंदणी क्रमांक: ${registrationNumber}.`;
+  }
+  
+  DEFAULT_TEMPLATE += ' काही प्रश्न असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद. - VIKHE PATIL FOUNDATION';
+  
+  const template = process.env.SMS_FORM_COMPLETION_TEMPLATE || DEFAULT_TEMPLATE;
+  
+  // Replace {REG_NUM} placeholder if present in custom template
+  if (registrationNumber && template.includes('{REG_NUM}')) {
+    return template.replace('{REG_NUM}', registrationNumber);
+  }
+  
+  return template;
+}
+
+/**
+ * Get the form completion SMS template for field officer form submissions (fully completed)
+ * Can be configured via SMS_FIELD_OFFICER_COMPLETION_TEMPLATE environment variable
+ * If not set, returns a default Marathi message for fully completed forms
+ */
+function getFieldOfficerCompletionTemplate(): string {
+  // Default Marathi message informing divyang that their form is fully completed
+  // Uses same entity name as OTP SMS: VIKHE PATIL FOUNDATION
+  // Includes contact number for queries
+  const DEFAULT_TEMPLATE = 'आपला फॉर्म पूर्णपणे पूर्ण झाला आहे. पुढील प्रक्रियेसाठी आमचे सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधतील. काही प्रश्न असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद. - VIKHE PATIL FOUNDATION';
+  
+  const template = process.env.SMS_FIELD_OFFICER_COMPLETION_TEMPLATE || DEFAULT_TEMPLATE;
+  
+  return template;
+}
+
+/**
+ * Build SMS message for form completion notification
+ * @param isFieldOfficerSubmission - true if submitted by field officer (fully completed), false for public (partial)
+ * @param registrationNumber - Optional registration number to include in public form SMS
+ */
+export function buildFormCompletionMessage(isFieldOfficerSubmission: boolean = false, registrationNumber?: string): string {
+  const message = isFieldOfficerSubmission 
+    ? getFieldOfficerCompletionTemplate()
+    : getPublicFormCompletionTemplate(registrationNumber);
+  
+  const isProduction = process.env.NODE_ENV === 'production';
+  const logPreview = message.substring(0, 50);
+  
+  console.log('[SMS] Form Completion Message built:', {
+    length: message.length,
+    preview: logPreview,
+    isFieldOfficerSubmission,
+    has_registration_number: !!registrationNumber,
+  });
+  
+  return message;
+}
+
+/**
+ * Extract divyang's phone number from survey data
+ * Looks for answers that match phone number pattern (10 digits starting with 6-9)
+ * Also checks known question IDs for mobile number fields (question_id 100 is typically mobile number)
+ * Returns the first valid 10-digit phone number found
+ */
+export function extractDivyangPhone(surveyJson: any): string | null {
+  try {
+    if (!surveyJson || typeof surveyJson !== 'object') {
+      return null;
+    }
+
+    // Handle both array format and object format
+    const items = Array.isArray(surveyJson) ? surveyJson : 
+                  (surveyJson.items || surveyJson.answers || []);
+
+    if (!Array.isArray(items)) {
+      return null;
+    }
+
+    // Known question IDs for mobile number fields (can be extended)
+    // Question 100 is typically "मोबाईल नं" (Mobile Number)
+    const mobileQuestionIds = [100];
+
+    // First, try to find by question_id (more reliable)
+    for (const item of items) {
+      const questionId = item.question_id || item.questionId;
+      const answer = item.answer || item.value || '';
+      
+      if (mobileQuestionIds.includes(questionId)) {
+        const digits = String(answer).replace(/\D/g, '');
+        if (digits.length === 10 && /^[6-9]/.test(digits)) {
+          return digits;
+        }
+      }
+    }
+
+    // Fallback: Look for any answer that looks like a valid Indian mobile number
+    // This handles cases where question_id might not be in our known list
+    for (const item of items) {
+      const answer = item.answer || item.value || '';
+      const digits = String(answer).replace(/\D/g, '');
+      
+      // Validate it's a 10-digit Indian mobile number (starts with 6-9)
+      if (digits.length === 10 && /^[6-9]/.test(digits)) {
+        // Additional check: make sure it's not a parent's mobile (question 157 is parent mobile)
+        const questionId = item.question_id || item.questionId;
+        if (questionId !== 157) { // Skip parent's mobile number
+          return digits;
+        }
+      }
+    }
+
+    return null;
+  } catch (error: any) {
+    console.error('[SMS] Error extracting phone from survey:', error);
+    return null;
+  }
+}
+
+/**
+ * Send SMS to divyang after form completion
+ * This is called asynchronously after successful form submission
+ * @param surveyJson - The survey data containing answers
+ * @param surveyId - Optional survey ID for logging
+ * @param isFieldOfficerSubmission - true if submitted by field officer (fully completed), false for public (partial)
+ * @param registrationNumber - Optional registration number to include in SMS
+ */
+export async function sendFormCompletionSMS(surveyJson: any, surveyId?: number, isFieldOfficerSubmission: boolean = false, registrationNumber?: string): Promise<{ ok: boolean; phone?: string; error?: string }> {
+  try {
+    const phone = extractDivyangPhone(surveyJson);
+    
+    if (!phone) {
+      console.log('[SMS] No valid phone number found in survey data', { survey_id: surveyId });
+      return { ok: false, error: 'No valid phone number found' };
+    }
+
+    const message = buildFormCompletionMessage(isFieldOfficerSubmission, registrationNumber);
+    const result = await sendSMS(phone, message);
+
+    if (result.ok) {
+      console.log('[SMS] Form completion SMS sent successfully', { 
+        phone: phone.substring(0, 3) + '****' + phone.substring(7), 
+        survey_id: surveyId 
+      });
+    } else {
+      console.error('[SMS] Failed to send form completion SMS', { 
+        phone: phone.substring(0, 3) + '****' + phone.substring(7), 
+        survey_id: surveyId,
+        error: result.error 
+      });
+    }
+
+    return {
+      ok: result.ok,
+      phone,
+      error: result.error,
+    };
+  } catch (error: any) {
+    console.error('[SMS] Error in sendFormCompletionSMS:', {
+      error: error.message,
+      survey_id: surveyId,
+    });
+    return {
+      ok: false,
+      error: error.message || 'Unknown error',
+    };
+  }
+}
+
 
