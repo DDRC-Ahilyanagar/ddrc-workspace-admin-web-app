@@ -13,14 +13,14 @@ import { sendFormCompletionSMS } from '@/lib/sms';
  */
 function generateShortForm(name: string): string {
   if (!name || typeof name !== 'string') return 'XXXX';
-  
+
   // Remove spaces, special characters, and convert to uppercase
   let cleaned = name
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, '') // Remove all non-alphanumeric
     .replace(/\s+/g, ''); // Remove spaces
-  
+
   // Take first 4-6 characters
   if (cleaned.length <= 4) {
     return cleaned.padEnd(4, 'X'); // Pad if too short
@@ -46,17 +46,17 @@ function generateRegistrationNumber(
   const month = String(now.getMonth() + 1).padStart(2, '0'); // 01-12
   const year = String(now.getFullYear()).slice(-2); // Last 2 digits
   const mmYY = `${month}${year}`;
-  
+
   // Get last 4 digits of Aadhaar
   const aadhaarStr = String(aadhaarId);
-  const aadhaarLast4 = aadhaarStr.length >= 4 
-    ? aadhaarStr.slice(-4) 
+  const aadhaarLast4 = aadhaarStr.length >= 4
+    ? aadhaarStr.slice(-4)
     : aadhaarStr.padStart(4, '0');
-  
+
   // Generate short forms
   const villageShort = village ? generateShortForm(village) : 'XXXX';
   const talukaShort = taluka ? generateShortForm(taluka) : 'XXXX';
-  
+
   // Format: DDRC/DIVYANG/MMYY/GAAV_SHORT/TALUKA_SHORT/AADHAR_LAST4
   return `DDRC/DIVYANG/${mmYY}/${villageShort}/${talukaShort}/${aadhaarLast4}`;
 }
@@ -119,6 +119,8 @@ export async function handleSubmit(request: NextRequest, user: any) {
         } else {
           body = obj;
         }
+
+
       } else {
         // Fallback: try text->JSON, else attempt URLSearchParams
         const raw = await request.text();
@@ -229,6 +231,36 @@ export async function handleSubmit(request: NextRequest, user: any) {
 
     let pool;
     let connection;
+
+    // Extract taluka, village, and district for logging/registration use
+    let logTaluka: string | null = null;
+    let logVillage: string | null = null;
+    let logDistrict: string | null = null;
+    try {
+      const talukaAnswer = normalizedItems.find((item: any) => item.question_id === 47);
+      const districtAnswer = normalizedItems.find((item: any) => item.question_id === 48);
+      const villageAnswer = normalizedItems.find((item: any) => item.question_id === 49);
+
+      if (talukaAnswer && talukaAnswer.answer) {
+        logTaluka = String(talukaAnswer.answer).trim();
+        if (logTaluka === '' || logTaluka === '--') logTaluka = null;
+      }
+
+      if (districtAnswer && districtAnswer.answer) {
+        logDistrict = String(districtAnswer.answer).trim();
+        if (logDistrict === '' || logDistrict === '--') logDistrict = null;
+      }
+
+      if (villageAnswer && villageAnswer.answer) {
+        logVillage = String(villageAnswer.answer).trim();
+        if (logVillage === '' || logVillage === '--') logVillage = null;
+      }
+    } catch (locationParseError: any) {
+      Logger.info('submit_answers_location_parse_failed', {
+        error: locationParseError?.message,
+        aadhaar_id: aadhaarId,
+      });
+    }
 
     try {
       pool = getDbPool();
@@ -694,35 +726,8 @@ export async function handleSubmit(request: NextRequest, user: any) {
         // The JSON file is already saved
       }
 
-      // Extract taluka and district from answers and update survey_aadhar if needed
-      // Question 47 = सध्याचा ता. (Current Taluka)
-      // Question 48 = सध्याचा जि. (Current District)
-      // Question 49 = गाव (Village)
-      let logTaluka: string | null = null;
-      let logVillage: string | null = null;
-      let logDistrict: string | null = null;
-
+      // Update survey_aadhar with taluka/district if we found them and they're not already set
       try {
-        // Find taluka, village and district from answers
-        const talukaAnswer = normalizedItems.find(item => item.question_id === 47);
-        const districtAnswer = normalizedItems.find(item => item.question_id === 48);
-        const villageAnswer = normalizedItems.find(item => item.question_id === 49);
-
-        if (talukaAnswer && talukaAnswer.answer) {
-          logTaluka = String(talukaAnswer.answer).trim();
-          if (logTaluka === '' || logTaluka === '--') logTaluka = null;
-        }
-
-        if (districtAnswer && districtAnswer.answer) {
-          logDistrict = String(districtAnswer.answer).trim();
-          if (logDistrict === '' || logDistrict === '--') logDistrict = null;
-        }
-
-        if (villageAnswer && villageAnswer.answer) {
-          logVillage = String(villageAnswer.answer).trim();
-          if (logVillage === '' || logVillage === '--') logVillage = null;
-        }
-
         // Update survey_aadhar with taluka/district if we found them and they're not already set
         if (logTaluka || logDistrict) {
           const updateFields: string[] = [];
@@ -816,15 +821,15 @@ export async function handleSubmit(request: NextRequest, user: any) {
         userId,
         surveyId,
         condition_met: source === 'Divyang Self' && userId === 1 && surveyId ? 'YES' : 'NO',
-        reason: !surveyId ? 'surveyId is null/undefined' : 
-                source !== 'Divyang Self' ? 'source mismatch' :
-                userId !== 1 ? 'userId mismatch' : 'OK'
+        reason: !surveyId ? 'surveyId is null/undefined' :
+          source !== 'Divyang Self' ? 'source mismatch' :
+            userId !== 1 ? 'userId mismatch' : 'OK'
       });
-      
+
       // Determine if this is a field officer submission (fully completed form)
-      const isFieldOfficerSubmission = source !== 'Divyang Self' && userId !== 1 && user && 
-                                       ((user.user_type || '').toLowerCase() === 'field_officer' || 
-                                        (user.user_type || '').toLowerCase() === 'field officer');
+      const isFieldOfficerSubmission = source !== 'Divyang Self' && userId !== 1 && user &&
+        ((user.user_type || '').toLowerCase() === 'field_officer' ||
+          (user.user_type || '').toLowerCase() === 'field officer');
 
       if (source === 'Divyang Self' && userId === 1 && surveyId) {
         // Call auto-assignment asynchronously (fire and forget) so it doesn't delay the response
@@ -886,7 +891,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
           } else {
             Logger.warn('FORM_COMPLETION_SMS_SKIPPED_NO_DATA', { survey_id: surveyId, source: 'public' });
           }
-        } catch (smsInitError) {
+        } catch (smsInitError: any) {
           Logger.error('FORM_COMPLETION_SMS_INIT_ERROR', {
             survey_id: surveyId,
             source: 'public',
@@ -924,7 +929,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
           } else {
             Logger.warn('FORM_COMPLETION_SMS_SKIPPED_NO_DATA', { survey_id: surveyId, source: 'field_officer' });
           }
-        } catch (smsInitError) {
+        } catch (smsInitError: any) {
           Logger.error('FORM_COMPLETION_SMS_INIT_ERROR', {
             survey_id: surveyId,
             source: 'field_officer',
@@ -936,9 +941,9 @@ export async function handleSubmit(request: NextRequest, user: any) {
           source,
           userId,
           surveyId,
-          reason: !surveyId ? 'surveyId is null' : 
-                  source !== 'Divyang Self' ? `source is '${source}' not 'Divyang Self'` :
-                  userId !== 1 ? `userId is ${userId} not 1` : 'unknown'
+          reason: !surveyId ? 'surveyId is null' :
+            source !== 'Divyang Self' ? `source is '${source}' not 'Divyang Self'` :
+              userId !== 1 ? `userId is ${userId} not 1` : 'unknown'
         });
       }
 
