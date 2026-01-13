@@ -64,17 +64,18 @@ export async function POST(request: NextRequest) {
     const userName = formData.get('user_name')?.toString() || '';
     const userPhone = formData.get('user_phone')?.toString() || '';
 
-    Logger.info('UPLOAD START', {
-      files: files.map((file) => ({
-        filename: file.name,
-        size: file.size,
-        type: file.type,
-      })),
-      user_name: userName,
-      user_phone: userPhone,
-    });
+    let folderName = '';
+    if (userName && userPhone) {
+      folderName = `${userName}_${userPhone}`
+        .replace(/[^a-zA-Z0-9_\-]/g, '_')
+        .replace(/_{2,}/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .substring(0, 120);
+    }
 
-    const uploadsDir = join(process.cwd(), 'public', 'uploads');
+    const baseDir = join(process.cwd(), 'public', 'uploads');
+    const uploadsDir = folderName ? join(baseDir, folderName) : baseDir;
+
     await mkdir(uploadsDir, { recursive: true });
 
     const origin = normalizeBase(`${request.nextUrl.protocol}//${request.nextUrl.host}`);
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
 
       // Always use relative path to avoid localhost issues
       // Frontend/API will convert to absolute URL when needed using getAbsoluteImageUrl
-      const relativePath = `/uploads/${fileName}`;
+      const relativePath = folderName ? `/uploads/${folderName}/${fileName}` : `/uploads/${fileName}`;
       savedFiles.push({
         url: relativePath, // Return relative path as url for backward compatibility
         path: relativePath, // Primary path (relative)

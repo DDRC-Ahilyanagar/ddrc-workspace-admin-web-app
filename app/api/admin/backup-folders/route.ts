@@ -95,6 +95,13 @@ export async function GET(request: NextRequest) {
 
     for (const entry of entries) {
       if (entry.isDirectory()) {
+        // Skip system or internal folders
+        if (['access_requests', 'temp', 'cache'].includes(entry.name)) continue;
+
+        // Backup folders should follow the pattern: name_phone or name-phone
+        // and usually contain many images, whereas Aadhaar folders have 2 images (front/back)
+        const isBackupPattern = entry.name.includes('_') || (entry.name.includes('-') && !/^\d+$/.test(entry.name.split('-').pop() || ''));
+
         const folderPath = path.join(MEDIA_ROOT, entry.name);
 
         try {
@@ -111,24 +118,39 @@ export async function GET(request: NextRequest) {
             }));
 
           if (images.length > 0) {
+            // Check if it looks like an Aadhaar folder (exactly 2 images named front/back)
+            const isAadharFolder = images.length <= 4 && images.some(img =>
+              img.name.toLowerCase().includes('front') ||
+              img.name.toLowerCase().includes('back')
+            );
+
+            if (isAadharFolder && images.length < 5) {
+              // Skip Aadhaar folders in media backup panel
+              continue;
+            }
+
             // Parse folder name to extract officer name and mobile
             // Format: person_name_mobile_no (e.g., Pranit_9561923703)
             let folderParts: string[];
-            if (entry.name.includes('-')) {
+            if (entry.name.includes('_')) {
+              folderParts = entry.name.split('_');
+            } else if (entry.name.includes('-')) {
               folderParts = entry.name.split('-');
             } else {
-              folderParts = entry.name.split('_');
+              folderParts = [entry.name];
             }
 
             // Last part is usually the mobile number
             const mobileNo = folderParts[folderParts.length - 1] || '';
             // Everything before the last part is the officer name
-            const separator = entry.name.includes('-') ? '-' : '_';
-            const officerName = folderParts.slice(0, -1).join(separator) || entry.name;
+            const separator = entry.name.includes('_') ? '_' : (entry.name.includes('-') ? '-' : ' ');
+            const officerName = folderParts.length > 1
+              ? folderParts.slice(0, -1).join(separator)
+              : entry.name;
 
             folders.push({
               folderName: entry.name,
-              officerName,
+              officerName: officerName.replace(/_/g, ' '),
               mobileNo,
               imageCount: images.length,
               images: images.slice(0, 10), // Show first 10 images in preview
@@ -143,8 +165,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Sort by folder name
-    folders.sort((a, b) => a.folderName.localeCompare(b.folderName));
+    // Sort by image count (descending) so active backups show first, then by name
+    folders.sort((a, b) => {
+      if (b.imageCount !== a.imageCount) {
+        return b.imageCount - a.imageCount;
+      }
+      return a.officerName.localeCompare(b.officerName);
+    });
 
     return NextResponse.json({
       ok: true,

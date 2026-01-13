@@ -29,25 +29,27 @@ export default function LoginPage() {
     try {
       // First check user type
       const userResponse = await fetchUserByPhone(phone);
-      
+
       if (userResponse.ok && userResponse.user) {
         const userType = userResponse.user.user_type?.toLowerCase() || '';
-        
+
         // Redirect beneficiary to public survey
         if (userType === 'beneficiary' || userType === 'public') {
           router.push('/public');
           setLoading(false);
           return;
         }
-        
+
         // Redirect field officer to landing page with scroll to download section
         if (userType === 'field_officer' || userType === 'field officer') {
           router.push('/?scrollToDownload=true');
           setLoading(false);
           return;
         }
+
+
       }
-      
+
       // For admin and verification officer, proceed with OTP
       const response = await sendOTP(phone, 'web');
       if (response.ok) {
@@ -69,9 +71,9 @@ export default function LoginPage() {
         {/* Left Side - 60% */}
         <div className="login-left-side d-flex flex-column align-items-center justify-content-center animate__animated animate__fadeInLeft">
           <div className="login-branding text-center">
-            <img 
-              src={LOGO_URL} 
-              alt="DDRC Logo" 
+            <img
+              src={LOGO_URL}
+              alt="DDRC Logo"
               className="login-logo mb-5 animate__animated animate__fadeInDown"
               style={{ maxWidth: '450px', width: '100%', height: 'auto' }}
             />
@@ -97,9 +99,9 @@ export default function LoginPage() {
           {/* Mobile-only branding section */}
           <div className="login-mobile-branding">
             <div className="text-center mb-4">
-              <img 
-                src={LOGO_URL} 
-                alt="DDRC Logo" 
+              <img
+                src={LOGO_URL}
+                alt="DDRC Logo"
                 className="login-mobile-logo mb-3"
               />
               <h1 className="login-mobile-title-main">
@@ -116,7 +118,7 @@ export default function LoginPage() {
               </p>
             </div>
           </div>
-          
+
           <div className="login-card-wrapper">
             <div className="card shadow-lg border-0">
               <div className="card-body">

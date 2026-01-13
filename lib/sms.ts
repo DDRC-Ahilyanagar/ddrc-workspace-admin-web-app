@@ -9,14 +9,14 @@ const SMS_CONFIG = {
 function getDLTTemplate(): string {
   // Default template with {#var#} placeholder
   const DEFAULT_OTP_TEMPLATE = 'Dear User, Your OTP to login at DDRC, Nagar is {#var#} Please do not share this with anyone. For Queries contact. 9022147060. VIKHE PATIL FOUNDATION';
-  
+
   const template = process.env.SMS_OTP_TEMPLATE || DEFAULT_OTP_TEMPLATE;
-  
+
   if (!template.includes('{#var#}')) {
     console.warn('[SMS] WARNING: Template does not contain {#var#} placeholder, using default template');
     return DEFAULT_OTP_TEMPLATE;
   }
-  
+
   return template;
 }
 
@@ -24,25 +24,25 @@ export function buildDLTMessage(otp: string): string {
   if (!otp || typeof otp !== 'string') {
     throw new Error('OTP must be a non-empty string');
   }
-  
+
   const cleanOtp = otp.replace(/\D/g, '');
   if (!cleanOtp || cleanOtp.length === 0) {
     throw new Error('OTP must contain at least one digit');
   }
-  
+
   const template = getDLTTemplate();
   const message = template.replace('{#var#}', cleanOtp);
-  
+
   const isProduction = process.env.NODE_ENV === 'production';
-  const logPreview = isProduction 
+  const logPreview = isProduction
     ? message.replace(cleanOtp, '****').substring(0, 50)
     : message.substring(0, 50);
-  
+
   console.log('[SMS] DLT Message built:', {
     length: message.length,
     preview: logPreview,
   });
-  
+
   return message;
 }
 
@@ -58,15 +58,15 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
     params.append('smsContentType', SMS_CONFIG.contentType);
 
     const url = `${SMS_CONFIG.url}?${params.toString()}`;
-    
+
     const isProduction = process.env.NODE_ENV === 'production';
-    const logMessage = isProduction 
+    const logMessage = isProduction
       ? message.replace(/\d{4,}/g, '****').substring(0, 50) + '...'
       : message.substring(0, 100) + '...';
-    
+
     console.log('[SMS] Message to send:', logMessage);
     console.log('[SMS] Full URL:', url.substring(0, 200) + '...');
-    
+
     // Log the URL and parameters for debugging (without exposing sensitive data)
     console.log('[SMS] Sending SMS:', {
       url: SMS_CONFIG.url,
@@ -76,7 +76,7 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
       contentType: SMS_CONFIG.contentType,
       messageLength: message.length,
     });
-    
+
     const response = await fetch(url, {
       method: 'GET',
       headers: {
@@ -86,7 +86,7 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
 
     const httpCode = response.status;
     const raw = await response.text();
-    
+
     // Parse the response to check for error codes
     let parsedResponse: any = null;
     let responseCode: string | undefined;
@@ -107,9 +107,9 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
     // 3005 = Insufficient balance
     // 3006 = DLT template not approved
     // Other codes = Various errors
-    const isSuccess = httpCode >= 200 && httpCode < 300 && 
-                      (responseCode === '2001' || responseCode === '3001' || responseCode === '200' || responseCode === undefined);
-    
+    const isSuccess = httpCode >= 200 && httpCode < 300 &&
+      (responseCode === '2001' || responseCode === '3001' || responseCode === '200' || responseCode === undefined);
+
     const errorMessages: Record<string, string> = {
       '3002': 'Invalid senderId (DDRCVK) - may not be approved/registered',
       '3003': 'Invalid routeId',
@@ -117,7 +117,7 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
       '3005': 'Insufficient SMS balance',
       '3006': 'DLT template not approved',
     };
-    
+
     let errorMessage: string | undefined;
     if (!isSuccess) {
       if (responseCode && errorMessages[responseCode]) {
@@ -175,24 +175,22 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
  */
 function getPublicFormCompletionTemplate(registrationNumber?: string): string {
   // Default Marathi message informing divyang about successful submission
-  // and that survey officer (सर्वेक्षण अधिकारी) will contact them
-  // Uses same entity name as OTP SMS: VIKHE PATIL FOUNDATION
-  // Includes contact number for queries and registration number if provided
-  let DEFAULT_TEMPLATE = 'आपला फॉर्म यशस्वीरित्या सादर करण्यात आला आहे. पुढील प्रक्रियेसाठी आमचे सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधतील.';
-  
+  // "Your primary information has been successfully recorded..."
+  let DEFAULT_TEMPLATE = 'आपली प्राथमिक माहिती यशस्वीरित्या नोंदवली गेली आहे.';
+
   if (registrationNumber) {
     DEFAULT_TEMPLATE += ` आपला नोंदणी क्रमांक: ${registrationNumber}.`;
   }
-  
-  DEFAULT_TEMPLATE += ' काही प्रश्न असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद. - VIKHE PATIL FOUNDATION';
-  
+
+  DEFAULT_TEMPLATE += ' पुढील टप्प्यासाठी आमचे क्षेत्रीय सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधून सविस्तर माहिती नोंदवतील. काही शंका असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद.– VIKHE PATIL FOUNDATION';
+
   const template = process.env.SMS_FORM_COMPLETION_TEMPLATE || DEFAULT_TEMPLATE;
-  
+
   // Replace {REG_NUM} placeholder if present in custom template
   if (registrationNumber && template.includes('{REG_NUM}')) {
     return template.replace('{REG_NUM}', registrationNumber);
   }
-  
+
   return template;
 }
 
@@ -203,12 +201,11 @@ function getPublicFormCompletionTemplate(registrationNumber?: string): string {
  */
 function getFieldOfficerCompletionTemplate(): string {
   // Default Marathi message informing divyang that their form is fully completed
-  // Uses same entity name as OTP SMS: VIKHE PATIL FOUNDATION
-  // Includes contact number for queries
-  const DEFAULT_TEMPLATE = 'आपला फॉर्म पूर्णपणे पूर्ण झाला आहे. पुढील प्रक्रियेसाठी आमचे सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधतील. काही प्रश्न असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद. - VIKHE PATIL FOUNDATION';
-  
+  // "Your survey form has been fully recorded..."
+  const DEFAULT_TEMPLATE = 'आपला सर्वेक्षण फॉर्म पूर्णपणे नोंदवण्यात आला आहे. पुढील प्रक्रिया संबंधित विभागा मार्फत लवकरच राबवली जाईल. काही शंका असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद.– VIKHE PATIL FOUNDATION';
+
   const template = process.env.SMS_FIELD_OFFICER_COMPLETION_TEMPLATE || DEFAULT_TEMPLATE;
-  
+
   return template;
 }
 
@@ -218,20 +215,20 @@ function getFieldOfficerCompletionTemplate(): string {
  * @param registrationNumber - Optional registration number to include in public form SMS
  */
 export function buildFormCompletionMessage(isFieldOfficerSubmission: boolean = false, registrationNumber?: string): string {
-  const message = isFieldOfficerSubmission 
+  const message = isFieldOfficerSubmission
     ? getFieldOfficerCompletionTemplate()
     : getPublicFormCompletionTemplate(registrationNumber);
-  
+
   const isProduction = process.env.NODE_ENV === 'production';
   const logPreview = message.substring(0, 50);
-  
+
   console.log('[SMS] Form Completion Message built:', {
     length: message.length,
     preview: logPreview,
     isFieldOfficerSubmission,
     has_registration_number: !!registrationNumber,
   });
-  
+
   return message;
 }
 
@@ -248,8 +245,8 @@ export function extractDivyangPhone(surveyJson: any): string | null {
     }
 
     // Handle both array format and object format
-    const items = Array.isArray(surveyJson) ? surveyJson : 
-                  (surveyJson.items || surveyJson.answers || []);
+    const items = Array.isArray(surveyJson) ? surveyJson :
+      (surveyJson.items || surveyJson.answers || []);
 
     if (!Array.isArray(items)) {
       return null;
@@ -263,7 +260,7 @@ export function extractDivyangPhone(surveyJson: any): string | null {
     for (const item of items) {
       const questionId = item.question_id || item.questionId;
       const answer = item.answer || item.value || '';
-      
+
       if (mobileQuestionIds.includes(questionId)) {
         const digits = String(answer).replace(/\D/g, '');
         if (digits.length === 10 && /^[6-9]/.test(digits)) {
@@ -277,7 +274,7 @@ export function extractDivyangPhone(surveyJson: any): string | null {
     for (const item of items) {
       const answer = item.answer || item.value || '';
       const digits = String(answer).replace(/\D/g, '');
-      
+
       // Validate it's a 10-digit Indian mobile number (starts with 6-9)
       if (digits.length === 10 && /^[6-9]/.test(digits)) {
         // Additional check: make sure it's not a parent's mobile (question 157 is parent mobile)
@@ -306,7 +303,7 @@ export function extractDivyangPhone(surveyJson: any): string | null {
 export async function sendFormCompletionSMS(surveyJson: any, surveyId?: number, isFieldOfficerSubmission: boolean = false, registrationNumber?: string): Promise<{ ok: boolean; phone?: string; error?: string }> {
   try {
     const phone = extractDivyangPhone(surveyJson);
-    
+
     if (!phone) {
       console.log('[SMS] No valid phone number found in survey data', { survey_id: surveyId });
       return { ok: false, error: 'No valid phone number found' };
@@ -316,15 +313,15 @@ export async function sendFormCompletionSMS(surveyJson: any, surveyId?: number, 
     const result = await sendSMS(phone, message);
 
     if (result.ok) {
-      console.log('[SMS] Form completion SMS sent successfully', { 
-        phone: phone.substring(0, 3) + '****' + phone.substring(7), 
-        survey_id: surveyId 
+      console.log('[SMS] Form completion SMS sent successfully', {
+        phone: phone.substring(0, 3) + '****' + phone.substring(7),
+        survey_id: surveyId
       });
     } else {
-      console.error('[SMS] Failed to send form completion SMS', { 
-        phone: phone.substring(0, 3) + '****' + phone.substring(7), 
+      console.error('[SMS] Failed to send form completion SMS', {
+        phone: phone.substring(0, 3) + '****' + phone.substring(7),
         survey_id: surveyId,
-        error: result.error 
+        error: result.error
       });
     }
 

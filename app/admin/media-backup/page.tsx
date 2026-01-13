@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import AdminLayout from '@/components/AdminLayout';
+import { getAbsoluteImageUrl } from '@/lib/config';
 
 interface BackupFolder {
   folderName: string;
@@ -22,8 +24,14 @@ export default function MediaBackupPage() {
   const [selectedFolderImages, setSelectedFolderImages] = useState<Array<{ name: string; path: string }>>([]);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [imageLoading, setImageLoading] = useState(true);
+  const [imageError, setImageError] = useState(false);
+
+  // Client-side only state for Portals
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+    setIsClient(true);
     loadFolders();
   }, []);
 
@@ -109,8 +117,16 @@ export default function MediaBackupPage() {
   };
 
   const openLightbox = (index: number) => {
-    setLightboxIndex(index);
-    setLightboxOpen(true);
+    if (selectedFolderImages && selectedFolderImages.length > index) {
+      const imgPath = selectedFolderImages[index].path;
+      const fullUrl = getAbsoluteImageUrl(imgPath);
+      console.log('Opening Lightbox for image:', { index, imgPath, fullUrl });
+
+      setLightboxIndex(index);
+      setImageLoading(true);
+      setImageError(false);
+      setLightboxOpen(true);
+    }
   };
 
   const closeLightbox = () => {
@@ -118,10 +134,14 @@ export default function MediaBackupPage() {
   };
 
   const goToPrevious = () => {
+    setImageLoading(true);
+    setImageError(false);
     setLightboxIndex((prev) => (prev > 0 ? prev - 1 : selectedFolderImages.length - 1));
   };
 
   const goToNext = () => {
+    setImageLoading(true);
+    setImageError(false);
     setLightboxIndex((prev) => (prev < selectedFolderImages.length - 1 ? prev + 1 : 0));
   };
 
@@ -228,7 +248,7 @@ export default function MediaBackupPage() {
                                       onClick={() => openLightbox(idx)}
                                     >
                                       <img
-                                        src={image.path}
+                                        src={getAbsoluteImageUrl(image.path)}
                                         alt={image.name}
                                         className="card-img-top"
                                         style={{
@@ -271,78 +291,145 @@ export default function MediaBackupPage() {
           </div>
         )}
 
-        {/* Lightbox Modal */}
-        {lightboxOpen && selectedFolderImages.length > 0 && (
+        {/* Lightbox Modal rendered via Portal to ensure it covers Sidebar & TopNav */}
+        {isClient && lightboxOpen && selectedFolderImages.length > 0 && selectedFolderImages[lightboxIndex] && createPortal(
           <div
-            className="modal d-block"
+            className="lightbox-master-overlay"
             style={{
-              backgroundColor: 'rgba(0, 0, 0, 0.9)',
-              zIndex: 9999,
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              width: '100vw',
+              height: '100vh',
+              backgroundColor: 'rgba(0, 0, 0, 0.95)',
+              zIndex: 2147483647, // Max integer for z-index
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden'
             }}
             onClick={closeLightbox}
           >
-            <div className="modal-dialog modal-fullscreen">
-              <div className="modal-content bg-transparent border-0">
-                <div className="modal-header border-0 position-absolute top-0 end-0 z-3">
-                  <button
-                    type="button"
-                    className="btn-close btn-close-white"
-                    onClick={closeLightbox}
-                    aria-label="Close"
-                  ></button>
-                </div>
-                <div className="modal-body d-flex align-items-center justify-content-center position-relative">
-                  {/* Previous Button */}
-                  <button
-                    className="btn btn-light position-absolute start-0 top-50 translate-middle-y ms-3"
-                    style={{ zIndex: 10 }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      goToPrevious();
-                    }}
-                  >
-                    <i className="bi bi-chevron-left"></i>
-                  </button>
+            {/* Header / Top Bar */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                padding: '20px 30px',
+                display: 'flex',
+                justifyContent: 'between',
+                alignItems: 'center',
+                background: 'linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 100%)',
+                zIndex: 10
+              }}
+              className="d-flex justify-content-between align-items-center w-100"
+            >
+              <div className="text-white">
+                <h5 className="mb-0">{selectedFolderImages[lightboxIndex].name}</h5>
+                <small className="text-white-50">{lightboxIndex + 1} of {selectedFolderImages.length}</small>
+              </div>
 
-                  {/* Image */}
-                  <div className="text-center" onClick={(e) => e.stopPropagation()}>
-                    <img
-                      src={selectedFolderImages[lightboxIndex].path}
-                      alt={selectedFolderImages[lightboxIndex].name}
-                      style={{
-                        maxWidth: '90vw',
-                        maxHeight: '85vh',
-                        objectFit: 'contain',
-                      }}
-                    />
-                    <div className="text-white mt-3">
-                      <p className="mb-1">{selectedFolderImages[lightboxIndex].name}</p>
-                      <p className="text-muted small">
-                        {lightboxIndex + 1} / {selectedFolderImages.length}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Next Button */}
-                  <button
-                    className="btn btn-light position-absolute end-0 top-50 translate-middle-y me-3"
-                    style={{ zIndex: 10 }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      goToNext();
-                    }}
-                  >
-                    <i className="bi bi-chevron-right"></i>
-                  </button>
-
-                  {/* Keyboard hint */}
-                  <div className="position-absolute bottom-0 start-50 translate-middle-x mb-3 text-white-50 small">
-                    Use ← → arrow keys to navigate, ESC to close
-                  </div>
-                </div>
+              <div className="d-flex align-items-center gap-3">
+                <a
+                  href={getAbsoluteImageUrl(selectedFolderImages[lightboxIndex].path)}
+                  download={selectedFolderImages[lightboxIndex].name}
+                  className="btn btn-outline-light btn-sm rounded-pill px-3"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <i className="bi bi-download me-2"></i> Download
+                </a>
+                <button
+                  className="btn-close btn-close-white"
+                  onClick={closeLightbox}
+                  style={{ fontSize: '1.5rem', cursor: 'pointer' }}
+                ></button>
               </div>
             </div>
-          </div>
+
+            {/* Navigation - Left */}
+            <button
+              className="btn btn-dark rounded-circle d-flex align-items-center justify-content-center p-0"
+              style={{
+                position: 'absolute',
+                left: '20px',
+                width: '60px',
+                height: '60px',
+                zIndex: 20,
+                border: '1px solid rgba(255,255,255,0.2)'
+              }}
+              onClick={(e) => { e.stopPropagation(); goToPrevious(); }}
+            >
+              <i className="bi bi-chevron-left" style={{ fontSize: '2rem' }}></i>
+            </button>
+
+            {/* Image Container */}
+            <div
+              className="d-flex align-items-center justify-content-center"
+              style={{ width: '100%', height: '100%', padding: '80px' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {imageLoading && !imageError && (
+                <div className="text-center text-white position-absolute">
+                  <div className="spinner-border text-primary mb-2" style={{ width: '3rem', height: '3rem' }}></div>
+                  <p>Loading Image...</p>
+                </div>
+              )}
+
+              {imageError ? (
+                <div className="text-center text-white bg-dark p-5 rounded border border-secondary shadow">
+                  <i className="bi bi-exclamation-triangle text-warning display-1 mb-3"></i>
+                  <h3>Unable to load image</h3>
+                  <p className="text-muted">The file might be corrupted or inaccessible.</p>
+                  <div className="d-flex gap-2 justify-content-center mt-4">
+                    <button className="btn btn-primary" onClick={() => { setImageError(false); setImageLoading(true); }}>Retry</button>
+                    <button className="btn btn-secondary" onClick={closeLightbox}>Close</button>
+                  </div>
+                </div>
+              ) : (
+                <img
+                  src={getAbsoluteImageUrl(selectedFolderImages[lightboxIndex].path)}
+                  alt={selectedFolderImages[lightboxIndex].name}
+                  onLoad={() => setImageLoading(false)}
+                  onError={() => { setImageLoading(false); setImageError(true); }}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                    objectFit: 'contain',
+                    border: '4px solid white',
+                    boxShadow: '0 0 50px rgba(0,0,0,1)',
+                    display: imageLoading ? 'none' : 'block'
+                  }}
+                />
+              )}
+            </div>
+
+            {/* Navigation - Right */}
+            <button
+              className="btn btn-dark rounded-circle d-flex align-items-center justify-content-center p-0"
+              style={{
+                position: 'absolute',
+                right: '20px',
+                width: '60px',
+                height: '60px',
+                zIndex: 20,
+                border: '1px solid rgba(255,255,255,0.2)'
+              }}
+              onClick={(e) => { e.stopPropagation(); goToNext(); }}
+            >
+              <i className="bi bi-chevron-right" style={{ fontSize: '2rem' }}></i>
+            </button>
+
+            {/* Footer / Info */}
+            <div className="position-absolute bottom-0 w-100 text-center pb-4" style={{ pointerEvents: 'none' }}>
+              <span className="badge bg-dark bg-opacity-75 rounded-pill px-4 py-2 text-white-50">
+                Use Arrow Keys to navigate • ESC to close
+              </span>
+            </div>
+          </div>,
+          document.body
         )}
       </div>
     </AdminLayout>

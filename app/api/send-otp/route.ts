@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
-    
+
     let userData: any = null;
     let effectiveRole: string = '';
 
@@ -120,31 +120,33 @@ export async function POST(request: NextRequest) {
       // ============================================================================
       // Determine if this is a web request early
       const isWebRequest = source === 'web';
-      
+
       let existConn;
       try {
         // Add timeout wrapper to fail fast if connection takes too long
         existConn = await Promise.race([
           pool.getConnection(),
-          new Promise((_, reject) => 
+          new Promise((_, reject) =>
             setTimeout(() => reject(new Error('Database connection timeout')), 25000)
           )
         ]) as any;
       } catch (connError: any) {
         Logger.error('send_otp_db_connection_failed', { error: connError.message, phone });
         return NextResponse.json(
-          { ok: false, error: connError.message?.includes('timeout') 
-            ? 'Database connection timeout. Please try again after a moment.' 
-            : 'Database connection unsuccessful. Please try again later.' },
+          {
+            ok: false, error: connError.message?.includes('timeout')
+              ? 'Database connection timeout. Please try again after a moment.'
+              : 'Database connection unsuccessful. Please try again later.'
+          },
           { status: 500 }
         );
       }
-      
+
       try {
         // Get name and email from request body if available (from onboarding step 2)
         const name = (body.name || '').toString().trim() || 'Field Officer';
         const email = (body.email || '').toString().trim() || null;
-        
+
         // Fetch user by phone number
         const [userCheck] = await existConn.execute(
           `SELECT 
@@ -165,11 +167,11 @@ export async function POST(request: NextRequest) {
         const existingUser = userExists ? (userCheck as any[])[0] : null;
         const existingStatus = existingUser ? (existingUser.status || '').toLowerCase().trim() : '';
         const existingIsActive = existingUser ? Number(existingUser.is_active) : 0;
-        
+
         // Determine if this is a sign-up attempt (mobile onboarding) vs login attempt
         const isMobileOnboarding = !isWebRequest && role === 'field_officer';
         const needsOnboardingSetup = !userExists || (existingStatus === '' || existingStatus === 'inactive');
-        
+
         // Only block active users if they're trying to SIGN UP (not login)
         // For login attempts, active users should be allowed to send OTP
         if (isMobileOnboarding && needsOnboardingSetup) {
@@ -186,7 +188,7 @@ export async function POST(request: NextRequest) {
               { status: 409 }
             );
           }
-          
+
           // Check if email is provided and if an active user exists with this email (only during sign-up)
           if (email && email.includes('@')) {
             const [emailCheck] = await existConn.execute(
@@ -196,13 +198,13 @@ export async function POST(request: NextRequest) {
                LIMIT 1`,
               [email.toLowerCase()]
             );
-            
+
             const emailUserExists = Array.isArray(emailCheck) && (emailCheck as any[]).length > 0;
             if (emailUserExists) {
               const emailUser = (emailCheck as any[])[0];
               const emailUserStatus = (emailUser.status || '').toLowerCase().trim();
               const emailUserIsActive = Number(emailUser.is_active) === 1;
-              
+
               // If active user exists with this email, reject signup
               if (emailUserStatus === 'active' && emailUserIsActive) {
                 existConn.release();
@@ -216,7 +218,7 @@ export async function POST(request: NextRequest) {
                   { status: 409 }
                 );
               }
-              
+
               // If email exists but phone is different, also reject (email should be unique per user)
               if (emailUser.contact_number && emailUser.contact_number !== phone) {
                 existConn.release();
@@ -233,18 +235,18 @@ export async function POST(request: NextRequest) {
             }
           }
         }
-        
+
         if (isMobileOnboarding && needsOnboardingSetup) {
           if (!userExists) {
             // Create new user
             Logger.info('send_otp_creating_user_for_onboarding', { phone, email, role });
-            
+
             // Get field officer user type ID
             const [foType]: any = await existConn.execute(
               `SELECT id FROM user_types WHERE LOWER(user_type) IN ('field officer', 'field_officer') LIMIT 1`
             );
             const fieldOfficerTypeId = Array.isArray(foType) && foType.length > 0 ? foType[0]?.id ?? null : null;
-            
+
             // Create user with inactive status (will be activated after profile completion)
             const DEFAULT_MOBILE_ROLE = 'field_officer';
             try {
@@ -263,24 +265,24 @@ export async function POST(request: NextRequest) {
                   {
                     ok: false,
                     error: duplicateField === 'phone' ? 'user_already_exists' : 'email_already_exists',
-                    message: duplicateField === 'phone' 
+                    message: duplicateField === 'phone'
                       ? 'या मोबाईल क्रमांकासह आधीच खाते नोंदणीकृत आहे. कृपया लॉगिन करा.'
                       : 'या ईमेल आयडीसह आधीच खाते नोंदणीकृत आहे. कृपया लॉगिन करा.',
                   },
                   { status: 409 }
                 );
               }
-              
-              Logger.error('send_otp_user_insert_failed', { 
-                phone, 
-                name, 
-                email, 
+
+              Logger.error('send_otp_user_insert_failed', {
+                phone,
+                name,
+                email,
                 fieldOfficerTypeId,
                 error: insertError.message,
                 code: insertError.code,
                 errno: insertError.errno,
                 sqlState: insertError.sqlState,
-                stack: insertError.stack 
+                stack: insertError.stack
               });
               existConn.release();
               return NextResponse.json(
@@ -292,9 +294,9 @@ export async function POST(request: NextRequest) {
                 { status: 500 }
               );
             }
-            
+
             Logger.info('send_otp_user_created_for_onboarding', { phone, name, email });
-            
+
             // Fetch the newly created user
             const [newUserCheck] = await existConn.execute(
               `SELECT 
@@ -309,7 +311,7 @@ export async function POST(request: NextRequest) {
                LIMIT 1`,
               [phone]
             );
-            
+
             if (Array.isArray(newUserCheck) && newUserCheck.length > 0) {
               userData = newUserCheck[0];
               // Allow OTP for newly created inactive users during onboarding
@@ -374,12 +376,12 @@ export async function POST(request: NextRequest) {
       // Also allow OTP for active/approved users (for login)
       const allowOtpForOnboarding = isPending && !isWebRequest && role === 'field_officer';
       const allowOtpForActiveUser = statusAllowsOtp && hasActiveFlag;
-      
+
       // Block OTP only if user is NOT in onboarding AND user is NOT active
       if (!allowOtpForOnboarding && !allowOtpForActiveUser) {
-        Logger.info('send_otp_rejected_user_not_approved', { 
-          phone, 
-          status: userData.status, 
+        Logger.info('send_otp_rejected_user_not_approved', {
+          phone,
+          status: userData.status,
           is_active: userData.is_active,
           allowOtpForOnboarding,
           allowOtpForActiveUser,
@@ -395,7 +397,7 @@ export async function POST(request: NextRequest) {
           { status: 403 }
         );
       }
-      
+
       // ============================================================================
       // Only proceed to OTP generation if user is approved and active
       // At this point, userData is guaranteed to have status='active' AND is_active=1
@@ -422,7 +424,7 @@ export async function POST(request: NextRequest) {
             { status: 403 }
           );
         }
-        
+
       }
 
       // For mobile requests, allow field_officer/supervisor/admin/therapy_specialist users
@@ -464,15 +466,15 @@ export async function POST(request: NextRequest) {
     // Bypass OTP for System Admin (9999999999) - return success without sending
     const ADMIN_BYPASS_PHONE = '9999999999';
     const isAdminBypass = phone === ADMIN_BYPASS_PHONE;
-    
+
     // Bypass OTP for Verification Officer (8888888888) - return success without sending
     const VERIFICATION_OFFICER_BYPASS_PHONE = '8888888888';
     const isVerificationOfficerBypass = phone === VERIFICATION_OFFICER_BYPASS_PHONE;
-    
+
     // Test Field Officer (7777777777) - generate and return OTP for testing
     const TEST_FIELD_OFFICER_PHONE = '7777777777';
     const isTestFieldOfficer = phone === TEST_FIELD_OFFICER_PHONE;
-    
+
     if (isAdminBypass) {
       Logger.info('send_otp_admin_bypass', { phone, note: 'Admin user - OTP bypassed' });
       return NextResponse.json({
@@ -481,7 +483,7 @@ export async function POST(request: NextRequest) {
         phone: phone,
       });
     }
-    
+
     if (isVerificationOfficerBypass) {
       Logger.info('send_otp_verification_officer_bypass', { phone, note: 'Verification Officer user - OTP bypassed' });
       return NextResponse.json({
@@ -490,22 +492,22 @@ export async function POST(request: NextRequest) {
         phone: phone,
       });
     }
-    
+
     // For test field officer, generate OTP and return it in response
     if (isTestFieldOfficer) {
       const testOTP = String(Math.floor(100000 + Math.random() * 900000));
       const expiresAt = new Date();
       expiresAt.setMinutes(expiresAt.getMinutes() + CONFIG.OTP_EXPIRY_MINUTES);
-      
+
       let connection;
       try {
         connection = await Promise.race([
           pool.getConnection(),
-          new Promise((_, reject) => 
+          new Promise((_, reject) =>
             setTimeout(() => reject(new Error('Database connection timeout')), 25000)
           )
         ]) as any;
-        
+
         await connection.beginTransaction();
         const [result] = await connection.execute(
           `INSERT INTO otp_verifications (phone, otp, expires_at, status, created_at, updated_at) 
@@ -514,9 +516,9 @@ export async function POST(request: NextRequest) {
         );
         await connection.commit();
         const otpId = (result as any).insertId;
-        
+
         Logger.info('send_otp_test_field_officer', { phone, otp: testOTP, otp_id: otpId });
-        
+
         return NextResponse.json({
           ok: true,
           otp_id: otpId,
@@ -540,10 +542,10 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-    
+
     // Generate OTP: 6-digit number (100000 to 999999)
     const otp = String(Math.floor(100000 + Math.random() * 900000));
-    
+
     // Validate OTP is clean (only digits, exactly 6 digits)
     if (!/^\d{6}$/.test(otp)) {
       Logger.error('send_otp_invalid_otp', { otp, phone });
@@ -552,9 +554,9 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
-    
+
     Logger.info('send_otp_generated', { otp, phone, otpLength: otp.length });
-    
+
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + CONFIG.OTP_EXPIRY_MINUTES);
 
@@ -563,23 +565,25 @@ export async function POST(request: NextRequest) {
       // Add timeout wrapper to fail fast if connection takes too long
       connection = await Promise.race([
         pool.getConnection(),
-        new Promise((_, reject) => 
+        new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Database connection timeout')), 25000)
         )
       ]) as any;
     } catch (connError: any) {
       Logger.error('send_otp_db_connection_failed_otp', { error: connError.message, phone });
       return NextResponse.json(
-        { ok: false, error: connError.message?.includes('timeout')
-          ? 'Database connection timeout. Please try again after a moment.'
-          : 'Database connection unsuccessful. Please try again later.' },
+        {
+          ok: false, error: connError.message?.includes('timeout')
+            ? 'Database connection timeout. Please try again after a moment.'
+            : 'Database connection unsuccessful. Please try again later.'
+        },
         { status: 500 }
       );
     }
-    
+
     try {
       await connection.beginTransaction();
-      
+
       // Mark old OTPs as expired when sending a new one
       await connection.execute(
         `UPDATE otp_verifications 
@@ -587,13 +591,13 @@ export async function POST(request: NextRequest) {
          WHERE phone = ? AND status = 'sent'`,
         [phone]
       );
-      
+
       const [result] = await connection.execute(
         `INSERT INTO otp_verifications (phone, otp, expires_at, status, created_at, updated_at) 
          VALUES (?, ?, ?, 'sent', NOW(), NOW())`,
         [phone, otp, expiresAt]
       );
-      
+
       const otpId = (result as any).insertId;
       await connection.commit();
 
@@ -606,18 +610,18 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
-      
+
       // Check if we're in local development mode (only skip SMS if explicitly enabled)
       // SMS will work by default unless LOCAL_DEV_SKIP_SMS is explicitly set to 'true'
       const isLocalDev = process.env.LOCAL_DEV_SKIP_SMS === 'true';
-      
+
       let sms: any = { ok: true, local_dev: true };
-      
+
       if (isLocalDev) {
         // Local development: Skip SMS sending, log OTP instead
-        Logger.info('send_otp_local_dev', { 
-          phone, 
-          otp_id: otpId, 
+        Logger.info('send_otp_local_dev', {
+          phone,
+          otp_id: otpId,
           otp: cleanOtp,
           message: 'OTP sent in local development mode - SMS skipped'
         });
@@ -628,7 +632,7 @@ export async function POST(request: NextRequest) {
         console.log(`OTP: ${cleanOtp}`);
         console.log(`OTP ID: ${otpId}`);
         console.log('========================================\n');
-        
+
         // Log signup step: OTP sent (Step 2) - local dev mode
         const isMobileOnboardingCheck = source !== 'web' && role === 'field_officer';
         if (isMobileOnboardingCheck) {
@@ -641,11 +645,11 @@ export async function POST(request: NextRequest) {
             data: { otp_id: otpId, local_dev: true, otp: cleanOtp },
           });
         }
-        
+
         // Return OTP in response for local development
-        return NextResponse.json({ 
-          ok: true, 
-          otp_id: otpId, 
+        return NextResponse.json({
+          ok: true,
+          otp_id: otpId,
           otp: cleanOtp, // Include OTP in response for local dev
           sms: { ok: true, local_dev: true, message: 'SMS skipped in local development' },
           message: `Local dev mode: OTP is ${cleanOtp}`
@@ -663,10 +667,10 @@ export async function POST(request: NextRequest) {
             { status: 500 }
           );
         }
-        
+
         // Send SMS and wait for response to diagnose issues
         Logger.info('send_otp', { phone, otp_id: otpId, otp: cleanOtp, messageLength: message.length });
-        
+
         let smsResult;
         try {
           smsResult = await sendSMS(phone, message);
@@ -675,7 +679,7 @@ export async function POST(request: NextRequest) {
           Logger.error('send_otp_sms_failed', { phone, otp_id: otpId, error: err.message, stack: err.stack });
           smsResult = { ok: false, error: err.message || 'SMS sending unsuccessful. Please try again later.' };
         }
-        
+
         // Log signup step: OTP sent (Step 2)
         const isMobileOnboardingCheck2 = source !== 'web' && role === 'field_officer';
         if (isMobileOnboardingCheck2) {
@@ -689,16 +693,16 @@ export async function POST(request: NextRequest) {
             error_message: smsResult.ok ? undefined : smsResult.error,
           });
         }
-        
+
         // Return with actual SMS status
-        return NextResponse.json({ 
-          ok: true, 
-          otp_id: otpId, 
+        return NextResponse.json({
+          ok: true,
+          otp_id: otpId,
           sms: {
             ok: smsResult.ok || false,
             queued: smsResult.ok || false,
-            message: smsResult.ok 
-              ? 'SMS sent successfully' 
+            message: smsResult.ok
+              ? 'SMS sent successfully'
               : smsResult.error || `SMS sending unsuccessful: ${smsResult.responseCode || 'Unknown error'}. Please try again.`,
             responseCode: smsResult.responseCode,
             status: smsResult.status,
@@ -715,10 +719,10 @@ export async function POST(request: NextRequest) {
           Logger.error('send_otp_rollback_failed', { error: (rollbackError as any).message });
         }
       }
-      Logger.error('send_otp_db_error', { 
-        error: dbError.message, 
+      Logger.error('send_otp_db_error', {
+        error: dbError.message,
         stack: dbError.stack,
-        phone 
+        phone
       });
       throw dbError; // Re-throw to be caught by outer catch
     } finally {
@@ -727,20 +731,20 @@ export async function POST(request: NextRequest) {
       }
     }
   } catch (error: any) {
-    Logger.error('send_otp_failed', { 
-      error: error.message, 
+    Logger.error('send_otp_failed', {
+      error: error.message,
       stack: error.stack,
       name: error.name,
       phone: (error as any).phone || 'unknown'
     });
-    
+
     // Return a user-friendly error message
     const errorMessage = error.message || 'An unexpected error occurred. Please try again later.';
     return NextResponse.json(
-      { 
-        ok: false, 
-        error: errorMessage.includes('timeout') || errorMessage.includes('ECONNREFUSED') 
-          ? 'Database connection timeout. Please try again after a moment.' 
+      {
+        ok: false,
+        error: errorMessage.includes('timeout') || errorMessage.includes('ECONNREFUSED')
+          ? 'Database connection timeout. Please try again after a moment.'
           : errorMessage
       },
       { status: 500 }
