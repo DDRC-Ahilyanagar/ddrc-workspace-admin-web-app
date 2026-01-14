@@ -53,8 +53,23 @@ export async function POST(request: NextRequest) {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
       `);
 
-      // Generate 6-digit OTP
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      // Check if this email belongs to a user with test field officer phone (7777777777)
+      const TEST_FIELD_OFFICER_PHONE = '7777777777';
+      const TEST_FIELD_OFFICER_OTP = '123456';
+      
+      const [userRows]: any = await conn.query(
+        `SELECT contact_number FROM users WHERE email = ? LIMIT 1`,
+        [email]
+      );
+      
+      let isTestFieldOfficerEmail = false;
+      if (Array.isArray(userRows) && userRows.length > 0) {
+        const userPhone = (userRows[0].contact_number || '').replace(/\D/g, '');
+        isTestFieldOfficerEmail = userPhone === TEST_FIELD_OFFICER_PHONE;
+      }
+      
+      // Generate 6-digit OTP - use 123456 for test field officer, random for others
+      const otp = isTestFieldOfficerEmail ? TEST_FIELD_OFFICER_OTP : Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = new Date();
       expiresAt.setMinutes(expiresAt.getMinutes() + 10); // 10 minutes expiry
 

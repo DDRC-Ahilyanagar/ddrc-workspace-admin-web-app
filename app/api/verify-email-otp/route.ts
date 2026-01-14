@@ -32,6 +32,23 @@ export async function POST(request: NextRequest) {
     const conn = await pool.getConnection();
 
     try {
+      // Test Field Officer phone number - if user has this phone, accept OTP 123456
+      const TEST_FIELD_OFFICER_PHONE = '7777777777';
+      const TEST_FIELD_OFFICER_OTP = '123456';
+      
+      // Check if this email belongs to a user with test field officer phone
+      let isTestFieldOfficerEmail = false;
+      if (otp === TEST_FIELD_OFFICER_OTP) {
+        const [userRows]: any = await conn.query(
+          `SELECT contact_number FROM users WHERE email = ? LIMIT 1`,
+          [email]
+        );
+        if (Array.isArray(userRows) && userRows.length > 0) {
+          const userPhone = (userRows[0].contact_number || '').replace(/\D/g, '');
+          isTestFieldOfficerEmail = userPhone === TEST_FIELD_OFFICER_PHONE;
+        }
+      }
+      
       // Find valid OTP
       const [rows]: any = await conn.query(
         `SELECT id, expires_at, status 
@@ -41,6 +58,33 @@ export async function POST(request: NextRequest) {
          LIMIT 1`,
         [email, otp]
       );
+
+      // For test field officer, accept OTP 123456 even if not in database
+      if (isTestFieldOfficerEmail && otp === TEST_FIELD_OFFICER_OTP) {
+        // Try to find and mark existing OTP as verified if it exists
+        const [existingRows]: any = await conn.query(
+          `SELECT id FROM email_otp_verifications 
+           WHERE email = ? AND status = 'sent'
+           ORDER BY created_at DESC 
+           LIMIT 1`,
+          [email]
+        );
+        
+        if (Array.isArray(existingRows) && existingRows.length > 0) {
+          await conn.execute(
+            `UPDATE email_otp_verifications 
+             SET status = 'verified', verified_at = CURRENT_TIMESTAMP 
+             WHERE id = ?`,
+            [existingRows[0].id]
+          );
+        }
+        
+        Logger.info('verify_email_otp_test_field_officer', { email, otp });
+        return NextResponse.json({
+          ok: true,
+          message: 'Email verified successfully',
+        });
+      }
 
       if (!Array.isArray(rows) || rows.length === 0) {
         return NextResponse.json(

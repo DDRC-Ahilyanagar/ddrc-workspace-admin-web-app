@@ -64,6 +64,9 @@ export async function POST(request: NextRequest) {
     const source = (body.source || headerSource || '').toString().toLowerCase();
     const role = normalizeRole(body.role || headerRole);
     const phone = (body.phone || '').replace(/\D/g, '');
+    const TEST_FIELD_OFFICER_PHONE = '7777777777';
+    const isTestFieldOfficer = phone === TEST_FIELD_OFFICER_PHONE;
+
     // Check if this is for survey verification (no user approval required)
     const isSurveyVerification = body.survey_verification === true || body.survey_verification === 'true';
 
@@ -170,13 +173,14 @@ export async function POST(request: NextRequest) {
 
         // Determine if this is a sign-up attempt (mobile onboarding) vs login attempt
         const isMobileOnboarding = !isWebRequest && role === 'field_officer';
-        const needsOnboardingSetup = !userExists || (existingStatus === '' || existingStatus === 'inactive');
+        // Test user can always trigger onboarding/signup even if active
+        const needsOnboardingSetup = !userExists || (existingStatus === '' || existingStatus === 'inactive') || (isTestFieldOfficer && isMobileOnboarding);
 
         // Only block active users if they're trying to SIGN UP (not login)
         // For login attempts, active users should be allowed to send OTP
         if (isMobileOnboarding && needsOnboardingSetup) {
           // This is a sign-up attempt - check for duplicate active users
-          if (userExists && existingStatus === 'active' && existingIsActive === 1) {
+          if (userExists && existingStatus === 'active' && existingIsActive === 1 && !isTestFieldOfficer) {
             existConn.release();
             Logger.info('send_otp_rejected_active_user_exists_signup', { phone, user_id: existingUser.id });
             return NextResponse.json(
@@ -190,7 +194,7 @@ export async function POST(request: NextRequest) {
           }
 
           // Check if email is provided and if an active user exists with this email (only during sign-up)
-          if (email && email.includes('@')) {
+          if (email && email.includes('@') && !isTestFieldOfficer) {
             const [emailCheck] = await existConn.execute(
               `SELECT id, status, is_active, contact_number 
                FROM users 
@@ -327,6 +331,35 @@ export async function POST(request: NextRequest) {
                 },
                 { status: 500 }
               );
+            }
+          } else if (isTestFieldOfficer) {
+            // Update existing test user for re-signup
+            Logger.info('send_otp_updating_test_user_for_onboarding', { phone, name, email });
+            try {
+              await existConn.execute(
+                `UPDATE users SET name = ?, email = ?, updated_at = NOW() WHERE contact_number = ?`,
+                [name, email || null, phone]
+              );
+
+              // Refresh userData
+              const [updatedCheck] = await existConn.execute(
+                `SELECT 
+                   u.id, 
+                   u.user_type, 
+                   u.status, 
+                   u.is_active, 
+                   ut.user_type AS related_type
+                 FROM users u
+                 LEFT JOIN user_types ut ON ut.id = u.user_type_id
+                 WHERE u.contact_number = ?
+                 LIMIT 1`,
+                [phone]
+              );
+              userData = (updatedCheck as any[])[0];
+            } catch (updateError: any) {
+              Logger.error('send_otp_test_user_update_failed', { phone, error: updateError.message });
+              // Continue with existing user data if update fails
+              userData = existingUser;
             }
           } else {
             // User exists but has empty/inactive status - use existing user for onboarding
@@ -472,8 +505,7 @@ export async function POST(request: NextRequest) {
     const isVerificationOfficerBypass = phone === VERIFICATION_OFFICER_BYPASS_PHONE;
 
     // Test Field Officer (7777777777) - generate and return OTP for testing
-    const TEST_FIELD_OFFICER_PHONE = '7777777777';
-    const isTestFieldOfficer = phone === TEST_FIELD_OFFICER_PHONE;
+    // Note: isTestFieldOfficer is already defined at the start of POST handler
 
     if (isAdminBypass) {
       Logger.info('send_otp_admin_bypass', { phone, note: 'Admin user - OTP bypassed' });
@@ -493,9 +525,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // For test field officer, generate OTP and return it in response
+    // For test field officer, use fixed OTP 123456 and do not return it in response
     if (isTestFieldOfficer) {
-      const testOTP = String(Math.floor(100000 + Math.random() * 900000));
+      const TEST_FIELD_OFFICER_OTP = '123456';
       const expiresAt = new Date();
       expiresAt.setMinutes(expiresAt.getMinutes() + CONFIG.OTP_EXPIRY_MINUTES);
 
@@ -509,21 +541,30 @@ export async function POST(request: NextRequest) {
         ]) as any;
 
         await connection.beginTransaction();
+        
+        // Mark old OTPs as expired
+        await connection.execute(
+          `UPDATE otp_verifications 
+           SET status = 'expired', updated_at = NOW() 
+           WHERE phone = ? AND status = 'sent'`,
+          [phone]
+        );
+        
         const [result] = await connection.execute(
           `INSERT INTO otp_verifications (phone, otp, expires_at, status, created_at, updated_at) 
            VALUES (?, ?, ?, 'sent', NOW(), NOW())`,
-          [phone, testOTP, expiresAt]
+          [phone, TEST_FIELD_OFFICER_OTP, expiresAt]
         );
         await connection.commit();
         const otpId = (result as any).insertId;
 
-        Logger.info('send_otp_test_field_officer', { phone, otp: testOTP, otp_id: otpId });
+        Logger.info('send_otp_test_field_officer', { phone, otp_id: otpId });
 
+        // Do not return OTP in response - user must enter it manually
         return NextResponse.json({
           ok: true,
           otp_id: otpId,
-          otp: testOTP, // Return OTP for testing
-          message: 'Test field officer OTP generated',
+          message: 'OTP sent successfully',
           phone: phone,
         });
       } catch (dbError: any) {

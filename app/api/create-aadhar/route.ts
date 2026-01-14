@@ -21,12 +21,17 @@ import { NextResponse as _ } from 'next/server';
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - aadhar_no
  *             properties:
+ *               has_no_aadhar:
+ *                 type: boolean
+ *                 description: Set to true if beneficiary doesn't have an Aadhaar card
  *               aadhar_no:
  *                 type: string
  *                 example: "1234-5678-9012"
+ *                 description: Required if has_no_aadhar is false
+ *               phone:
+ *                 type: string
+ *                 description: Required if has_no_aadhar is true (10 digits)
  *               user_id:
  *                 type: number
  *                 example: 1
@@ -45,21 +50,37 @@ import { NextResponse as _ } from 'next/server';
 async function handleCreate(request: NextRequest, user?: any) {
   try {
     const body = await request.json();
-    const aadharNo = (body.aadhar_no || '').trim();
+    let aadharNo = (body.aadhar_no || '').trim();
+    const hasNoAadhar = body.has_no_aadhar === true;
+    const phone = (body.phone || '').trim();
+
     // Use authenticated user ID if available, otherwise use user_id from body or default to 1
     const userId = user?.id || body.user_id || 1;
     const frontImage = body.front_image || null;
     const backImage = body.back_image || null;
 
-    const validation = validateRequest(body, {
-      aadhar_no: (a) => validateAadhar(a || ''),
-    });
+    if (hasNoAadhar) {
+      // Validate phone number instead of Aadhaar
+      if (!/^\d{10}$/.test(phone)) {
+        return NextResponse.json(
+          { ok: false, error: 'Valid 10-digit phone number is required when Aadhaar is not available' },
+          { status: 422 }
+        );
+      }
+      // Generate a unique placeholder for Aadhaar No
+      aadharNo = `PH-${phone}`;
+    } else {
+      // Standard Aadhaar validation
+      const validation = validateRequest(body, {
+        aadhar_no: (a) => validateAadhar(a || ''),
+      });
 
-    if (!validation.valid) {
-      return NextResponse.json(
-        { ok: false, error: validation.errors.join(', ') || 'aadhar_no required' },
-        { status: 422 }
-      );
+      if (!validation.valid) {
+        return NextResponse.json(
+          { ok: false, error: validation.errors.join(', ') || 'Valid aadhar_no required' },
+          { status: 422 }
+        );
+      }
     }
 
     const pool = getDbPool();

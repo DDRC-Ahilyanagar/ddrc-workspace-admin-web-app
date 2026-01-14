@@ -254,7 +254,7 @@ export function extractDivyangPhone(surveyJson: any): string | null {
 
     // Known question IDs for mobile number fields (can be extended)
     // Question 100 is typically "मोबाईल नं" (Mobile Number)
-    const mobileQuestionIds = [100];
+    const mobileQuestionIds = [100, 6];
 
     // First, try to find by question_id (more reliable)
     for (const item of items) {
@@ -279,7 +279,7 @@ export function extractDivyangPhone(surveyJson: any): string | null {
       if (digits.length === 10 && /^[6-9]/.test(digits)) {
         // Additional check: make sure it's not a parent's mobile (question 157 is parent mobile)
         const questionId = item.question_id || item.questionId;
-        if (questionId !== 157) { // Skip parent's mobile number
+        if (questionId !== 157 && questionId !== 9) { // Skip parent's mobile number
           return digits;
         }
       }
