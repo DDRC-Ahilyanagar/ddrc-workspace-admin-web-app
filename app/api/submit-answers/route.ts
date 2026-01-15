@@ -237,9 +237,16 @@ export async function handleSubmit(request: NextRequest, user: any) {
     let logVillage: string | null = null;
     let logDistrict: string | null = null;
     try {
-      const talukaAnswer = normalizedItems.find((item: any) => item.question_id === 47);
-      const districtAnswer = normalizedItems.find((item: any) => item.question_id === 48);
-      const villageAnswer = normalizedItems.find((item: any) => item.question_id === 49);
+      const talukaAnswer = normalizedItems.find((item: any) =>
+        item.question_id === 47 || item.question_id === 28
+      );
+      // District: 46 (Field), 27 (Public), 48 (Legacy fallback)
+      const districtAnswer = normalizedItems.find((item: any) =>
+        item.question_id === 46 || item.question_id === 27 || item.question_id === 48
+      );
+      const villageAnswer = normalizedItems.find((item: any) =>
+        item.question_id === 49 || item.question_id === 30
+      );
 
       if (talukaAnswer && talukaAnswer.answer) {
         logTaluka = String(talukaAnswer.answer).trim();
