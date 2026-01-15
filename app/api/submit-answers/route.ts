@@ -32,6 +32,24 @@ function generateShortForm(name: string): string {
 }
 
 /**
+ * Get current time in Asia/Kolkata timezone
+ */
+function getISTDate(): Date {
+  const d = new Date();
+  const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
+  const nd = new Date(utc + (3600000 * 5.5)); // Add +5:30
+  return nd;
+}
+
+/**
+ * Get ISO string for IST (without Z, appended with +05:30)
+ */
+function getISTISOString(): string {
+  const ist = getISTDate();
+  return ist.toISOString().replace('Z', '+05:30');
+}
+
+/**
  * Generate registration number for public form submissions
  * Format: DDRC/DIVYANG/MMYY/GAAV_SHORT/TALUKA_SHORT/AADHAR_LAST4
  * Example: DDRC/DIVYANG/0224/SHIRD/RAHAT/5678
@@ -41,8 +59,8 @@ function generateRegistrationNumber(
   village: string | null,
   taluka: string | null
 ): string {
-  // Get current month and year (MMYY format)
-  const now = new Date();
+  // Get current month and year (MMYY format) in IST
+  const now = getISTDate();
   const month = String(now.getMonth() + 1).padStart(2, '0'); // 01-12
   const year = String(now.getFullYear()).slice(-2); // Last 2 digits
   const mmYY = `${month}${year}`;
@@ -57,8 +75,8 @@ function generateRegistrationNumber(
   const villageShort = village ? generateShortForm(village) : 'XXXX';
   const talukaShort = taluka ? generateShortForm(taluka) : 'XXXX';
 
-  // Format: DDRC/DIVYANG/MMYY/GAAV_SHORT/TALUKA_SHORT/AADHAR_LAST4
-  return `DDRC/DIVYANG/${mmYY}/${villageShort}/${talukaShort}/${aadhaarLast4}`;
+  // Format: DDRC/DIVYANG/MMYY/TALUKA_SHORT/GAAV_SHORT/AADHAR_LAST4
+  return `DDRC/DIVYANG/${mmYY}/${talukaShort}/${villageShort}/${aadhaarLast4}`;
 }
 
 /**
@@ -407,7 +425,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
         aadhaar_id: aadhaarId,
         aadhaar_number: aadhaarNumber,
         holder_name: holderName,
-        submitted_at: new Date().toISOString(),
+        submitted_at: getISTISOString(),
         answers: normalizedItems,
       };
       // Write JSON file to disk
@@ -555,7 +573,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
                 ...existingJson,
                 ...responsePayload,
                 answers: Array.from(answerMap.values()),
-                updated_at: new Date().toISOString(),
+                updated_at: getISTISOString(),
               };
             } catch (mergeError) {
               Logger.info('submit_answers_json_merge_failed', { error: (mergeError as any)?.message });

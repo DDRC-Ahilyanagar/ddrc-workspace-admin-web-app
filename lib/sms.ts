@@ -1,7 +1,7 @@
 const SMS_CONFIG = {
   url: process.env.SMS_URL || 'https://msg.icloudsms.com/rest/services/sendSMS/sendGroupSms',
   authKey: process.env.SMS_AUTH_KEY || '7e717a70bd48264130d89f149c798bc4',
-  senderId: process.env.SMS_SENDER_ID || 'DDRCVK',
+  senderId: 'DDRCVK',
   routeId: process.env.SMS_ROUTE_ID || '1',
   contentType: process.env.SMS_CONTENT_TYPE || 'english',
 };
@@ -63,23 +63,14 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
 
     const url = `${SMS_CONFIG.url}?${params.toString()}`;
 
-    const isProduction = process.env.NODE_ENV === 'production';
-    const logMessage = isProduction
-      ? message.replace(/\d{4,}/g, '****').substring(0, 50) + '...'
-      : message.substring(0, 100) + '...';
-
-    console.log('[SMS] Message to send:', logMessage);
-    console.log('[SMS] Full URL:', url.substring(0, 200) + '...');
-
-    // Log the URL and parameters for debugging (without exposing sensitive data)
-    console.log('[SMS] Sending SMS:', {
-      url: SMS_CONFIG.url,
-      senderId: SMS_CONFIG.senderId,
-      routeId: SMS_CONFIG.routeId,
-      mobile: mobile,
-      contentType: SMS_CONFIG.contentType,
-      messageLength: message.length,
-    });
+    // High visibility logging
+    console.log('\n🔵 --- SMS API REQUEST ---');
+    console.log('URL:', url.replace(SMS_CONFIG.authKey, '***AUTH_KEY***'));
+    console.log('Mobile:', mobile);
+    console.log('SenderID:', SMS_CONFIG.senderId);
+    console.log('Content-Type:', params.get('smsContentType'));
+    console.log('Message Length:', message.length);
+    console.log('--------------------------\n');
 
     const response = await fetch(url, {
       method: 'GET',
@@ -90,6 +81,11 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
 
     const httpCode = response.status;
     const raw = await response.text();
+
+    console.log('\n🟢 --- SMS API RESPONSE ---');
+    console.log('Status Code:', httpCode);
+    console.log('Raw Response:', raw);
+    console.log('---------------------------\n');
 
     // Parse the response to check for error codes
     let parsedResponse: any = null;
