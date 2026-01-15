@@ -55,7 +55,11 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
     params.append('senderId', SMS_CONFIG.senderId);
     params.append('routeId', SMS_CONFIG.routeId);
     params.append('mobileNos', mobile);
-    params.append('smsContentType', SMS_CONFIG.contentType);
+    const isUnicode = /[^\x00-\x7F]/.test(message);
+    const contentType = isUnicode ? 'unicode' : SMS_CONFIG.contentType;
+
+    params.append('smsContentType', contentType);
+    // params.append('smsContentType', SMS_CONFIG.contentType);
 
     const url = `${SMS_CONFIG.url}?${params.toString()}`;
 
@@ -174,21 +178,25 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
  * If not set, returns a default Marathi message for partial submissions
  */
 function getPublicFormCompletionTemplate(registrationNumber?: string): string {
+  // DLT Template ID: <To Be Generated>
+  // Template: आपली प्राथमिक माहिती यशस्वीरित्या नोंदवली गेली आहे. आपला नोंदणी क्रमांक: {#var#}. पुढील टप्प्यासाठी आमचे क्षेत्रीय सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधून सविस्तर माहिती नोंदवतील. काही शंका असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद.– VIKHE PATIL FOUNDATION
+
   // Default Marathi message informing divyang about successful submission
-  // "Your primary information has been successfully recorded..."
-  let DEFAULT_TEMPLATE = 'आपली प्राथमिक माहिती यशस्वीरित्या नोंदवली गेली आहे.';
+  let template = 'आपली प्राथमिक माहिती यशस्वीरित्या नोंदवली गेली आहे.';
 
   if (registrationNumber) {
-    DEFAULT_TEMPLATE += ` आपला नोंदणी क्रमांक: ${registrationNumber}.`;
+    template += ` आपला नोंदणी क्रमांक: ${registrationNumber}.`;
   }
 
-  DEFAULT_TEMPLATE += ' पुढील टप्प्यासाठी आमचे क्षेत्रीय सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधून सविस्तर माहिती नोंदवतील. काही शंका असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद.– VIKHE PATIL FOUNDATION';
+  template += ' पुढील टप्प्यासाठी आमचे क्षेत्रीय सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधून सविस्तर माहिती नोंदवतील. काही शंका असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद.– VIKHE PATIL FOUNDATION';
 
-  const template = process.env.SMS_FORM_COMPLETION_TEMPLATE || DEFAULT_TEMPLATE;
-
-  // Replace {REG_NUM} placeholder if present in custom template
-  if (registrationNumber && template.includes('{REG_NUM}')) {
-    return template.replace('{REG_NUM}', registrationNumber);
+  const envTemplate = process.env.SMS_FORM_COMPLETION_TEMPLATE;
+  if (envTemplate) {
+    // Replace {REG_NUM} placeholder if present in custom template
+    if (registrationNumber && envTemplate.includes('{REG_NUM}')) {
+      return envTemplate.replace('{REG_NUM}', registrationNumber);
+    }
+    return envTemplate;
   }
 
   return template;
@@ -279,7 +287,20 @@ export function extractDivyangPhone(surveyJson: any): string | null {
       if (digits.length === 10 && /^[6-9]/.test(digits)) {
         // Additional check: make sure it's not a parent's mobile (question 157 is parent mobile)
         const questionId = item.question_id || item.questionId;
-        if (questionId !== 157 && questionId !== 9) { // Skip parent's mobile number
+        // if (questionId !== 157 && questionId !== 9) { // Skip parent's mobile number
+        return digits;
+        // }
+      }
+    }
+
+    // Double fallback: Explicitly check for Parent's mobile (question_id 9) if we still haven't found one
+    // behaving strictly on IDs now that we are desperate
+    for (const item of items) {
+      const questionId = item.question_id || item.questionId;
+      if (questionId === 9) {
+        const answer = item.answer || item.value || '';
+        const digits = String(answer).replace(/\D/g, '');
+        if (digits.length === 10 && /^[6-9]/.test(digits)) {
           return digits;
         }
       }
