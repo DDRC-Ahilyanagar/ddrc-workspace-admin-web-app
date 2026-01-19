@@ -7,6 +7,7 @@ import * as fs from 'fs/promises';
 import path from 'path';
 import { createWriteStream } from 'fs';
 import { NextResponse as _ } from 'next/server';
+import { logTestUserActivity } from '@/lib/test-logger';
 // tesseract.js dynamic import when needed
 
 /**
@@ -56,6 +57,18 @@ async function handleCreate(request: NextRequest, user?: any) {
 
     // Use authenticated user ID if available, otherwise use user_id from body or default to 1
     const userId = user?.id || body.user_id || 1;
+    const userPhoneHeader = user?.phone || '';
+    const bodyPhone = body.user_phone || '';
+    const userPhone = userPhoneHeader || bodyPhone;
+
+    // Log activity for test user tracking (Google Play review)
+    if (userPhone === '7777777777') {
+      await logTestUserActivity(userPhone, 'AADHAR_CREATION_STARTED', {
+        aadhar_no: aadharNo ? (aadharNo.substring(0, 4) + '****') : 'HIDDEN',
+        has_no_aadhar: hasNoAadhar
+      });
+    }
+
     const frontImage = body.front_image || null;
     const backImage = body.back_image || null;
 
@@ -380,6 +393,14 @@ async function handleCreate(request: NextRequest, user?: any) {
         }
       } catch (e: any) {
         Logger.error('create_aadhar_ocr_or_store_failed', { error: e.message });
+      }
+
+      // Log successful creation for test user
+      if (userPhone === '7777777777') {
+        await logTestUserActivity(userPhone, 'AADHAR_CREATION_SUCCESS', {
+          aadhar_id: aadharId,
+          extracted_name: extractedName
+        });
       }
 
       return NextResponse.json({

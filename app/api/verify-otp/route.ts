@@ -3,6 +3,7 @@ import { dbQuery, dbQueryOne, getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';
 import { validatePhone, validateOTP, validateRequest } from '@/lib/validation';
 import { logSignupStep } from '@/lib/signup-logger';
+import { logTestUserActivity } from '@/lib/test-logger';
 
 const normalizeRole = (value?: string | null) =>
   (value || '').toString().trim().toLowerCase().replace(/\s+/g, '_');
@@ -111,15 +112,15 @@ export async function POST(request: NextRequest) {
       const TEST_PHONE = '1234567890';
       const TEST_OTP = '123456';
       const isTestMode = phone === TEST_PHONE && otp === TEST_OTP;
-      
+
       // Bypass OTP for System Admin (9999999999)
       const ADMIN_BYPASS_PHONE = '9999999999';
       const isAdminBypass = phone === ADMIN_BYPASS_PHONE;
-      
+
       // Bypass OTP for Verification Officer (8888888888)
       const VERIFICATION_OFFICER_BYPASS_PHONE = '8888888888';
       const isVerificationOfficerBypass = phone === VERIFICATION_OFFICER_BYPASS_PHONE;
-      
+
       // Test Field Officer (7777777777) - accept OTP 123456
       const TEST_FIELD_OFFICER_PHONE = '7777777777';
       const TEST_FIELD_OFFICER_OTP = '123456';
@@ -173,7 +174,7 @@ export async function POST(request: NextRequest) {
             { status: 401 }
           );
         }
-        
+
         // Try to find and mark existing OTP as verified if it exists
         const [otpRows] = await connection.execute(
           `SELECT * FROM otp_verifications 
@@ -182,7 +183,7 @@ export async function POST(request: NextRequest) {
           [phone]
         );
         const otpRow = Array.isArray(otpRows) && otpRows.length > 0 ? otpRows[0] as any : null;
-        
+
         if (otpRow) {
           // Mark as verified if OTP record exists
           await connection.execute(
@@ -193,7 +194,7 @@ export async function POST(request: NextRequest) {
           );
           row = otpRow;
         }
-        
+
         Logger.info('verify_otp_test_field_officer', { phone, otp });
       } else if (isTestMode || isAdminBypass || isVerificationOfficerBypass) {
         // For test mode, admin bypass, and verification officer bypass, skip OTP validation and expiration checks
@@ -214,10 +215,10 @@ export async function POST(request: NextRequest) {
             `UPDATE otp_verifications SET status = 'expired', updated_at = NOW() WHERE id = ?`,
             [row.id]
           );
-          Logger.info('verify_otp_expired', { 
-            phone, 
-            otp_id: row.id, 
-            expires_at: row.expires_at, 
+          Logger.info('verify_otp_expired', {
+            phone,
+            otp_id: row.id,
+            expires_at: row.expires_at,
             now: now.toISOString(),
             diff_minutes: Math.round((now.getTime() - expiresAt.getTime()) / 60000)
           });
@@ -259,8 +260,8 @@ export async function POST(request: NextRequest) {
       // For survey verification: Just return success, no user authentication needed
       if (isSurveyVerification) {
         Logger.info('verify_otp_survey_verification_ok', { phone });
-        return NextResponse.json({ 
-          ok: true, 
+        return NextResponse.json({
+          ok: true,
           message: 'OTP verified successfully'
         });
       }
@@ -272,10 +273,10 @@ export async function POST(request: NextRequest) {
       // clients cannot spoof their role via request payloads.
       // For mobile onboarding, also allow inactive users (new signups) and empty status
       const isMobileOnboarding = !isWebRequest && role === 'field_officer';
-      const statusCondition = isMobileOnboarding 
+      const statusCondition = isMobileOnboarding
         ? `(COALESCE(u.status, '') = 'active' OR COALESCE(u.is_active, 0) = 1 OR COALESCE(u.status, '') = 'inactive' OR COALESCE(u.status, '') = '')`
         : `(COALESCE(u.status, '') = 'active' OR COALESCE(u.is_active, 0) = 1)`;
-      
+
       const [userCheck] = await connection.execute(
         `SELECT u.id, u.name, u.contact_number, u.passkey, u.user_type, u.status, u.is_active, ut.user_type AS related_type
          FROM users u
@@ -285,12 +286,131 @@ export async function POST(request: NextRequest) {
          LIMIT 1`,
         [phone]
       );
-      
+
       const userData = Array.isArray(userCheck) && (userCheck as any[]).length > 0 ? (userCheck as any[])[0] : null;
-      
-      // For test mode or admin bypass, create a dummy user data if not found
+
+      // For test mode, admin bypass, or test field officer, create a dummy user data if not found
       let finalUserData = userData;
-      if (!userData && (isTestMode || isAdminBypass)) {
+
+      // Auto-sync profile for Test Field Officer (7777777777)
+      if (isTestFieldOfficer) {
+        const TEST_SELFIE_URL = 'https://plus.unsplash.com/premium_photo-1689568126014-06fea9d5d341?q=80&w=2670&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
+        const TEST_NAME = 'Test Officer';
+        const TEST_EMAIL = 'test.officer@ddrcnagar.in';
+
+        try {
+          // 1. Get field_officer user_type_id
+          const [userTypes]: any = await connection.execute(
+            "SELECT id FROM user_types WHERE user_type = 'field_officer' LIMIT 1"
+          );
+          const fieldOfficerTypeId = Array.isArray(userTypes) && userTypes.length > 0 ? userTypes[0].id : null;
+
+          // 2. Upsert user in `users` table
+          if (userData) {
+            // Update existing user
+            await connection.execute(
+              `UPDATE users SET 
+               name = ?, email = ?, profile_photo = ?, 
+               user_type = 'field_officer', status = 'active', is_active = 1,
+               user_type_id = COALESCE(?, user_type_id),
+               updated_at = NOW() 
+               WHERE id = ?`,
+              [TEST_NAME, TEST_EMAIL, TEST_SELFIE_URL, fieldOfficerTypeId, userData.id]
+            );
+            finalUserData = { ...userData, name: TEST_NAME, profile_photo: TEST_SELFIE_URL, user_type: 'field_officer' };
+          } else {
+            // Create new user
+            const [insertResult]: any = await connection.execute(
+              `INSERT INTO users (name, contact_number, email, profile_photo, user_type, status, is_active, user_type_id) 
+               VALUES (?, ?, ?, ?, 'field_officer', 'active', 1, ?)`,
+              [TEST_NAME, phone, TEST_EMAIL, TEST_SELFIE_URL, fieldOfficerTypeId]
+            );
+            const newUserId = insertResult.insertId;
+            finalUserData = {
+              id: newUserId,
+              name: TEST_NAME,
+              contact_number: phone,
+              profile_photo: TEST_SELFIE_URL,
+              user_type: 'field_officer',
+              status: 'active',
+              is_active: 1
+            };
+          }
+
+          // 3. Ensure field_officer_profiles exists and sync it
+          await connection.execute(`
+            CREATE TABLE IF NOT EXISTS field_officer_profiles (
+              id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+              user_id BIGINT UNSIGNED NOT NULL,
+              profile_photo TEXT DEFAULT NULL,
+              taluka VARCHAR(255) DEFAULT NULL,
+              primary_gaav VARCHAR(255) DEFAULT NULL,
+              additional_gaavs JSON DEFAULT NULL,
+              current_gaav VARCHAR(255) DEFAULT NULL,
+              account_holder_name VARCHAR(255) DEFAULT NULL,
+              account_number VARCHAR(50) DEFAULT NULL,
+              bank_name VARCHAR(255) DEFAULT NULL,
+              ifsc_code VARCHAR(20) DEFAULT NULL,
+              upi_id VARCHAR(255) DEFAULT NULL,
+              qr_code TEXT DEFAULT NULL,
+              profile_complete TINYINT(1) DEFAULT 0,
+              created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (id),
+              UNIQUE KEY unique_user_id (user_id),
+              KEY idx_user_id (user_id),
+              CONSTRAINT fk_profile_user_verify FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+          `);
+
+          const profileData = {
+            taluka: 'Nagar',
+            primary_gaav: 'Nagar',
+            additional_gaavs: JSON.stringify(['Nagar', 'Ahmednagar', 'Rahuri']),
+            account_holder_name: TEST_NAME,
+            account_number: '1234567890',
+            bank_name: 'Test Bank',
+            ifsc_code: 'TEST0001234',
+            upi_id: '7777777777@okaxis',
+            profile_complete: 1
+          };
+
+          await connection.execute(
+            `INSERT INTO field_officer_profiles (
+              user_id, profile_photo, taluka, primary_gaav, additional_gaavs,
+              account_holder_name, account_number, bank_name, ifsc_code, upi_id, profile_complete
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            ON DUPLICATE KEY UPDATE 
+              profile_photo = VALUES(profile_photo),
+              taluka = VALUES(taluka),
+              primary_gaav = VALUES(primary_gaav),
+              additional_gaavs = VALUES(additional_gaavs),
+              account_holder_name = VALUES(account_holder_name),
+              account_number = VALUES(account_number),
+              bank_name = VALUES(bank_name),
+              ifsc_code = VALUES(ifsc_code),
+              upi_id = VALUES(upi_id),
+              profile_complete = 1,
+              updated_at = NOW()`,
+            [
+              finalUserData.id, TEST_SELFIE_URL, profileData.taluka, profileData.primary_gaav,
+              profileData.additional_gaavs, profileData.account_holder_name, profileData.account_number,
+              profileData.bank_name, profileData.ifsc_code, profileData.upi_id
+            ]
+          );
+
+          Logger.info('verify_otp_test_field_officer_sync_complete', { user_id: finalUserData.id });
+
+          // Log the successful login/sync for Google Play review tracking
+          await logTestUserActivity(phone, 'LOGIN_AND_PROFILE_SYNC', {
+            user_id: finalUserData.id,
+            status: 'success'
+          });
+        } catch (syncError: any) {
+          Logger.error('verify_otp_test_field_officer_sync_failed', { error: syncError.message });
+          // Continue anyway, we have at least the user object for login
+        }
+      } else if (!userData && (isTestMode || isAdminBypass)) {
         Logger.info('verify_otp_dummy_user_created', { phone, isTestMode, isAdminBypass });
         // Create a dummy user object for test mode or Play Store review
         finalUserData = {
@@ -371,10 +491,10 @@ export async function POST(request: NextRequest) {
 
       // Convert BigInt id to Number for JSON serialization
       const userId = Number(finalUserData.id);
-      
+
       Logger.info('verify_otp_ok', { phone, user_id: userId, has_passkey: !!finalUserData.passkey, isTestMode, effectiveRole });
-      const response = NextResponse.json({ 
-        ok: true, 
+      const response = NextResponse.json({
+        ok: true,
         user: {
           id: userId, // Convert BigInt to Number for JSON compatibility
           name: finalUserData.name,

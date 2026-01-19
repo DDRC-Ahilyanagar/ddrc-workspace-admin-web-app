@@ -317,3 +317,15 @@ model EarlyDetectionBaby {
   @@index([createdAt])
   @@map("early_detection_babies")
 }
+
+model TestUserLog {
+  id        BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  phone     String   @db.VarChar(20)
+  action    String   @db.VarChar(255)
+  data      Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([phone])
+  @@index([createdAt])
+  @@map("test_user_logs")
+}

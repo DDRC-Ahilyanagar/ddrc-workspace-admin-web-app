@@ -6,6 +6,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { autoAssignSurveys } from '@/lib/auto-assign-surveys';
 import { sendFormCompletionSMS } from '@/lib/sms';
+import { logTestUserActivity } from '@/lib/test-logger';
 
 /**
  * Generate short form for village/taluka name
@@ -159,7 +160,18 @@ export async function handleSubmit(request: NextRequest, user: any) {
       });
       return NextResponse.json({ ok: false, error: 'Invalid JSON' }, { status: 400 });
     }
+
     let userId = Number(user?.id || 0);
+    const userPhone = user?.phone || body.user_phone || '';
+
+    // Log activity for test user tracking (Google Play review)
+    if (userPhone === '7777777777') {
+      await logTestUserActivity(userPhone, 'SURVEY_SUBMISSION_STARTED', {
+        aadhar_id: body.aadhaar_id || body.aadhar_id,
+        items_count: Array.isArray(body.items) ? body.items.length : 0
+      });
+    }
+
     // Fallbacks: accept explicit user_id or user_phone if auth not present
     if (!userId || userId <= 0) {
       if (body.user_id) {
@@ -739,6 +751,15 @@ export async function handleSubmit(request: NextRequest, user: any) {
               throw insertError;
             }
           }
+        }
+
+        // Log successful submission for test user
+        if (userPhone === '7777777777') {
+          await logTestUserActivity(userPhone, 'SURVEY_SUBMISSION_SUCCESS', {
+            survey_id: surveyId,
+            aadhaar_id: aadhaarId,
+            answered: answeredCount
+          });
         }
       } catch (surveyError: any) {
         Logger.error('submit_answers_survey_record_failed', {
