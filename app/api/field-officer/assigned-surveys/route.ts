@@ -42,10 +42,10 @@ export async function GET(request: NextRequest) {
 
         try {
             let rows: any;
-            
+
             // Check if user is a verification officer
             const isVerificationOfficer = userType === 'verification_officer' || userType === 'verification officer';
-            
+
             if (isVerificationOfficer) {
                 // For verification officers, get surveys assigned via surveys.assigned_to
                 // Check if assigned_to column exists
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
                     AND TABLE_NAME = 'surveys' 
                     AND COLUMN_NAME = 'assigned_to'
                 `);
-                
+
                 if (Array.isArray(columns) && columns.length > 0) {
                     // Column exists, query using assigned_to
                     [rows] = await conn.query(`
@@ -68,7 +68,8 @@ export async function GET(request: NextRequest) {
                           NULL as assignment_id,
                           s.verification_status as assignment_status,
                           s.updated_at as assigned_at,
-                          NULL as rejection_reason
+                          NULL as rejection_reason,
+                          'assigned' as survey_type
                         FROM surveys s
                         WHERE s.assigned_to = ?
                         ORDER BY s.updated_at DESC
@@ -78,8 +79,9 @@ export async function GET(request: NextRequest) {
                     rows = [];
                 }
             } else {
-                // For field officers, get surveys from survey_assignments
-                [rows] = await conn.query(`
+                // For field officers, get BOTH assigned surveys AND self-created surveys
+                // 1. Get surveys from survey_assignments (assigned by admin)
+                const [assignedRows]: any = await conn.query(`
                     SELECT 
                       s.id,
                       s.survey_json,
@@ -88,22 +90,102 @@ export async function GET(request: NextRequest) {
                       sa.id as assignment_id,
                       sa.status as assignment_status,
                       sa.assigned_at,
-                      sa.rejection_reason
+                      sa.rejection_reason,
+                      'assigned' as survey_type
                     FROM survey_assignments sa
                     JOIN surveys s ON sa.survey_id = s.id
                     WHERE sa.field_officer_id = ?
                     ORDER BY sa.assigned_at DESC
                 `, [user.id]);
+
+                // 2. Get self-created surveys (created by field officer)
+                const [selfCreatedRows]: any = await conn.query(`
+                    SELECT 
+                      s.id,
+                      s.survey_json,
+                      s.source,
+                      s.verification_status as survey_status,
+                      NULL as assignment_id,
+                      'accepted' as assignment_status,
+                      s.created_at as assigned_at,
+                      NULL as rejection_reason,
+                      'self_created' as survey_type
+                    FROM surveys s
+                    WHERE s.user_id = ?
+                    AND NOT EXISTS (
+                        SELECT 1 FROM survey_assignments sa 
+                        WHERE sa.survey_id = s.id AND sa.field_officer_id = ?
+                    )
+                    ORDER BY s.created_at DESC
+                `, [user.id, user.id]);
+
+                // Combine both arrays
+                rows = [...(Array.isArray(assignedRows) ? assignedRows : []), ...(Array.isArray(selfCreatedRows) ? selfCreatedRows : [])];
+
+                // Sort by date (most recent first)
+                rows.sort((a: any, b: any) => {
+                    const dateA = new Date(a.assigned_at || 0).getTime();
+                    const dateB = new Date(b.assigned_at || 0).getTime();
+                    return dateB - dateA;
+                });
             }
+
+            // Get required questions to determine survey completion
+            const [requiredQuestionsRows]: any = await conn.query(`
+                SELECT id FROM questions 
+                WHERE is_required = 1
+                  AND (status = 'Active' OR status IS NULL OR status = '')
+                ORDER BY id
+            `);
+
+            const requiredQuestionIds = new Set<number>();
+            if (Array.isArray(requiredQuestionsRows)) {
+                requiredQuestionsRows.forEach((r: any) => {
+                    if (r?.id) requiredQuestionIds.add(Number(r.id));
+                });
+            }
+
+            let completeCount = 0;
+            let incompleteCount = 0;
 
             const surveys = Array.isArray(rows) ? rows.map((row: any) => {
                 let surveyData = {};
+                let isComplete = false;
+
                 try {
                     surveyData = typeof row.survey_json === 'string'
                         ? JSON.parse(row.survey_json)
                         : row.survey_json;
+
+                    // Check if all required questions are answered
+                    const answers = (surveyData as any).answers || [];
+                    const answeredQuestionIds = new Set<number>();
+
+                    answers.forEach((ans: any) => {
+                        const qid = Number(ans.question_id);
+                        const answer = String(ans.answer || '').trim();
+                        if (qid && answer && answer !== '--' && answer !== '') {
+                            answeredQuestionIds.add(qid);
+                        }
+                    });
+
+                    // Survey is complete if all required questions are answered
+                    isComplete = requiredQuestionIds.size > 0;
+                    for (const reqId of requiredQuestionIds) {
+                        if (!answeredQuestionIds.has(reqId)) {
+                            isComplete = false;
+                            break;
+                        }
+                    }
+
+                    if (isComplete) {
+                        completeCount++;
+                    } else {
+                        incompleteCount++;
+                    }
                 } catch (e: any) {
                     Logger.error('PARSE_SURVEY_JSON_ERROR', { survey_id: row.id, error: e.message });
+                    incompleteCount++;
                 }
 
                 return {
@@ -115,12 +197,19 @@ export async function GET(request: NextRequest) {
                     assignment_status: row.assignment_status,
                     assigned_at: row.assigned_at,
                     rejection_reason: row.rejection_reason,
+                    survey_type: row.survey_type,
+                    is_complete: isComplete,
                 };
             }) : [];
 
             return NextResponse.json({
                 ok: true,
-                surveys: surveys
+                surveys: surveys,
+                counts: {
+                    total: surveys.length,
+                    complete: completeCount,
+                    incomplete: incompleteCount,
+                }
             });
         } finally {
             conn.release();

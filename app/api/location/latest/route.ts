@@ -44,9 +44,10 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
 
       // Combine user data with location data
       const locations = users.map((u: any) => {
-        const location = locationMap.get(u.user_id);
+        const userId = Number(u.user_id);
+        const location = locationMap.get(userId);
         return {
-          user_id: u.user_id,
+          user_id: u.user_id.toString(), // Return as string to client to avoid BigInt serialization issues
           name: u.name,
           contact_number: u.contact_number,
           latitude: location?.latitude || null,

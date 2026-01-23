@@ -190,3 +190,131 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * DELETE backup folder or individual image
+ * Query params:
+ * - folder: folder name (required)
+ * - image: image filename (optional, if provided deletes only this image)
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    // Check authentication
+    const { user, error } = await verifyAuth(request);
+    if (!user || error) {
+      return NextResponse.json(
+        { ok: false, error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    // Only allow admin
+    const userType = (user?.user_type || '').toLowerCase().trim();
+    if (userType !== 'admin') {
+      return NextResponse.json(
+        { ok: false, error: 'Unauthorized: Access restricted to admins' },
+        { status: 403 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const folderName = searchParams.get('folder');
+    const imageName = searchParams.get('image');
+
+    if (!folderName) {
+      return NextResponse.json(
+        { ok: false, error: 'Folder name is required' },
+        { status: 400 }
+      );
+    }
+
+    const folderPath = path.join(MEDIA_ROOT, decodeURIComponent(folderName));
+    const resolvedPath = path.resolve(folderPath);
+    const resolvedRoot = path.resolve(MEDIA_ROOT);
+
+    // Security check: ensure path is within MEDIA_ROOT
+    if (!resolvedPath.startsWith(resolvedRoot)) {
+      return NextResponse.json(
+        { ok: false, error: 'Invalid folder path' },
+        { status: 403 }
+      );
+    }
+
+    // Check if folder exists
+    try {
+      await fs.access(folderPath);
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: 'Folder not found' },
+        { status: 404 }
+      );
+    }
+
+    if (imageName) {
+      // Delete individual image
+      const imagePath = path.join(folderPath, decodeURIComponent(imageName));
+      const resolvedImagePath = path.resolve(imagePath);
+
+      // Security check: ensure image path is within folder
+      if (!resolvedImagePath.startsWith(resolvedPath)) {
+        return NextResponse.json(
+          { ok: false, error: 'Invalid image path' },
+          { status: 403 }
+        );
+      }
+
+      try {
+        await fs.unlink(imagePath);
+        Logger.info('IMAGE_DELETED', {
+          folder: folderName,
+          image: imageName,
+          deleted_by: user.id,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          message: 'Image deleted successfully',
+        });
+      } catch (err: any) {
+        Logger.error('IMAGE_DELETE_ERROR', {
+          folder: folderName,
+          image: imageName,
+          error: err.message,
+        });
+        return NextResponse.json(
+          { ok: false, error: 'Failed to delete image' },
+          { status: 500 }
+        );
+      }
+    } else {
+      // Delete entire folder
+      try {
+        await fs.rm(folderPath, { recursive: true, force: true });
+        Logger.info('FOLDER_DELETED', {
+          folder: folderName,
+          deleted_by: user.id,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          message: 'Folder deleted successfully',
+        });
+      } catch (err: any) {
+        Logger.error('FOLDER_DELETE_ERROR', {
+          folder: folderName,
+          error: err.message,
+        });
+        return NextResponse.json(
+          { ok: false, error: 'Failed to delete folder' },
+          { status: 500 }
+        );
+      }
+    }
+  } catch (error: any) {
+    Logger.error('DELETE_BACKUP_ERROR', { error: error.message });
+    return NextResponse.json(
+      { ok: false, error: error.message || 'Failed to delete' },
+      { status: 500 }
+    );
+  }
+}
+

@@ -17,7 +17,12 @@ interface LocationData {
 }
 
 // In-memory store - persists for the lifetime of the server process
-const locationStore = new Map<number, LocationData>();
+// Use globalThis to persist across module reloads in development
+const globalStore = globalThis as unknown as { locationStore: Map<number, LocationData> };
+if (!globalStore.locationStore) {
+  globalStore.locationStore = new Map<number, LocationData>();
+}
+const locationStore = globalStore.locationStore;
 
 /**
  * Update location for a user
@@ -34,7 +39,7 @@ export function updateLocation(data: {
 }): void {
   const now = new Date();
   const existing = locationStore.get(data.user_id);
-  
+
   locationStore.set(data.user_id, {
     user_id: data.user_id,
     latitude: data.latitude,
@@ -68,7 +73,7 @@ export function getAllLocations(): LocationData[] {
 export function isOnline(userId: number): boolean {
   const location = locationStore.get(userId);
   if (!location) return false;
-  
+
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
   return location.timestamp >= fiveMinutesAgo;
 }
@@ -80,7 +85,7 @@ export function isOnline(userId: number): boolean {
 export function getLocationHistory(userId: number, hours: number = 24): LocationData[] {
   const location = locationStore.get(userId);
   if (!location) return [];
-  
+
   const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000);
   if (location.timestamp >= cutoffTime) {
     return [location];
