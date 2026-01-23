@@ -329,3 +329,18 @@ model TestUserLog {
   @@index([createdAt])
   @@map("test_user_logs")
 }
+
+model AppVersion {
+  id           Int       @id @default(autoincrement()) @db.UnsignedInt
+  platform     String    @db.VarChar(50)
+  latestVersion String   @map("latest_version") @db.VarChar(20)
+  buildNumber  Int       @map("build_number") @db.UnsignedInt
+  forceUpdate  Boolean   @default(false) @map("force_update")
+  title        String?   @db.VarChar(255)
+  message      String?   @db.Text
+  storeUrl     String?   @map("store_url") @db.VarChar(500)
+  createdAt    DateTime? @default(now()) @map("created_at")
+  updatedAt    DateTime? @default(now()) @updatedAt @map("updated_at")
+
+  @@map("app_versions")
+}
