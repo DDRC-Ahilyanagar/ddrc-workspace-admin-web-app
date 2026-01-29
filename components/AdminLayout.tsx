@@ -283,6 +283,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     { path: '/admin/location-tracking', label: 'Location Tracking', icon: 'bi-geo-alt' },
     // Only show media backup for authorized admin
     ...(isAuthorizedAdmin ? [{ path: '/admin/media-backup', label: 'Media Backup', icon: 'bi-images' }] : []),
+    // Only show system logs for specific authorized developer
+    ...(userPhone === '7768068585' ? [{ path: '/admin/logs', label: 'System Logs', icon: 'bi-terminal' }] : []),
   ];
 
   const verificationOfficerMenuItems = [

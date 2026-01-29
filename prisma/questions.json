@@ -1392,7 +1392,7 @@
     "question": "दिव्यांगता कारण",
     "question_type": "MCQ",
     "multi_select": "No",
-    "options": "जन्मत:,अपघात,वांशिक,अनुवांशिक",
+    "options": "जन्मत:,अपघात,वांशिक,अनुवांशिक,आजाराने",
     "rendering_condition": "No",
     "rendering_question": null,
     "rendering_value": null,
