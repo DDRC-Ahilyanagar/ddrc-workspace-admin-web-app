@@ -20,6 +20,7 @@ interface Question {
   valid_input?: string;
   max_length?: number;
   status?: string;
+  error?: string;
 }
 
 interface QuestionSection {
@@ -187,10 +188,33 @@ export default function PublicFormPage() {
 
   const submitForm = async () => {
     setSubmitting(true); setError('');
-    try {
-      const visible: Question[] = [];
-      questionSections.forEach(s => s.questions.forEach(q => { if (shouldShowQuestion(q)) visible.push(q); }));
 
+    // Final Validation Check
+    const visible: Question[] = [];
+    let hasValidationError = false;
+
+    questionSections.forEach(s => s.questions.forEach(q => {
+      if (shouldShowQuestion(q)) {
+        visible.push(q);
+        const val = answers[q.id] || '';
+        const validationError = validateInput(q, String(val));
+        if (validationError) {
+          hasValidationError = true;
+          setAllQuestions(questions => questions.map(qu => qu.id === q.id ? { ...qu, error: validationError } : qu));
+        }
+      }
+    }));
+
+    if (hasValidationError) {
+      setError("कृपया लाल रंगातील त्रुटी तपासा (Please fix the validation errors)");
+      setSubmitting(false);
+      // Scroll to first error
+      const firstError = document.querySelector('.border-red-500');
+      if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    try {
       const res = await submitAnswers(1, aadharId!, visible.map(q => ({
         question_id: q.id,
         section_id: q.section_id || null,
@@ -214,10 +238,40 @@ export default function PublicFormPage() {
     return expectedValue.split(/[|,]/).some(v => ans === v.trim() || ans.includes(v.trim()));
   };
 
+  const validateInput = (q: Question, val: string) => {
+    if (!val) {
+      if (q.question_type !== 'upload') return '';
+    }
+
+    if (q.regex) {
+      try {
+        const re = new RegExp(q.regex);
+        if (!re.test(val)) return `Invalid format. Expected: ${q.regex}`;
+      } catch (e) { }
+    }
+
+    if (q.valid_input === 'numeric') {
+      if (!/^\d*$/.test(val)) return 'Only numbers allowed';
+    }
+
+    if (q.max_length && val.length > q.max_length) {
+      return `Max length is ${q.max_length} characters`;
+    }
+
+    return '';
+  };
+
   const handleAnswerChange = (qid: any, val: any) => {
     setAnswers(prev => {
       const next = { ...prev, [qid]: val };
       const q = allQuestions.find(x => x.id === qid);
+
+      // Clear error on change if valid
+      if (q) {
+        const validationError = validateInput(q, String(val));
+        setAllQuestions(questions => questions.map(qu => qu.id === qid ? { ...qu, error: validationError } : qu));
+      }
+
       if (q?.question === 'ता.' || q?.question?.includes('तालुका')) loadDependentData(val);
       return next;
     });
@@ -247,11 +301,17 @@ export default function PublicFormPage() {
     else if (isType) options = disabilityTypes;
     else if (q.options && q.options !== 'NULL') options = q.options.split(',').map(o => o.trim());
 
-    const inputClasses = "w-full bg-white/50 backdrop-blur-sm border border-slate-200 rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white outline-none transition-all duration-300 shadow-sm";
+    const hasError = !!q.error;
+    const baseInputClasses = "w-full bg-white/50 backdrop-blur-sm border rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none transition-all duration-300 shadow-sm";
+    const inputClasses = `${baseInputClasses} ${hasError ? 'border-red-500 focus:ring-4 focus:ring-red-500/10' : 'border-slate-200 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white'}`;
 
     return (
-      <div key={q.id} className="group bg-white/40 p-6 md:p-8 rounded-[32px] border border-white/60 shadow-sm hover:shadow-md transition-all duration-500 hover:bg-white/60">
-        <label className="block text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 group-hover:text-blue-600 transition-colors">{q.question}</label>
+      <div key={q.id} className={`group bg-white/40 p-6 md:p-8 rounded-[32px] border ${hasError ? 'border-red-200' : 'border-white/60'} shadow-sm hover:shadow-md transition-all duration-500 hover:bg-white/60`}>
+        <div className="flex justify-between items-start mb-4">
+          <label className="block text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] group-hover:text-blue-600 transition-colors">{q.question}</label>
+          {hasError && <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider animate-in fade-in slide-in-from-right-2">{q.error}</span>}
+        </div>
+
         {q.question_type.toLowerCase() === 'mcq' ? (
           <select className={inputClasses} value={ans || ''} onChange={(e) => handleAnswerChange(q.id, e.target.value)}>
             <option value="">-- निवडा --</option>
@@ -261,7 +321,7 @@ export default function PublicFormPage() {
           <div className="space-y-4">
             <div className="relative group/up">
               <input type="file" className="hidden" id={`up-${q.id}`} accept="image/*" onChange={(e) => e.target.files?.[0] && handleFileUpload(q.id, e.target.files[0])} />
-              <label htmlFor={`up-${q.id}`} className="w-full bg-slate-100/50 border-2 border-dashed border-slate-300 rounded-2xl h-24 flex items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-white transition-all">
+              <label htmlFor={`up-${q.id}`} className={`w-full bg-slate-100/50 border-2 border-dashed ${hasError ? 'border-red-300' : 'border-slate-300'} rounded-2xl h-24 flex items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-white transition-all`}>
                 {ans ? (
                   <img src={ans.startsWith('http') ? getAbsoluteImageUrl(ans) : ans} className="h-full w-full object-contain p-2" alt="Upload" />
                 ) : (
@@ -276,7 +336,14 @@ export default function PublicFormPage() {
         ) : q.question_type.toLowerCase() === 'date' ? (
           <input type="date" className={inputClasses} value={ans || ''} onChange={(e) => handleAnswerChange(q.id, e.target.value)} />
         ) : (
-          <input type="text" className={inputClasses} placeholder="..." value={ans || ''} onChange={(e) => handleAnswerChange(q.id, e.target.value)} />
+          <input
+            type="text"
+            className={inputClasses}
+            placeholder="..."
+            value={ans || ''}
+            maxLength={q.max_length}
+            onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+          />
         )}
       </div>
     );
