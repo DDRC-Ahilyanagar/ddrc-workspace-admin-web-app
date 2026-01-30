@@ -1,1707 +1,400 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { apiCall, getQuestions, submitAnswers, uploadImage } from '@/lib/api-client';
-import { getAbsoluteImageUrl } from '@/lib/config';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
-interface Question {
-  id: number | string;
-  section_id?: number;
-  title?: string;
-  question: string;
-  question_type: string;
-  multi_select?: number | string;
-  options?: string | null;
-  rendering_condition?: string;
-  rendering_question?: string | null;
-  rendering_value?: string | null;
-  regex?: string;
-  valid_input?: string;
-  max_length?: number;
-  status?: string;
-}
+const LOGO_URL = '/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png';
+const SUPPORT_IMG = '/empowerment_support_modern.png';
 
-interface QuestionSection {
-  title: string;
-  questions: Question[];
-}
-
-type Step = 'upload-front' | 'upload-back' | 'aadhar-info' | 'personal-info' | 'address' | 'complete';
-
-export default function PublicFormPage() {
-  const [currentStep, setCurrentStep] = useState<Step>('upload-front');
-  const [frontImage, setFrontImage] = useState<File | null>(null);
-  const [backImage, setBackImage] = useState<File | null>(null);
-  const [frontImageUrl, setFrontImageUrl] = useState<string>('');
-  const [backImageUrl, setBackImageUrl] = useState<string>('');
-  const [aadharNo, setAadharNo] = useState('');
-  const [divyangName, setDivyangName] = useState('');
-  const [aadharId, setAadharId] = useState<number | null>(null);
-  const [existingSurveyData, setExistingSurveyData] = useState<any>(null);
-  const [checkingExisting, setCheckingExisting] = useState(false);
-  const [allQuestions, setAllQuestions] = useState<Question[]>([]);
-  const [questionSections, setQuestionSections] = useState<QuestionSection[]>([]);
-  const [answers, setAnswers] = useState<Record<number | string, any>>({});
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
-  // State for dynamic address fields used in renderQuestion
-  const [talukas, setTalukas] = useState<string[]>([]);
-  const [villages, setVillages] = useState<string[]>([]);
-  const [grams, setGrams] = useState<string[]>([]);
-  const [talathi, setTalathi] = useState<string[]>([]);
-  const [phc, setPhc] = useState<string[]>([]);
-  
-  // State for disability types (loaded from API for "दिव्यांगता प्रकार" question)
-  const [disabilityTypes, setDisabilityTypes] = useState<string[]>([]);
-  const [loadingDisabilityTypes, setLoadingDisabilityTypes] = useState(false);
-
-  // Helper to convert question ID to number for consistent handling
-  const getQuestionIdNumber = (id: number | string): number => {
-    return typeof id === 'string' ? parseInt(id, 10) : id;
-  };
-
-  // Calculate age from date of birth
-  const calculateAge = (dob: string): string => {
-    if (!dob) return '';
-    try {
-      const birthDate = new Date(dob);
-      if (isNaN(birthDate.getTime())) return '';
-      const today = new Date();
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const monthDiff = today.getMonth() - birthDate.getMonth();
-      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-      }
-      return age > 0 ? `${age} वर्षे` : '';
-    } catch {
-      return '';
-    }
-  };
-
-  // Find question IDs by question text
-  const getQuestionIdByText = (questionText: string): number | string | null => {
-    const question = allQuestions.find(q => q.question?.trim() === questionText.trim());
-    return question?.id || null;
-  };
-
-  // Reorder questions so conditional questions appear immediately after their parent
-  const reorderQuestionsWithConditionals = (questions: Question[]): Question[] => {
-    if (questions.length <= 1) return questions;
-
-    // Build a map of parent question labels/IDs to their dependent questions
-    const parentToChildren = new Map<string, Question[]>();
-
-    // First pass: identify all conditional questions and group them by parent
-    for (const q of questions) {
-      const rawCondition = (q.rendering_condition || '').toString().trim().toLowerCase();
-      const hasCondition = rawCondition === 'yes' || rawCondition === 'true' || rawCondition === '1';
-
-      if (hasCondition && q.rendering_question) {
-        const parentKey = q.rendering_question.trim();
-        if (parentKey) {
-          if (!parentToChildren.has(parentKey)) {
-            parentToChildren.set(parentKey, []);
-          }
-          parentToChildren.get(parentKey)!.push(q);
+const content = {
+  mr: {
+    hero: {
+      title: 'दिव्यांग सर्वेक्षण अभियान – २०२६',
+      subtitle: 'जिल्हा प्रशासन, अहिल्यानगर व जिल्हा दिव्यांग पुनर्वसन केंद्र यांचा संयुक्त उपक्रम',
+      cta: 'नोंदणी सुरू करा',
+    },
+    about: {
+      title: 'अभियानाबद्दल',
+      description: 'अहिल्यानगर जिल्ह्यातील सर्व दिव्यांग बांधवांचे अचूक, अद्ययावत व विश्वासार्ह माहिती संकलित करण्यासाठी हे विशेष सर्वेक्षण राबविण्यात येत आहे. या माहितीच्या आधारे दिव्यांग बांधवांना विविध शासकीय योजना व सेवा प्रभावीपणे उपलब्ध करून देण्यात येणार आहेत.',
+    },
+    process: {
+      title: 'नोंदणी प्रक्रिया',
+      steps: [
+        {
+          title: 'प्रशिक्षित कर्मचारी',
+          desc: 'सर्वेक्षण आशा सेविका, अंगणवाडी सेविका व प्रशिक्षित स्वयंसेवकांमार्फत घरोघरी जाऊन करण्यात येईल.',
+          icon: <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+        },
+        {
+          title: 'डिजिटल नोंदणी',
+          desc: 'यासाठी स्वतंत्र मोबाईल अॅप व अधिकृत वेबसाइट विकसित करण्यात आली आहे.',
+          icon: <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+        },
+        {
+          title: 'संपर्क व पडताळणी',
+          desc: 'प्राथमिक माहिती भरल्यानंतर संबंधित व्यक्तीशी गावपातळीवर संपर्क साधून माहितीची नोंद पूर्ण केली जाईल.',
+          icon: <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
         }
-      }
+      ]
+    },
+    benefits: {
+      title: 'सर्वेक्षणाचे फायदे',
+      items: [
+        'शासकीय योजनांचा लाभ',
+        'वैद्यकीय पुनर्वसन सेवा',
+        'UDID प्रमाणपत्र मदत',
+        'स्वयंरोजगाराच्या संधी',
+        'सहायक साधने उपलब्ध करणे'
+      ]
+    },
+    documents: {
+      title: 'आवश्यक कागदपत्रे',
+      subtitle: 'नोंदणीसाठी खालील कागदपत्रे जवळ ठेवावीत:',
+      list: [
+        'दिव्यांग प्रमाणपत्र (UDID)',
+        'आधार कार्ड',
+        'रेशन कार्ड',
+        'निवडणूक ओळखपत्र',
+        'बँक पासबुक'
+      ]
+    },
+    footer: {
+      slogan: 'आपला सहभाग – आपल्या हक्कासाठी आवश्यक',
+      closing: 'एकत्र येऊया – सक्षम, समावेशक आणि संवेदनशील समाज घडवूया.',
+      contact: '०२४१ २७७ ७७७२'
     }
-
-    // Second pass: rebuild the list ensuring conditional questions appear immediately after their parent
-    const reordered: Question[] = [];
-    const processed = new Set<number | string>();
-
-    // Helper function to recursively add a question and all its dependents
-    const addQuestionAndDependents = (q: Question) => {
-      if (processed.has(q.id)) return;
-
-      reordered.push(q);
-      processed.add(q.id);
-
-      // Add all questions that depend on this one (recursively handles nested dependencies)
-      const qLabel = q.question?.trim() || '';
-      const qId = q.id.toString();
-
-      // Check by question text (exact match)
-      if (parentToChildren.has(qLabel)) {
-        for (const child of parentToChildren.get(qLabel)!) {
-          addQuestionAndDependents(child);
+  },
+  en: {
+    hero: {
+      title: 'Divyang Survey Campaign 2026',
+      subtitle: 'A prestigious joint initiative by the District Administration of Ahilyanagar and DDRC.',
+      cta: 'Start Registration',
+    },
+    about: {
+      title: 'About Campaign',
+      description: 'Executing a comprehensive data-driven initiative to maintain accurate and reliable demographics for every person with disabilities in the district, ensuring targeted delivery of government welfare.',
+    },
+    process: {
+      title: 'Workflow',
+      steps: [
+        {
+          title: 'Door-to-Door',
+          desc: 'Conducted by certified Asha workers and trained volunteers at the grassroots level.',
+          icon: <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+        },
+        {
+          title: 'Digital Ecosystem',
+          desc: 'Advanced mobile applications and web portals designed for seamless data integrity.',
+          icon: <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+        },
+        {
+          title: 'Validation',
+          desc: 'Rigorous multi-level verification ensures every record is authentic and verified.',
+          icon: <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
         }
-      }
-
-      // Check by question ID (if rendering_question is a number)
-      if (parentToChildren.has(qId)) {
-        for (const child of parentToChildren.get(qId)!) {
-          addQuestionAndDependents(child);
-        }
-      }
-    };
-
-    // Process all independent questions first (those without rendering conditions)
-    // This ensures parents are processed before their dependents
-    for (const q of questions) {
-      if (processed.has(q.id)) continue;
-
-      const rawCondition = (q.rendering_condition || '').toString().trim().toLowerCase();
-      const hasCondition = rawCondition === 'yes' || rawCondition === 'true' || rawCondition === '1';
-
-      if (!hasCondition) {
-        // Independent question - add it and all its dependents
-        addQuestionAndDependents(q);
-      }
+      ]
+    },
+    benefits: {
+      title: 'Core Objectives',
+      items: [
+        'Direct Benefit Transfer',
+        'Advanced Rehab Services',
+        'UDID Facilitation',
+        'Self-Employment Support',
+        'Assistive Tech Provision'
+      ]
+    },
+    documents: {
+      title: 'On-boarding Docs',
+      subtitle: 'Please keep digital or physical copies ready:',
+      list: [
+        'Disability Certificate',
+        'Aadhaar Identity Card',
+        'Ration Card',
+        'Voter ID Card',
+        'Bank Statement'
+      ]
+    },
+    footer: {
+      slogan: 'Your Voice, Your Rights',
+      closing: 'Together, let us build a barrier-free, inclusive, and compassionate society.',
+      contact: '0241 277 7772'
     }
+  }
+};
 
-    // Process any remaining dependent questions that weren't added (edge case: parent not in list)
-    for (const q of questions) {
-      if (!processed.has(q.id)) {
-        addQuestionAndDependents(q);
-      }
-    }
+export default function LandingPage() {
+  const [lang, setLang] = useState<'mr' | 'en'>('mr');
+  const [scrolled, setScrolled] = useState(false);
+  const t = content[lang];
 
-    // If reordering didn't work or resulted in different length, fall back to original order
-    if (reordered.length !== questions.length) {
-      return questions.sort((a, b) => {
-        const aId = getQuestionIdNumber(a.id);
-        const bId = getQuestionIdNumber(b.id);
-        return aId - bId;
-      });
-    }
-
-    return reordered;
-  };
-
-  // Load questions on mount
   useEffect(() => {
-    loadQuestions();
-    loadTalukas();
+    const handleScroll = () => setScrolled(window.scrollY > 50);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Load disability types after questions are loaded
-  useEffect(() => {
-    if (allQuestions.length > 0) {
-      loadDisabilityTypes();
-    }
-  }, [allQuestions.length]);
-
-  // Load talukas
-  const loadTalukas = async () => {
-    try {
-      const response = await fetch('/api/get-talukas');
-      const data = await response.json();
-      if (data.ok && data.talukas) {
-        setTalukas(data.talukas);
-      }
-    } catch (err) {
-      console.error('Failed to load talukas:', err);
-    }
-  };
-
-  // Load disability types from API (matching field officer app logic)
-  // This loads disability types for "दिव्यांगता प्रकार (Disability Type)" question
-  const loadDisabilityTypes = async () => {
-    if (loadingDisabilityTypes || disabilityTypes.length > 0) return;
-    
-    setLoadingDisabilityTypes(true);
-    try {
-      // Fetch from the same source that get-questions uses - disability_types table
-      // We'll fetch a question that has disability types injected to get the options
-      const response = await fetch('/api/get-questions');
-      const data = await response.json();
-      
-      if (data.ok && data.data) {
-        // Find the disability type question (ID 69 or contains "दिव्यांगता प्रकार")
-        const disabilityTypeQuestion = data.data.find((q: any) => {
-          const qid = parseInt(q.id || '0');
-          const label = (q.question || '').toString().trim();
-          return qid === 69 || 
-                 label.includes('दिव्यांगता प्रकार') || 
-                 label.toLowerCase().includes('disability type');
-        });
-
-        if (disabilityTypeQuestion && disabilityTypeQuestion.options) {
-          // Parse options (comma-separated, same format as get-questions route returns)
-          const options = disabilityTypeQuestion.options
-            .split(',')
-            .map((opt: string) => opt.trim())
-            .filter((opt: string) => opt && opt !== 'NULL' && opt !== 'null' && opt.length > 0);
-          setDisabilityTypes(options);
-          console.log('✅ Loaded disability types:', options.length, 'types');
-        } else {
-          console.warn('⚠️ Disability type question not found or has no options');
-        }
-      }
-    } catch (err) {
-      console.error('Failed to load disability types:', err);
-    } finally {
-      setLoadingDisabilityTypes(false);
-    }
-  };
-
-  // Load dependent data when taluka is selected
-  const loadDependentData = async (taluka: string) => {
-    if (!taluka) {
-      setVillages([]);
-      setGrams([]);
-      setTalathi([]);
-      setPhc([]);
-      return;
-    }
-
-    try {
-      const [villagesRes, gramsRes, talathiRes, phcRes] = await Promise.all([
-        fetch(`/api/get-villages?taluka=${encodeURIComponent(taluka)}`),
-        fetch(`/api/get-grams?taluka=${encodeURIComponent(taluka)}`),
-        fetch(`/api/get-talathi?taluka=${encodeURIComponent(taluka)}`),
-        fetch(`/api/get-phc?taluka=${encodeURIComponent(taluka)}`),
-      ]);
-
-      const villagesData = await villagesRes.json();
-      const gramsData = await gramsRes.json();
-      const talathiData = await talathiRes.json();
-      const phcData = await phcRes.json();
-
-      // Match the field officer app logic: check ok and extract data
-      if (villagesRes.ok && villagesData.ok && villagesData.villages) {
-        const villagesList = Array.isArray(villagesData.villages) 
-          ? villagesData.villages.map((v: any) => String(v).trim()).filter(Boolean)
-          : [];
-        setVillages(villagesList);
-        console.log('Loaded villages:', villagesList.length, villagesList);
-      } else {
-        setVillages([]);
-      }
-
-      if (gramsRes.ok && gramsData.ok && gramsData.grams) {
-        const gramsList = Array.isArray(gramsData.grams)
-          ? gramsData.grams.map((g: any) => String(g).trim()).filter(Boolean)
-          : [];
-        setGrams(gramsList);
-      } else {
-        setGrams([]);
-      }
-
-      if (talathiRes.ok && talathiData.ok && talathiData.talathi) {
-        const talathiList = Array.isArray(talathiData.talathi)
-          ? talathiData.talathi.map((t: any) => String(t).trim()).filter(Boolean)
-          : [];
-        setTalathi(talathiList);
-        console.log('Loaded talathi:', talathiList.length, talathiList);
-      } else {
-        setTalathi([]);
-      }
-
-      if (phcRes.ok && phcData.ok && phcData.phc) {
-        const phcList = Array.isArray(phcData.phc)
-          ? phcData.phc.map((p: any) => String(p).trim()).filter(Boolean)
-          : [];
-        setPhc(phcList);
-      } else {
-        setPhc([]);
-      }
-    } catch (err) {
-      console.error('Failed to load dependent data:', err);
-      setVillages([]);
-      setGrams([]);
-      setTalathi([]);
-      setPhc([]);
-    }
-  };
-
-  // Get question IDs for DOB and Age
-  const dobQuestionId = useMemo(() => getQuestionIdByText('जन्म तारीख'), [allQuestions]);
-  const ageQuestionId = useMemo(() => getQuestionIdByText('वय'), [allQuestions]);
-  const prevDobRef = useRef<string>('');
-
-  // Auto-calculate age when date of birth is set
-  useEffect(() => {
-    if (allQuestions.length > 0 && dobQuestionId && ageQuestionId) {
-      const dobValue = answers[dobQuestionId]?.toString() || '';
-
-      // Only update if DOB actually changed
-      if (dobValue !== prevDobRef.current) {
-        prevDobRef.current = dobValue;
-
-        if (dobValue) {
-          const calculatedAge = calculateAge(dobValue);
-          if (calculatedAge) {
-            setAnswers((prev) => ({ ...prev, [ageQuestionId]: calculatedAge }));
-          }
-        } else {
-          // Clear age if DOB is cleared
-          setAnswers((prev) => {
-            const newAnswers = { ...prev };
-            delete newAnswers[ageQuestionId];
-            return newAnswers;
-          });
-        }
-      }
-    }
-  }, [answers, allQuestions, dobQuestionId, ageQuestionId]);
-
-  // Pre-fill name from Aadhar info section when moving to personal info step
-  useEffect(() => {
-    if (currentStep === 'personal-info' && divyangName && allQuestions.length > 0) {
-      const nameQuestionId = getQuestionIdByText('दिव्यांगांचे नाव');
-      if (nameQuestionId) {
-        // Pre-fill if empty, or update if it matches the previous divyangName (to keep in sync)
-        const currentNameAnswer = answers[nameQuestionId];
-        if (!currentNameAnswer || currentNameAnswer === divyangName) {
-          setAnswers((prev) => ({ ...prev, [nameQuestionId]: divyangName }));
-        }
-      }
-    }
-  }, [currentStep, divyangName, allQuestions.length]);
-
-  // TEMP: Prefill form data for testing
-  useEffect(() => {
-    // Only prefill if we haven't already (check if aadhar is empty)
-    if (!aadharNo && !divyangName && currentStep === 'upload-front') {
-      setAadharNo('123456789012');
-      setDivyangName('Test User');
-
-      // Create dummy files for images to pass validation
-      // Use a valid 1x1 pixel PNG base64 to avoid "Input buffer contains unsupported image format" error
-      const validBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNiAAAABgADNjd8qAAAAABJRU5ErkJggg==';
-      const byteCharacters = atob(validBase64);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const dummyFile = new File([byteArray], 'test_image.png', { type: 'image/png' });
-
-      // setFrontImage(dummyFile);
-      // setBackImage(dummyFile);
-      // setFrontImageUrl('/placeholder-id-front.png');
-      // setBackImageUrl('/placeholder-id-back.png');
-    }
-
-    if (allQuestions.length > 0) {
-      const updates: Record<number | string, any> = {};
-
-      // Helper to safely add answer if question exists
-      const addAnswer = (text: string, value: any) => {
-        // Try exact match first
-        let qId = getQuestionIdByText(text);
-
-        // If not found, try finding by substring if needed (less reliable but fallback)
-        if (!qId) {
-          const q = allQuestions.find(q => q.question?.includes(text));
-          if (q) qId = q.id;
-        }
-
-        if (qId) {
-          updates[qId] = value;
-        }
-      };
-
-      // Personal Info Prefills
-      addAnswer('लिंग', 'पुरुष');
-      addAnswer('मोबाईल नं', '9999999999');
-      addAnswer('जन्म तारीख', '1990-01-01');
-      addAnswer('ईमेल आयडी', 'test@example.com');
-      addAnswer('शिक्षण', 'पदवीधर');
-      addAnswer('व्यवसाय', 'नोकरी');
-      addAnswer('उत्पन्न गट', 'APL');
-
-      // Additional requested prefills
-      addAnswer('वैवाहिक स्थिती', 'विवाहित');
-      addAnswer('धर्म', 'हिंदू');
-      addAnswer('वडील/आई चे नाव', 'सुभाष कदम');
-      addAnswer('वडील किंवा काळजीवाहकाचा मोबाईल नं', '9876543210');
-      addAnswer('कुटूंब प्रमुखाचे नाव', 'सुभाष कदम');
-      addAnswer('घरातील एकूण सदस्य', '4');
-      addAnswer('प्रवर्ग', 'खुला प्रवर्ग (OPEN/GENERAL)');
-      addAnswer('रक्त गट', 'O+');
-      addAnswer('लाभार्थी आत्महत्या ग्रस्त कुटुंबातील सदस्य आहे का?', 'नाही');
-      addAnswer('लाभार्थी अनाथ आहे का? (१८ वर्षाखालील व आई-वडील दोन्ही नसलेले)', 'नाही');
-      addAnswer('लाभार्थी आदिवासी क्षेत्रातील रहिवाशी आहे का?', 'नाही');
-      addAnswer('लाभार्थी प्रकल्पग्रस्त आहे का?', 'नाही');
-      addAnswer('लाभार्थी एकल पालकाच्या कुटुंबातील आहे का?', 'नाही');
-      addAnswer('लाभार्थी स्थलांतरित (कामासाठी स्थलांतर केलेले) कुटुंबातील आहे का?', 'नाही');
-
-      // Disability Details
-      addAnswer('वैश्विक कार्ड (UDID)', 'नाही');
-      addAnswer('दिव्यांगता प्रकार (Disability Type)', 'Blindness');
-      addAnswer('दिव्यांगता टक्केवारी (% of Disability)', '40');
-
-      // Additional Disability Related
-      addAnswer('आपले युडीआयडी कार्ड आहे का?', 'नाही');
-      addAnswer('UDID कार्ड क्रमांक', '1234567890123456');
-
-      // Address Fields (Backup in case the other effect doesn't fire)
-      addAnswer('सध्याचा ता.', 'Parner');
-      addAnswer('ता.', 'Parner');
-      addAnswer('सध्याचा गाव', 'Bhalawani');
-      addAnswer('गाव', 'Bhalawani');
-      addAnswer('सध्याचा जि.', 'Ahilyanagar');
-      addAnswer('जि.', 'Ahilyanagar');
-
-      // Missing Prefills
-      addAnswer('जिल्हा', 'Ahilyanagar');
-      addAnswer('राज्य', 'Maharashtra');
-      addAnswer('पिनकोड', '414302');
-
-      if (Object.keys(updates).length > 0) {
-        setAnswers((prev) => ({ ...prev, ...updates }));
-      }
-    }
-  }, [allQuestions.length, currentStep]);
-
-  const loadQuestions = async () => {
-    setLoading(true);
-    try {
-      // Load public questions from JSON file
-      const response = await getQuestions(true);
-      if (response.ok && response.data) {
-        const questions = response.data as Question[];
-        
-        // Convert string IDs to numbers for consistency, but keep original for answers
-        const normalizedQuestions = questions.map(q => ({
-          ...q,
-          id: typeof q.id === 'string' ? parseInt(q.id, 10) : q.id,
-        }));
-        
-        setAllQuestions(normalizedQuestions);
-
-        // Group questions by their title (section)
-        const sectionsMap = new Map<string, Question[]>();
-        
-        for (const q of normalizedQuestions) {
-          const sectionTitle = q.title || 'Other';
-          if (!sectionsMap.has(sectionTitle)) {
-            sectionsMap.set(sectionTitle, []);
-          }
-          sectionsMap.get(sectionTitle)!.push(q);
-        }
-
-        // Convert map to array and reorder questions within each section
-        const sections: QuestionSection[] = Array.from(sectionsMap.entries()).map(([title, questions]) => ({
-          title,
-          questions: reorderQuestionsWithConditionals(questions),
-        }));
-
-        // Sort sections by the first question ID in each section to maintain order
-        sections.sort((a, b) => {
-          const aFirstId = a.questions.length > 0 ? getQuestionIdNumber(a.questions[0].id) : 0;
-          const bFirstId = b.questions.length > 0 ? getQuestionIdNumber(b.questions[0].id) : 0;
-          return aFirstId - bFirstId;
-        });
-
-        setQuestionSections(sections);
-      }
-    } catch (err: any) {
-      setError('Questions लोड करण्यात अडचण: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleFrontImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setFrontImage(file);
-      const url = URL.createObjectURL(file);
-      setFrontImageUrl(url);
-    }
-  };
-
-  const handleBackImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setBackImage(file);
-      const url = URL.createObjectURL(file);
-      setBackImageUrl(url);
-    }
-  };
-
-  const handleNext = async () => {
-    if (currentStep === 'upload-front') {
-      if (!frontImage) {
-        setError('कृपया आधार कार्डची पुढील बाजू अपलोड करा');
-        return;
-      }
-      setCurrentStep('upload-back');
-      setError('');
-    } else if (currentStep === 'upload-back') {
-      if (!backImage) {
-        setError('कृपया आधार कार्डची मागील बाजू अपलोड करा');
-        return;
-      }
-      setCurrentStep('aadhar-info');
-      setError('');
-    } else if (currentStep === 'aadhar-info') {
-      if (!aadharNo.trim() || !divyangName.trim()) {
-        setError('कृपया आधार क्रमांक आणि नाव प्रविष्ट करा');
-        return;
-      }
-      // Validate Aadhar format (12 digits, optionally with dashes)
-      const digits = aadharNo.replace(/\D/g, '');
-      if (digits.length !== 12) {
-        setError('कृपया वैध 12 अंकी आधार क्रमांक प्रविष्ट करा');
-        return;
-      }
-      await createAadharRecord();
-    } else if (currentStep === 'personal-info') {
-      // Validate ALL visible questions are required
-      const allVisibleQuestions: Question[] = [];
-      questionSections.forEach(section => {
-        section.questions.forEach(q => {
-          if (shouldShowQuestion(q)) {
-            allVisibleQuestions.push(q);
-          }
-        });
-      });
-
-      const missing = allVisibleQuestions.find((q) => {
-        const answer = answers[q.id];
-        // Check if answer is empty, null, undefined, or empty array
-        if (answer === null || answer === undefined || answer === '') return true;
-        if (Array.isArray(answer) && answer.length === 0) return true;
-        if (typeof answer === 'string' && answer.trim() === '') return true;
-        return false;
-      });
-      if (missing) {
-        setError(`कृपया सर्व आवश्यक फील्ड भरा: ${missing.question}`);
-        return;
-      }
-
-      // Validate mobile numbers (must be exactly 10 digits)
-      for (const q of allVisibleQuestions) {
-        if (q.question?.includes('मोबाईल') || q.question?.includes('Mobile')) {
-          const mobileValue = answers[q.id];
-          if (mobileValue && mobileValue.toString().trim()) {
-            const digits = mobileValue.toString().replace(/\D/g, '');
-            if (digits.length !== 10) {
-              setError(`कृपया 10 अंकी मोबाईल नंबर प्रविष्ट करा: ${q.question}`);
-              return;
-            }
-          }
-        }
-
-        // Validate email format
-        if (q.question?.includes('ईमेल') || q.question?.includes('Email') || q.question?.includes('email')) {
-          const emailValue = answers[q.id];
-          if (emailValue && emailValue.toString().trim()) {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(emailValue.toString().trim())) {
-              setError(`कृपया वैध ईमेल आयडी प्रविष्ट करा: ${q.question}`);
-              return;
-            }
-          }
-        }
-      }
-
-      await submitForm();
-    }
-  };
-
-  const handlePrev = () => {
-    if (currentStep === 'upload-back') {
-      setCurrentStep('upload-front');
-    } else if (currentStep === 'aadhar-info') {
-      setCurrentStep('upload-back');
-    } else if (currentStep === 'personal-info') {
-      setCurrentStep('aadhar-info');
-    }
-    setError('');
-  };
-
-  // Check for existing survey by Aadhar number
-  const checkExistingSurvey = async (aadharDigits: string) => {
-    if (aadharDigits.length !== 12) return;
-
-    setCheckingExisting(true);
-    try {
-      const response = await apiCall('public/get-survey-by-aadhar', {
-        method: 'POST',
-        body: JSON.stringify({ aadhar_no: aadharDigits }),
-      });
-
-      if (response.ok && response.exists && response.data) {
-        setExistingSurveyData(response.data);
-        // Pre-fill name if available
-        if (response.data.holder_name) {
-          setDivyangName(response.data.holder_name);
-        }
-        // Pre-fill Aadhar ID if available
-        if (response.data.aadhar_id) {
-          setAadharId(response.data.aadhar_id);
-        }
-      } else {
-        setExistingSurveyData(null);
-      }
-    } catch (err: any) {
-      console.error('Error checking existing survey:', err);
-      setExistingSurveyData(null);
-    } finally {
-      setCheckingExisting(false);
-    }
-  };
-
-  const createAadharRecord = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      // If existing survey data is available, use that aadhar_id
-      if (existingSurveyData && existingSurveyData.aadhar_id) {
-        setAadharId(existingSurveyData.aadhar_id);
-
-        // Prefill answers if available
-        if (existingSurveyData.answers && Object.keys(existingSurveyData.answers).length > 0) {
-          setAnswers((prev) => ({ ...prev, ...existingSurveyData.answers }));
-        }
-
-        // Pre-fill the name in personal info section
-        if (divyangName && allQuestions.length > 0) {
-          const nameQuestionId = getQuestionIdByText('दिव्यांगांचे नाव');
-          if (nameQuestionId) {
-            setAnswers((prev) => ({ ...prev, [nameQuestionId]: divyangName }));
-          }
-        }
-
-        setCurrentStep('personal-info');
-        setLoading(false);
-        return;
-      }
-      // First upload images
-      const formData = new FormData();
-      formData.append('front_image', frontImage!);
-      formData.append('back_image', backImage!);
-      formData.append('aadhar_no', aadharNo);
-      formData.append('divyang_name', divyangName);
-
-      const uploadResponse = await fetch('/api/public/upload-aadhar', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const uploadData = await uploadResponse.json();
-      if (!uploadData.ok) {
-        throw new Error(uploadData.error || 'Upload failed');
-      }
-
-      // Then create Aadhar record
-      const createResponse = await apiCall('public/create-aadhar', {
-        method: 'POST',
-        body: JSON.stringify({
-          aadhar_no: aadharNo,
-          divyang_name: divyangName,
-          front_image: uploadData.front_image,
-          back_image: uploadData.back_image,
-        }),
-      });
-
-      if (!createResponse.ok) {
-        throw new Error(createResponse.error || 'Aadhar record creation failed');
-      }
-
-      setAadharId(createResponse.aadhar_id);
-
-      // Pre-fill the name in personal info section
-      if (divyangName && allQuestions.length > 0) {
-        const nameQuestionId = getQuestionIdByText('दिव्यांगांचे नाव');
-        if (nameQuestionId) {
-          setAnswers((prev) => ({ ...prev, [nameQuestionId]: divyangName }));
-        }
-      }
-
-      setCurrentStep('personal-info');
-    } catch (err: any) {
-      setError(err.message || 'त्रुटी आली. कृपया पुन्हा प्रयत्न करा.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const submitForm = async () => {
-    setSubmitting(true);
-    setError('');
-    try {
-      if (!aadharId) {
-        throw new Error('Aadhar ID not found');
-      }
-
-      // Final validation: Ensure all visible questions have answers
-      const allVisibleQuestions: Question[] = [];
-      questionSections.forEach(section => {
-        section.questions.forEach(q => {
-          if (shouldShowQuestion(q)) {
-            allVisibleQuestions.push(q);
-          }
-        });
-      });
-
-      const missingAnswers = allVisibleQuestions.find((q) => {
-        const answer = answers[q.id];
-        if (answer === null || answer === undefined || answer === '') return true;
-        if (Array.isArray(answer) && answer.length === 0) return true;
-        if (typeof answer === 'string' && answer.trim() === '') return true;
-        return false;
-      });
-
-      if (missingAnswers) {
-        setError(`कृपया सर्व आवश्यक फील्ड भरा: ${missingAnswers.question}`);
-        setSubmitting(false);
-        return;
-      }
-
-      // Combine all answers
-      const allAnswers = allVisibleQuestions
-        .map((q) => ({
-          question_id: q.id,
-          section_id: q.section_id || null,
-          answer: Array.isArray(answers[q.id]) ? answers[q.id].join(',') : String(answers[q.id]),
-        }));
-
-      const response = await submitAnswers(1, aadharId, allAnswers, 'Divyang Self');
-      if (!response.ok) {
-        throw new Error(response.error || 'Form submission failed');
-      }
-
-      setCurrentStep('complete');
-    } catch (err: any) {
-      setError(err.message || 'Form सबमिट करण्यात अडचण. कृपया पुन्हा प्रयत्न करा.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleAnswerChange = (questionId: number | string, value: any) => {
-    setAnswers((prev) => {
-      const newAnswers = { ...prev, [questionId]: value };
-
-      // Auto-calculate age when date of birth changes
-      const dobQuestionId = getQuestionIdByText('जन्म तारीख');
-      const ageQuestionId = getQuestionIdByText('वय');
-
-      if (questionId === dobQuestionId && ageQuestionId) {
-        const age = calculateAge(value);
-        if (age) {
-          newAnswers[ageQuestionId] = age;
-        }
-      }
-
-      // Handle taluka selection - load dependent data
-      const question = allQuestions.find(q => q.id === questionId);
-      if (question) {
-        const label = question.question?.trim() || '';
-        const isTaluka = label === 'ता.' || label === 'सध्याचा ता.' || label.includes('तालुका');
-
-        if (isTaluka && value) {
-          // Clear dependent fields when taluka changes
-          const villageQuestionId = getQuestionIdByText('सध्याचा गाव') || getQuestionIdByText('गाव');
-          const gramQuestionId = getQuestionIdByText('सध्याचा ग्रामपंचायत') || getQuestionIdByText('ग्रामपंचायत');
-          const talathiQuestionId = getQuestionIdByText('सध्याचा तलाठी कार्यालय') || getQuestionIdByText('तलाठी कार्यालय');
-
-          if (villageQuestionId) delete newAnswers[villageQuestionId];
-          if (gramQuestionId) delete newAnswers[gramQuestionId];
-          if (talathiQuestionId) delete newAnswers[talathiQuestionId];
-
-          // Load dependent data
-          loadDependentData(value);
-        }
-      }
-
-      return newAnswers;
-    });
-    // Force re-render to show/hide conditional questions
-    // The shouldShowQuestion function will be called during render
-  };
-
-  const handleFileUpload = async (questionId: number | string, file: File) => {
-    // Create immediate preview URL for instant feedback
-    const previewUrl = URL.createObjectURL(file);
-
-    // Set preview immediately so user can see the image
-    handleAnswerChange(questionId, previewUrl);
-
-    // Now upload the file in the background
-    setLoading(true);
-    try {
-      const uploadedUrl = await uploadImage(file);
-      if (uploadedUrl) {
-        // Replace preview URL with actual uploaded URL
-        handleAnswerChange(questionId, uploadedUrl);
-        // Clean up the preview URL to free memory
-        URL.revokeObjectURL(previewUrl);
-      } else {
-        setError('प्रतिमा अपलोड करण्यात अडचण आली. कृपया पुन्हा प्रयत्न करा.');
-        // Keep preview URL if upload fails
-      }
-    } catch (err: any) {
-      setError('प्रतिमा अपलोड करण्यात अडचण: ' + err.message);
-      // Keep preview URL if upload fails
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Normalize string for comparison (trim whitespace, lowercase)
-  const normalizeValue = (value: string): string => {
-    return value.trim();
-  };
-
-  // Expand multi-answer values (handle arrays and pipe-separated values)
-  const expandMultiAnswerValues = (answer: any): string[] => {
-    if (!answer) return [];
-
-    // Handle arrays (multi-select)
-    if (Array.isArray(answer)) {
-      return answer.map(v => normalizeValue(String(v))).filter(v => v.length > 0);
-    }
-
-    const answerStr = String(answer).trim();
-    if (!answerStr) return [];
-
-    // Handle pipe-separated values (||)
-    const parts = answerStr.split('||');
-    const values: string[] = [];
-
-    for (const part of parts) {
-      const segment = part.trim();
-      if (!segment) continue;
-
-      // Handle format like "key: value" - extract value part
-      const clean = segment.includes(':')
-        ? segment.substring(segment.indexOf(':') + 1).trim()
-        : segment;
-
-      if (clean) {
-        values.push(normalizeValue(clean));
-      }
-    }
-
-    // If no values extracted, use the original answer
-    if (values.length === 0) {
-      values.push(normalizeValue(answerStr));
-    }
-
-    return values;
-  };
-
-  const shouldShowQuestion = (q: Question): boolean => {
-    // Check rendering condition - if empty, 'No', 'false', or '0', show the question
-    const rawCondition = (q.rendering_condition || '').toString().trim().toLowerCase();
-    if (!rawCondition || rawCondition === 'no' || rawCondition === 'false' || rawCondition === '0') {
-      return true;
-    }
-
-    // Must have rendering_question and rendering_value for conditional rendering
-    const targetLabel = (q.rendering_question || '').toString().trim();
-    const expectedRaw = (q.rendering_value || '').toString().trim();
-
-    if (!targetLabel || !expectedRaw) {
-      return true; // Show if condition data is incomplete
-    }
-
-    // Exclude current question ID when searching for rendering question to avoid self-reference
-    const currentQid = q.id;
-
-    // Try to find the rendering question by ID first, then by question text
-    const renderingQuestion = allQuestions.find((x) => {
-      // Skip self-reference
-      if (x.id === currentQid) return false;
-
-      // Match by ID if rendering_question is a number
-      const renderingQId = parseInt(targetLabel);
-      if (renderingQId > 0) {
-        const xIdNum = getQuestionIdNumber(x.id);
-        if (xIdNum === renderingQId) {
-          return true;
-        }
-      }
-
-      // Match by exact question text
-      if (x.question?.trim() === targetLabel) {
-        return true;
-      }
-
-      return false;
-    });
-
-    if (!renderingQuestion) {
-      // Debug: log when rendering question is not found
-      console.warn('Rendering question not found:', targetLabel, 'for question:', q.id);
-      return false;
-    }
-
-    const renderingAnswer = answers[renderingQuestion.id];
-    if (!renderingAnswer) return false;
-
-    // Expand actual answer values (handle arrays, pipe-separated, etc.)
-    const actualValues = expandMultiAnswerValues(renderingAnswer);
-    if (actualValues.length === 0) return false;
-
-    // Split expected values by comma or pipe, normalize them
-    const expectedValues = expectedRaw
-      .split(/[|,]/) // Split by pipe or comma
-      .map(e => normalizeValue(e))
-      .filter(e => e.length > 0);
-
-    if (expectedValues.length === 0) return false;
-
-    // Check if any expected value matches any actual value
-    return expectedValues.some(expected =>
-      actualValues.some(actual => actual === expected)
-    );
-  };
-
-  const renderQuestion = (q: Question) => {
-    if (!shouldShowQuestion(q)) return null;
-
-    const currentAnswer = answers[q.id];
-    const label = q.question?.trim() || '';
-
-    // Check if this is an address field
-    const isDistrict = label === 'जि.' || label === 'सध्याचा जि.';
-    const isTaluka = label === 'ता.' || label === 'सध्याचा ता.' || label.includes('तालुका');
-    const isVillage = label === 'गाव' || label === 'सध्याचा गाव' || label.includes('गाव / शहर');
-    const isGram = label.includes('ग्रामपंचायत');
-    const isTalathi = label.includes('तलाठी कार्यालय');
-    const isPhc = label.includes('PHC') || label.includes('प्राथमिक आरोग्य केंद्र');
-    
-    // Check if this is a disability type question (matching field officer app logic)
-    const isDisabilityTypeQuestion = 
-      (label.includes('दिव्यांगता प्रकार') || label.toLowerCase().includes('disability type')) &&
-      (q.title?.includes('दिव्यांगता') || q.section_id);
-
-    switch (q.question_type.toLowerCase()) {
-      case 'mcq':
-        // For address fields, use dynamic options
-        let options: string[] = [];
-        if (isTaluka) {
-          // Use loaded talukas if available, otherwise fall back to question options
-          options = talukas.length > 0 ? talukas : (q.options && q.options !== 'NULL' && q.options !== 'null' ? q.options.split(',').map((o) => o.trim()).filter(o => o && o !== '--Select--') : []);
-        } else if (isVillage && villages.length > 0) {
-          options = villages;
-        } else if (isGram && grams.length > 0) {
-          options = grams;
-        } else if (isTalathi && talathi.length > 0) {
-          options = talathi;
-        } else if (isPhc && phc.length > 0) {
-          options = phc;
-        } else if (isDisabilityTypeQuestion && disabilityTypes.length > 0) {
-          // Use loaded disability types (matching field officer app logic)
-          options = disabilityTypes;
-        } else {
-          // Handle null, undefined, or "NULL" string
-          if (q.options && q.options !== 'NULL' && q.options !== 'null') {
-            options = q.options.split(',').map((o) => o.trim()).filter(o => o && o !== '--Select--');
-          } else {
-            options = [];
-          }
-        }
-
-        const isMultiSelect = q.multi_select === 1 || q.multi_select === '1';
-
-        if (isMultiSelect) {
-          const selectedValues = Array.isArray(currentAnswer) ? currentAnswer : [];
-          return (
-            <div key={q.id} className="mb-3 mb-md-4">
-              <label className="form-label fw-semibold mb-2 d-block">{q.question}</label>
-              <div className="ps-2">
-                {options.map((opt, idx) => (
-                  <div key={idx} className="form-check mb-2 py-2" style={{ minHeight: '44px' }}>
-                    <input
-                      className="form-check-input"
-                      type="checkbox"
-                      checked={selectedValues.includes(opt)}
-                      onChange={(e) => {
-                        const newValues = e.target.checked
-                          ? [...selectedValues, opt]
-                          : selectedValues.filter((v) => v !== opt);
-                        handleAnswerChange(q.id, newValues);
-                      }}
-                      style={{ width: '1.25rem', height: '1.25rem', marginTop: '0.25rem' }}
-                    />
-                    <label className="form-check-label ms-2" style={{ fontSize: '0.95rem', cursor: 'pointer' }}>
-                      {opt}
-                    </label>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        } else {
-          // Show loading state for disability type if options are being loaded
-          const showLoading = Boolean(isDisabilityTypeQuestion && loadingDisabilityTypes && options.length === 0);
-          
-          return (
-            <div key={q.id} className="mb-3 mb-md-4">
-              <label className="form-label fw-semibold mb-2 d-block">{q.question}</label>
-              <select
-                className="form-select form-select-lg"
-                value={currentAnswer || ''}
-                onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                required
-                disabled={showLoading}
-                style={{ fontSize: '1rem', minHeight: '48px' }}
-              >
-                <option value="">
-                  {showLoading ? 'लोड होत आहे...' : '-- निवडा --'}
-                </option>
-                {options.map((opt, idx) => (
-                  <option key={idx} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-              {isDisabilityTypeQuestion && loadingDisabilityTypes && options.length === 0 && (
-                <small className="form-text text-muted d-block mt-1">दिव्यांगता प्रकार लोड होत आहे...</small>
-              )}
-            </div>
-          );
-        }
-
-      case 'short_answer':
-      case 'text':
-        // Check if this is a mobile number field
-        const isMobileField = q.question?.includes('मोबाईल') || q.question?.includes('Mobile');
-        // Check if this is an email field
-        const isEmailField = q.question?.includes('ईमेल') || q.question?.includes('Email') || q.question?.includes('email');
-        // Check if this is the age field (should be read-only)
-        const isAgeField = q.question?.trim() === 'वय';
-
-        // Validation check for UI highlighting
-        const isInvalid = error && !currentAnswer && !isAgeField;
-
-        // District field: always default to "Ahilyanagar"
-        if (isDistrict) {
-          const districtValue = currentAnswer || 'Ahilyanagar';
-
-          return (
-            <div key={q.id} className="mb-3 mb-md-4">
-              <label className="form-label fw-semibold mb-2 d-block">{q.question}</label>
-              <input
-                type="text"
-                className={`form-control form-control-lg ${isInvalid ? 'is-invalid' : ''}`}
-                value={districtValue}
-                onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                required
-                style={{ fontSize: '1rem', minHeight: '48px' }}
-              />
-            </div>
-          );
-        }
-
-        // Gram Panchayat should always be a dropdown, even if question_type is 'text'
-        if (isGram && grams.length > 0) {
-          return (
-            <div key={q.id} className="mb-3 mb-md-4">
-              <label className="form-label fw-semibold mb-2 d-block">{q.question}</label>
-              <select
-                className={`form-select form-select-lg ${isInvalid ? 'is-invalid' : ''}`}
-                value={currentAnswer || ''}
-                onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                required
-                style={{ fontSize: '1rem', minHeight: '48px' }}
-              >
-                <option value="">-- निवडा --</option>
-                {grams.map((opt, idx) => (
-                  <option key={idx} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            </div>
-          );
-        }
-
-        return (
-          <div key={q.id} className="mb-3 mb-md-4">
-            <label className="form-label fw-semibold mb-2 d-block">{q.question}</label>
-            <input
-              type={isEmailField ? 'email' : 'text'}
-              className={`form-control form-control-lg ${isInvalid ? 'is-invalid' : ''}`}
-              value={currentAnswer || ''}
-              onChange={(e) => {
-                let value = e.target.value;
-
-                // Mobile number validation: only digits, max 10
-                if (isMobileField) {
-                  value = value.replace(/\D/g, ''); // Remove non-digits
-                  if (value.length > 10) {
-                    value = value.slice(0, 10);
-                  }
-                }
-
-                handleAnswerChange(q.id, value);
-              }}
-              onBlur={(e) => {
-                // Validate on blur
-                const value = e.target.value.trim();
-
-                if (isMobileField && value && value.length !== 10) {
-                  setError('कृपया 10 अंकी मोबाईल नंबर प्रविष्ट करा');
-                } else if (isEmailField && value) {
-                  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                  if (!emailRegex.test(value)) {
-                    setError('कृपया वैध ईमेल आयडी प्रविष्ट करा');
-                  } else {
-                    setError('');
-                  }
-                } else if (isMobileField && value && value.length === 10) {
-                  setError(''); // Clear error if mobile is valid
-                }
-              }}
-              readOnly={isAgeField}
-              required={!isAgeField}
-              maxLength={isMobileField ? 10 : (q.max_length || undefined)}
-              style={{ fontSize: '1rem', minHeight: '48px', backgroundColor: isAgeField ? '#e9ecef' : undefined }}
-              placeholder={isMobileField ? '10 अंकी मोबाईल नंबर' : isEmailField ? 'example@email.com' : undefined}
-            />
-            {isAgeField && currentAnswer && (
-              <small className="form-text text-muted d-block mt-1">वय आपोआप मोजले गेले आहे</small>
-            )}
-          </div>
-        );
-
-      case 'long_answer':
-        const isLongInvalid = error && !currentAnswer;
-        return (
-          <div key={q.id} className="mb-3 mb-md-4">
-            <label className="form-label fw-semibold mb-2 d-block">{q.question}</label>
-            <textarea
-              className={`form-control ${isLongInvalid ? 'is-invalid' : ''}`}
-              rows={4}
-              value={currentAnswer || ''}
-              onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-              required
-              maxLength={q.max_length || undefined}
-              style={{ fontSize: '1rem', minHeight: '100px' }}
-            />
-          </div>
-        );
-
-      case 'date':
-        const isDateInvalid = error && !currentAnswer;
-        return (
-          <div key={q.id} className="mb-3 mb-md-4">
-            <label className="form-label fw-semibold mb-2 d-block">{q.question}</label>
-            <input
-              type="date"
-              className={`form-control form-control-lg ${isDateInvalid ? 'is-invalid' : ''}`}
-              value={currentAnswer || ''}
-              onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-              required
-              style={{ fontSize: '1rem', minHeight: '48px' }}
-            />
-          </div>
-        );
-
-      case 'number':
-        const isNumberInvalid = error && !currentAnswer;
-        return (
-          <div key={q.id} className="mb-3 mb-md-4">
-            <label className="form-label fw-semibold mb-2 d-block">{q.question}</label>
-            <input
-              type="number"
-              className={`form-control form-control-lg ${isNumberInvalid ? 'is-invalid' : ''}`}
-              value={currentAnswer || ''}
-              onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-              required
-              style={{ fontSize: '1rem', minHeight: '48px' }}
-            />
-          </div>
-        );
-
-      case 'upload':
-        const isUploadInvalid = error && !currentAnswer;
-        return (
-          <div key={q.id} className="mb-3 mb-md-4">
-            <label className="form-label fw-semibold mb-2 d-block">{q.question}</label>
-            <input
-              type="file"
-              className={`form-control form-control-lg ${isUploadInvalid ? 'is-invalid' : ''}`}
-              accept="image/*"
-              required
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  handleFileUpload(q.id, file);
-                }
-              }}
-              disabled={loading}
-              style={{ fontSize: '1rem', minHeight: '48px' }}
-            />
-            {currentAnswer && (
-              <div className="mt-3">
-                <img
-                  src={currentAnswer.startsWith('blob:') ? currentAnswer : getAbsoluteImageUrl(currentAnswer)}
-                  alt="Uploaded"
-                  className="img-fluid rounded shadow-sm"
-                  style={{ maxHeight: '200px', maxWidth: '100%', border: '2px solid #dee2e6' }}
-                  onError={(e) => {
-                    // If image fails to load, try to use the answer as-is (might be a blob URL)
-                    const target = e.target as HTMLImageElement;
-                    if (!target.src.startsWith('blob:')) {
-                      target.src = currentAnswer;
-                    }
-                  }}
-                />
-                <p className="text-success small mt-2 mb-0">
-                  {currentAnswer.startsWith('blob:') ? '⏳ अपलोड होत आहे...' : '✓ प्रतिमा अपलोड झाली'}
-                </p>
-              </div>
-            )}
-          </div>
-        );
-
-      default:
-        const isDefaultInvalid = error && !currentAnswer;
-        return (
-          <div key={q.id} className="mb-3 mb-md-4">
-            <label className="form-label fw-semibold mb-2 d-block">{q.question}</label>
-            <input
-              type="text"
-              className={`form-control form-control-lg ${isDefaultInvalid ? 'is-invalid' : ''}`}
-              value={currentAnswer || ''}
-              onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-              style={{ fontSize: '1rem', minHeight: '48px' }}
-            />
-          </div>
-        );
-    }
-  };
-
-  if (loading && allQuestions.length === 0) {
-    return (
-      <div className="container-fluid px-3 py-4" style={{ minHeight: '100vh' }}>
-        <div className="text-center py-5">
-          <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem' }}>
-            <span className="visually-hidden">लोड होत आहे...</span>
-          </div>
-          <p className="mt-3 text-muted">लोड होत आहे...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (currentStep === 'complete') {
-    return (
-      <div className="container-fluid px-3 py-4" style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0D47A1 0%, #1976D2 50%, #42A5F5 100%)' }}>
-        <div className="row justify-content-center align-items-center" style={{ minHeight: '100vh' }}>
-          <div className="col-12 col-md-8 col-lg-6">
-            <div className="card shadow-lg border-0" style={{ borderRadius: '20px', overflow: 'hidden' }}>
-              <div className="card-body text-center p-5 p-md-6" style={{ background: 'linear-gradient(to bottom, #ffffff 0%, #f8f9fa 100%)' }}>
-                {/* Animated Success Icon */}
-                <div className="mb-4" style={{ animation: 'scaleIn 0.5s ease-out' }}>
-                  <div
-                    className="rounded-circle d-inline-flex align-items-center justify-content-center shadow-lg"
-                    style={{
-                      width: '120px',
-                      height: '120px',
-                      background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
-                      position: 'relative',
-                      animation: 'bounceIn 0.8s ease-out'
-                    }}
-                  >
-                    <svg
-                      width="60"
-                      height="60"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="white"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      style={{ animation: 'checkmark 0.5s ease-out 0.3s both' }}
-                    >
-                      <path d="M20 6L9 17l-5-5" />
-                    </svg>
-                    {/* Ripple effect */}
-                    <div
-                      className="position-absolute rounded-circle"
-                      style={{
-                        width: '120px',
-                        height: '120px',
-                        background: 'rgba(40, 167, 69, 0.2)',
-                        animation: 'ripple 1.5s ease-out infinite',
-                        top: '50%',
-                        left: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        zIndex: -1
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Success Message */}
-                <h2
-                  className="mb-3 fw-bold"
-                  style={{
-                    color: '#28a745',
-                    fontSize: '2rem',
-                    animation: 'fadeInUpSuccess 0.6s ease-out 0.2s both'
-                  }}
-                >
-                  फॉर्म सबमिट झाला!
-                </h2>
-
-                <p
-                  className="lead mb-3"
-                  style={{
-                    color: '#495057',
-                    fontSize: '1.15rem',
-                    animation: 'fadeInUpSuccess 0.6s ease-out 0.4s both'
-                  }}
-                >
-                  आपला फॉर्म यशस्वीरित्या सबमिट झाला आहे.
-                </p>
-
-                <p
-                  className="mb-4"
-                  style={{
-                    color: '#6c757d',
-                    fontSize: '1rem',
-                    fontWeight: '500',
-                    animation: 'fadeInUpSuccess 0.6s ease-out 0.6s both'
-                  }}
-                >
-                  धन्यवाद!
-                </p>
-
-                {/* Decorative elements */}
-                <div className="mt-4 pt-4 border-top">
-                  <div className="d-flex justify-content-center gap-2">
-                    <div
-                      className="rounded-circle"
-                      style={{
-                        width: '8px',
-                        height: '8px',
-                        background: '#28a745',
-                        animation: 'pulse 1.5s ease-in-out infinite 0.8s'
-                      }}
-                    />
-                    <div
-                      className="rounded-circle"
-                      style={{
-                        width: '8px',
-                        height: '8px',
-                        background: '#28a745',
-                        animation: 'pulse 1.5s ease-in-out infinite 1s'
-                      }}
-                    />
-                    <div
-                      className="rounded-circle"
-                      style={{
-                        width: '8px',
-                        height: '8px',
-                        background: '#28a745',
-                        animation: 'pulse 1.5s ease-in-out infinite 1.2s'
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="container-fluid px-3 py-3 py-md-4" style={{ minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
-      <div className="row justify-content-center">
-        <div className="col-12 col-md-10 col-lg-8">
-          <div className="card shadow-sm border-0">
-            <div className="card-header bg-primary text-white py-3">
-              <h3 className="mb-0 text-center fw-bold" style={{ fontSize: '1.25rem' }}>दिव्यांग नोंदणी फॉर्म</h3>
+    <div className="min-h-screen bg-[#FDFDFD] text-slate-900 overflow-x-hidden selection:bg-blue-500 selection:text-white">
+      {/* Premium Ambient Background */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-blue-100/40 rounded-full blur-[160px] animate-pulse"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-100/40 rounded-full blur-[140px] animate-pulse" style={{ animationDelay: '1s' }}></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03] mix-blend-overlay"></div>
+      </div>
+
+      {/* Navigation */}
+      <nav className={`fixed top-0 w-full z-50 transition-all duration-500 px-6 ${scrolled ? 'py-4' : 'py-8'}`}>
+        <div className={`max-w-7xl mx-auto flex justify-between items-center transition-all duration-500 ${scrolled
+          ? 'bg-white/80 backdrop-blur-2xl border border-white/40 rounded-[32px] px-8 py-3 shadow-[0_20px_50px_rgba(0,0,0,0.05)]'
+          : 'bg-transparent px-4 py-2'
+          }`}>
+          <div className="flex items-center gap-4 group cursor-pointer">
+            <div className="bg-white p-2 rounded-2xl shadow-lg transition-transform group-hover:scale-110 group-hover:rotate-3">
+              <img src={LOGO_URL} alt="DDRC" className="w-8 h-8 object-contain" />
             </div>
-            <div className="card-body p-3 p-md-4">
-              {/* Progress indicator */}
-              <div className="mb-4">
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                  <small className="text-muted fw-semibold">प्रगती</small>
-                  <small className="text-muted fw-semibold">
-                    {['upload-front', 'upload-back', 'aadhar-info', 'personal-info', 'address'].indexOf(currentStep) + 1} / 5
-                  </small>
-                </div>
-                <div className="progress" style={{ height: '25px', borderRadius: '12px' }}>
-                  <div
-                    className="progress-bar progress-bar-striped progress-bar-animated bg-primary"
-                    role="progressbar"
-                    style={{
-                      width: `${((['upload-front', 'upload-back', 'aadhar-info', 'personal-info', 'address'].indexOf(currentStep) + 1) / 5) * 100}%`,
-                    }}
-                  >
-                    <span className="small fw-semibold">
-                      {['upload-front', 'upload-back', 'aadhar-info', 'personal-info', 'address'].indexOf(currentStep) + 1} / 5
-                    </span>
-                  </div>
+            <div>
+              <h1 className="text-blue-950 font-black text-2xl tracking-tighter leading-none">DDRC</h1>
+              <span className="text-[10px] font-bold text-blue-600 uppercase tracking-[0.3em]">Ahilyanagar</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 md:gap-8">
+            <button
+              onClick={() => setLang(l => l === 'mr' ? 'en' : 'mr')}
+              className="text-xs font-black text-blue-900/40 hover:text-blue-600 transition-all uppercase tracking-[0.2em] flex items-center gap-3 group"
+            >
+              <span className="w-8 h-[1px] bg-blue-200 transition-all group-hover:w-12 group-hover:bg-blue-500"></span>
+              {lang === 'mr' ? 'English' : 'मराठी'}
+            </button>
+            <Link href="/login" className="hidden sm:block px-8 py-3.5 rounded-2xl bg-slate-950 text-white text-[11px] font-black uppercase tracking-[0.2em] hover:bg-blue-900 transition-all shadow-[0_15px_30px_rgba(0,0,0,0.15)] active:scale-95 border border-white/10">
+              {lang === 'mr' ? 'लॉगिन' : 'Staff Login'}
+            </Link>
+          </div>
+        </div>
+      </nav>
+
+      {/* Hero Section */}
+      <section className="relative pt-56 pb-24 px-6 flex flex-col items-center justify-center text-center">
+        <div className="relative z-10 max-w-5xl">
+          <div className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full bg-blue-50/50 backdrop-blur-md border border-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-[0.4em] mb-12 mx-auto shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-1000">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
+            </span>
+            Official Survey 2026
+          </div>
+
+          <h2 className="text-6xl md:text-9xl font-black text-slate-950 mb-10 leading-[0.85] tracking-tightest filter drop-shadow-sm animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200">
+            {t.hero.title}
+          </h2>
+
+          <p className="text-xl md:text-2xl text-slate-600 font-semibold max-w-3xl mx-auto mb-16 leading-relaxed opacity-70 animate-in fade-in slide-in-from-bottom-12 duration-1000 delay-400">
+            {t.hero.subtitle}
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-6 animate-in fade-in slide-in-from-bottom-16 duration-1000 delay-500">
+            <Link href="/public/survey" className="group relative px-12 py-6 rounded-[32px] bg-blue-600 text-white text-2xl font-black transition-all hover:bg-blue-700 hover:shadow-[0_25px_50px_rgba(37,99,235,0.3)] hover:-translate-y-2 active:scale-95 overflow-hidden">
+              <span className="relative z-10 flex items-center gap-4">
+                {t.hero.cta}
+                <svg className="w-7 h-7 transition-transform duration-500 group-hover:translate-x-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+              </span>
+              <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+            </Link>
+          </div>
+        </div>
+
+        {/* Abstract Background Elements */}
+        <div className="absolute top-1/2 left-0 -translate-y-1/2 -translate-x-1/4 w-[600px] h-[600px] bg-gradient-to-br from-blue-400/10 to-transparent rounded-full blur-[100px] opacity-40"></div>
+        <div className="absolute top-1/3 right-0 -translate-y-1/2 translate-x-1/4 w-[700px] h-[700px] bg-gradient-to-bl from-blue-400/10 to-transparent rounded-full blur-[120px] opacity-40"></div>
+      </section>
+
+      {/* Structured Content Grid */}
+      <section className="max-w-7xl mx-auto px-6 py-32">
+        <div className="grid lg:grid-cols-12 gap-10 items-stretch">
+
+          {/* About Section - Large Glass Card */}
+          <div className="lg:col-span-12 p-1 md:p-12 rounded-[56px] bg-white border border-slate-100 shadow-[0_30px_70px_rgba(0,0,0,0.03)] group overflow-hidden relative">
+            <div className="absolute top-0 right-0 w-[40%] h-full bg-blue-50/50 -skew-x-12 translate-x-1/4 transition-transform duration-1000 group-hover:translate-x-1/3"></div>
+
+            <div className="relative z-10 grid md:grid-cols-2 gap-16 items-center p-8 md:p-0">
+              <div>
+                <div className="text-blue-600 font-black text-xs uppercase tracking-[0.5em] mb-6">Introduction</div>
+                <h3 className="text-4xl md:text-6xl font-black text-slate-950 mb-8 leading-[0.9] tracking-tighter">{t.about.title}</h3>
+                <p className="text-xl text-slate-500 font-bold leading-relaxed opacity-80 mb-10">
+                  {t.about.description}
+                </p>
+                <div className="flex gap-4">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="w-2.5 h-2.5 rounded-full bg-blue-600/20"></div>
+                  ))}
                 </div>
               </div>
-
-              {error && (
-                <div className="alert alert-danger alert-dismissible fade show" role="alert">
-                  <strong>त्रुटी:</strong> {error}
-                  <button type="button" className="btn-close" onClick={() => setError('')} aria-label="Close"></button>
-                </div>
-              )}
-
-              {/* Step 1: Upload Front */}
-              {currentStep === 'upload-front' && (
-                <div>
-                  <h4 className="mb-3 mb-md-4 text-center text-md-start" style={{ fontSize: '1.1rem' }}>
-                    चरण 1: आधार कार्डची पुढील बाजू अपलोड करा
-                  </h4>
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold mb-2">पुढील बाजू (Front) *</label>
-                    <input
-                      type="file"
-                      className="form-control form-control-lg"
-                      accept="image/*"
-                      onChange={handleFrontImageUpload}
-                      style={{ fontSize: '0.95rem' }}
-                    />
-                    {frontImageUrl && (
-                      <div className="mt-3 text-center">
-                        <img
-                          src={frontImageUrl}
-                          alt="Front"
-                          className="img-fluid rounded shadow-sm"
-                          style={{ maxHeight: '250px', maxWidth: '100%', border: '2px solid #dee2e6' }}
-                        />
-                        <p className="text-success small mt-2 mb-0">
-                          ✓ प्रतिमा अपलोड झाली
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Step 2: Upload Back */}
-              {currentStep === 'upload-back' && (
-                <div>
-                  <h4 className="mb-3 mb-md-4 text-center text-md-start" style={{ fontSize: '1.1rem' }}>
-                    चरण 2: आधार कार्डची मागील बाजू अपलोड करा
-                  </h4>
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold mb-2">मागील बाजू (Back) *</label>
-                    <input
-                      type="file"
-                      className="form-control form-control-lg"
-                      accept="image/*"
-                      onChange={handleBackImageUpload}
-                      style={{ fontSize: '0.95rem' }}
-                    />
-                    {backImageUrl && (
-                      <div className="mt-3 text-center">
-                        <img
-                          src={backImageUrl}
-                          alt="Back"
-                          className="img-fluid rounded shadow-sm"
-                          style={{ maxHeight: '250px', maxWidth: '100%', border: '2px solid #dee2e6' }}
-                        />
-                        <p className="text-success small mt-2 mb-0">
-                          ✓ प्रतिमा अपलोड झाली
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Step 3: Aadhar Info */}
-              {currentStep === 'aadhar-info' && (
-                <div>
-                  <h4 className="mb-3 mb-md-4 text-center text-md-start" style={{ fontSize: '1.1rem' }}>
-                    चरण 3: आधार कार्ड माहिती
-                  </h4>
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold mb-2">दिव्यांगांचे नाव *</label>
-                    <input
-                      type="text"
-                      className="form-control form-control-lg"
-                      value={divyangName}
-                      onChange={(e) => setDivyangName(e.target.value)}
-                      placeholder="दिव्यांगांचे पूर्ण नाव प्रविष्ट करा"
-                      required
-                      style={{ fontSize: '1rem' }}
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold mb-2">आधार क्रमांक *</label>
-                    <div className="d-flex gap-2">
-                      <input
-                        type="text"
-                        className="form-control form-control-lg"
-                        value={aadharNo}
-                        onChange={(e) => {
-                          // Format Aadhaar number with hyphens as user types
-                          let value = e.target.value;
-                          // Remove all non-digits
-                          const digits = value.replace(/\D/g, '');
-
-                          // Limit to 12 digits only (not 14)
-                          const limitedDigits = digits.slice(0, 12);
-
-                          // Format with hyphens: XXXX-XXXX-XXXX
-                          let formatted = '';
-                          if (limitedDigits.length > 0) {
-                            formatted = limitedDigits.slice(0, 4);
-                            if (limitedDigits.length > 4) {
-                              formatted += '-' + limitedDigits.slice(4, 8);
-                            }
-                            if (limitedDigits.length > 8) {
-                              formatted += '-' + limitedDigits.slice(8, 12);
-                            }
-                          }
-
-                          setAadharNo(formatted);
-
-                          // Check for existing survey when 12 digits are entered
-                          if (limitedDigits.length === 12) {
-                            checkExistingSurvey(limitedDigits);
-                          } else {
-                            setExistingSurveyData(null);
-                          }
-                        }}
-                        onKeyUp={(e) => {
-                          // Ensure formatting is applied on keyup as well (for better UX)
-                          const digits = aadharNo.replace(/\D/g, '');
-                          if (digits.length === 12) {
-                            checkExistingSurvey(digits);
-                          }
-                        }}
-                        placeholder="1234-5678-9012"
-                        maxLength={14}
-                        required
-                        style={{ fontSize: '1rem' }}
-                      />
-                      {checkingExisting && (
-                        <button className="btn btn-outline-secondary" type="button" disabled>
-                          <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                          तपासत आहे...
-                        </button>
-                      )}
-                    </div>
-                    <small className="form-text text-muted d-block mt-1">12 अंकी आधार क्रमांक प्रविष्ट करा (स्वयंचलित स्वरूप: 1234-5678-9012)</small>
-                    {existingSurveyData && (
-                      <div className="alert alert-warning mt-2" role="alert">
-                        <strong>⚠️ सर्वेक्षण आधीच अस्तित्वात आहे!</strong>
-                        <p className="mb-2 mt-2">
-                          या आधार क्रमांकासाठी सर्वेक्षण आधीच भरले गेले आहे.
-                          {existingSurveyData.survey && (
-                            <span> उत्तरांची संख्या: {existingSurveyData.survey.answer_count}</span>
-                          )}
-                        </p>
-                        <div className="d-flex gap-2">
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-primary"
-                            onClick={() => {
-                              // Prefill form with existing data
-                              if (existingSurveyData.holder_name) {
-                                setDivyangName(existingSurveyData.holder_name);
-                              }
-                              if (existingSurveyData.answers && Object.keys(existingSurveyData.answers).length > 0) {
-                                setAnswers((prev) => ({ ...prev, ...existingSurveyData.answers }));
-                              }
-                              if (existingSurveyData.front_image) {
-                                setFrontImageUrl(existingSurveyData.front_image);
-                              }
-                              if (existingSurveyData.back_image) {
-                                setBackImageUrl(existingSurveyData.back_image);
-                              }
-                              if (existingSurveyData.aadhar_id) {
-                                setAadharId(existingSurveyData.aadhar_id);
-                              }
-                              setExistingSurveyData(null);
-                            }}
-                          >
-                            माहिती पूर्व-भरणा करा
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-secondary"
-                            onClick={() => setExistingSurveyData(null)}
-                          >
-                            नवीन सर्वेक्षण सुरू करा
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {currentStep === 'personal-info' && (
-                <div>
-                  <h4 className="mb-3 mb-md-4 text-center text-md-start" style={{ fontSize: '1.1rem' }}>
-                    चरण 4: वैयक्तिक माहिती
-                  </h4>
-                  <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-                    {questionSections.map((section, sectionIndex) => {
-                      // Filter visible questions in this section
-                      const visibleQuestions = section.questions.filter(q => shouldShowQuestion(q));
-                      
-                      if (visibleQuestions.length === 0) return null;
-
-                      return (
-                        <div key={sectionIndex} className="mb-4">
-                          {/* Section Header */}
-                          <div className="mb-3 pb-2 border-bottom">
-                            <h5 className="fw-bold text-primary mb-0" style={{ fontSize: '1.05rem' }}>
-                              {section.title}
-                            </h5>
-                          </div>
-                          
-                          {/* Section Questions */}
-                          {visibleQuestions.map((q) => renderQuestion(q))}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Navigation buttons */}
-              <div className="mt-4 pt-3 border-top">
-                <div className="d-flex flex-column flex-sm-row gap-2 justify-content-between">
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary btn-lg flex-fill flex-sm-grow-0"
-                    onClick={handlePrev}
-                    disabled={currentStep === 'upload-front' || loading || submitting}
-                    style={{ minHeight: '48px', fontSize: '1rem' }}
-                  >
-                    ← मागे
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-lg flex-fill flex-sm-grow-0"
-                    onClick={handleNext}
-                    disabled={loading || submitting}
-                    style={{ minHeight: '48px', fontSize: '1rem' }}
-                  >
-                    {loading || submitting ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm me-2" />
-                        प्रक्रिया होत आहे...
-                      </>
-                    ) : currentStep === 'personal-info' ? (
-                      <>
-                        ✓ सबमिट करा
-                      </>
-                    ) : (
-                      <>
-                        पुढे →
-                      </>
-                    )}
-                  </button>
+              <div className="relative rounded-[40px] overflow-hidden shadow-2xl">
+                <img src={SUPPORT_IMG} alt="Empowerment" className="w-full h-[450px] object-cover transition-transform duration-1000 group-hover:scale-105" />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 to-transparent"></div>
+                <div className="absolute bottom-6 left-6 right-6 p-6 rounded-3xl bg-white/20 backdrop-blur-xl border border-white/30 text-white font-bold text-center italic">
+                  "Sutainable Empowerment Through Integration"
                 </div>
               </div>
             </div>
           </div>
+
+          {/* Benefits Section */}
+          <div className="lg:col-span-7 p-12 rounded-[56px] bg-slate-950 text-white shadow-2xl relative overflow-hidden flex flex-col justify-center">
+            <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 blur-[90px] -mr-40 -mt-40"></div>
+            <div className="absolute bottom-0 left-0 w-60 h-60 bg-blue-500/10 blur-[80px] -ml-30 -mb-30"></div>
+
+            <h3 className="text-4xl font-black mb-12 relative z-10 tracking-tight">{t.benefits.title}</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
+              {t.benefits.items.map((item, i) => (
+                <div key={i} className="group p-5 rounded-[24px] bg-white/5 border border-white/10 transition-all hover:bg-white hover:text-slate-950 cursor-default flex items-start gap-4">
+                  <span className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-[10px] font-black group-hover:bg-slate-950 group-hover:text-white">✓</span>
+                  <span className="text-sm font-black uppercase tracking-wide leading-tight">{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Documents Section */}
+          <div className="lg:col-span-5 p-12 rounded-[56px] bg-blue-50 border border-blue-100 flex flex-col justify-center shadow-lg relative overflow-hidden">
+            <div className="absolute top-6 right-8 opacity-10 rotate-12 scale-150">
+              <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm1 7V3.5L18.5 9H15z" /></svg>
+            </div>
+
+            <div className="flex justify-between items-center mb-10 relative z-10">
+              <h3 className="text-3xl font-black text-blue-950 tracking-tight">{t.documents.title}</h3>
+              <span className="bg-blue-600 text-white px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-[0.2em] shadow-lg">Verify</span>
+            </div>
+
+            <div className="space-y-3 relative z-10">
+              {t.documents.list.map((doc, i) => (
+                <div key={i} className="group flex items-center justify-between p-4 rounded-2xl bg-white/60 backdrop-blur-md border border-blue-200/50 shadow-sm transition-all hover:bg-white hover:-translate-x-2">
+                  <span className="font-bold text-blue-950 text-sm">{doc}</span>
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100">
+                    <span className="text-blue-600 text-xs">📎</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
+
+      {/* Progress/Workflow Visualized */}
+      <section className="py-40 px-6 relative">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-24">
+            <h3 className="text-5xl md:text-7xl font-black text-slate-950 tracking-tightest mb-6">{t.process.title}</h3>
+            <div className="w-24 h-2.5 bg-blue-600 mx-auto rounded-full shadow-lg"></div>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-10">
+            {t.process.steps.map((step, i) => (
+              <div key={i} className="relative group p-1 md:p-2">
+                <div className="relative p-12 rounded-[48px] bg-white border border-slate-100 shadow-[0_20px_60px_rgba(0,0,0,0.02)] transition-all duration-700 hover:shadow-[0_40px_100px_rgba(37,99,235,0.1)] hover:-translate-y-4">
+                  <div className="text-[120px] font-black text-blue-50 absolute -top-10 -right-4 opacity-50 transition-all duration-700 group-hover:text-blue-100 group-hover:-translate-y-4">0{i + 1}</div>
+
+                  <div className="relative z-10">
+                    <div className="w-24 h-24 rounded-[32px] bg-blue-50 flex items-center justify-center text-5xl mb-10 shadow-inner group-hover:bg-blue-600 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500">
+                      {step.icon}
+                    </div>
+                    <h4 className="text-3xl font-black text-slate-900 mb-6 tracking-tight">{step.title}</h4>
+                    <p className="text-slate-500 font-bold text-lg leading-relaxed opacity-70 group-hover:opacity-100 transition-opacity">
+                      {step.desc}
+                    </p>
+                  </div>
+                </div>
+                {i < 2 && (
+                  <div className="hidden lg:block absolute top-1/2 -right-6 -translate-y-1/2 z-20 opacity-20 group-hover:opacity-100 transition-opacity group-hover:translate-x-2 duration-700">
+                    <svg className="w-12 h-12 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Footer / High Impact CTA */}
+      <footer className="pt-24 pb-12 px-6 bg-[#F8FAFC]">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-slate-950 rounded-[70px] p-16 md:p-32 text-center overflow-hidden relative mb-24 shadow-3xl">
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] opacity-20"></div>
+            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-blue-500/20 via-transparent to-blue-500/10"></div>
+
+            <div className="relative z-10">
+              <h4 className="text-4xl md:text-7xl font-black text-white mb-12 leading-[0.9] tracking-tightest">
+                {t.footer.slogan}
+              </h4>
+              <p className="text-blue-400 font-black mb-16 uppercase tracking-[0.6em] text-xs md:text-sm">
+                Join Ahilyanagar's Digital Transformation
+              </p>
+
+              <Link href="/public/survey" className="group inline-flex items-center gap-6 px-16 py-8 rounded-[40px] bg-white text-slate-950 text-2xl md:text-3xl font-black hover:bg-blue-50 hover:scale-105 transition-all duration-500 shadow-[0_30px_100px_rgba(255,255,255,0.15)] active:scale-95">
+                {t.hero.cta}
+                <div className="w-12 h-12 rounded-full bg-slate-950 text-white flex items-center justify-center transition-transform group-hover:rotate-45">
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path d="M7 17L17 7M17 7H7M17 7V17" /></svg>
+                </div>
+              </Link>
+
+              <p className="mt-16 text-slate-500 font-bold text-sm max-w-xl mx-auto leading-relaxed opacity-60">
+                {t.footer.closing}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col md:flex-row justify-between items-center gap-12 border-t border-slate-200 pt-16">
+            <div className="flex items-center gap-5 transition-opacity hover:opacity-100 opacity-60">
+              <div className="bg-slate-950 p-2 rounded-xl">
+                <img src={LOGO_URL} alt="Logo" className="w-6 h-6 object-contain invert" />
+              </div>
+              <span className="text-[12px] font-black uppercase tracking-[0.4em] text-slate-900">DDRC AHILYANAGAR</span>
+            </div>
+
+            <div className="flex flex-wrap justify-center gap-16 text-[11px] font-black uppercase tracking-[0.3em] text-slate-400">
+              <div className="flex items-center gap-3">
+                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                HELPLINE: <span className="text-slate-900">{t.footer.contact}</span>
+              </div>
+              <p>© 2026 OFFICIAL SURVEY PORTAL</p>
+            </div>
+          </div>
+        </div>
+      </footer>
+
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
+        
+        :root {
+          --font-outfit: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+          font-family: var(--font-outfit);
+          scroll-behavior: smooth;
+        }
+
+        .tracking-tightest {
+          letter-spacing: -0.05em;
+        }
+
+        ::selection {
+          background: #2563eb;
+          color: white;
+        }
+
+        @keyframes float {
+          0% { transform: translateY(0px); }
+          50% { transform: translateY(-10px); }
+          100% { transform: translateY(0px); }
+        }
+
+        .animate-float {
+          animation: float 5s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
 }
-

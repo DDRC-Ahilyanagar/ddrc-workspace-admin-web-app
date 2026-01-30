@@ -169,54 +169,79 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
 }
 
 /**
- * Get the form completion SMS template for public form submissions
- * Can be configured via SMS_FORM_COMPLETION_TEMPLATE environment variable
- * If not set, returns a default Marathi message for partial submissions
+ * Generate a registration number based on the specified format:
+ * [MMYY][TALUKA_SHORT][VILLAGE_SHORT][AADHAAR_LAST4]
+ * Example: 0126KOLRAH5678 (Jan 2026, Kolhapur taluka, Rahimatpur village, Aadhaar ends in 5678)
+ * 
+ * @param aadhaarNumber - The full Aadhaar number (12 digits)
+ * @param village - Village name (Marathi or English)
+ * @param taluka - Taluka name (Marathi or English)
+ * @returns Formatted registration number string
  */
-function getPublicFormCompletionTemplate(registrationNumber?: string): string {
-  // DLT Template ID: <To Be Generated>
-  // Template: आपली प्राथमिक माहिती यशस्वीरित्या नोंदवली गेली आहे. आपला नोंदणी क्रमांक: {#var#}. पुढील टप्प्यासाठी आमचे क्षेत्रीय सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधून सविस्तर माहिती नोंदवतील. काही शंका असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद.– VIKHE PATIL FOUNDATION
+export function generateRegistrationNumber(
+  aadhaarNumber: string,
+  village: string = 'UNK',
+  taluka: string = 'UNK'
+): string {
+  // 1. Month and Year (mmyy, where yy is last 2 digits of year)
+  const now = new Date();
+  const month = (now.getMonth() + 1).toString().padStart(2, '0');
+  const year = now.getFullYear().toString().substring(2);
+  const mmyy = `${month}${year}`;
 
-  // Default Marathi message informing divyang about successful submission
-  let template = 'आपली प्राथमिक माहिती यशस्वीरित्या नोंदवली गेली आहे.';
+  // 2. Taluka and Village short codes (3 characters each)
+  const cleanTaluka = taluka.replace(/[^a-zA-Z]/g, '').toUpperCase();
+  const cleanVillage = village.replace(/[^a-zA-Z]/g, '').toUpperCase();
 
-  if (registrationNumber) {
-    template += ` आपला नोंदणी क्रमांक: ${registrationNumber}.`;
-  }
+  const talukaShort = cleanTaluka.substring(0, 3).padEnd(3, 'X');
+  const villageShort = cleanVillage.substring(0, 3).padEnd(3, 'X');
 
-  template += ' पुढील टप्प्यासाठी आमचे क्षेत्रीय सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधून सविस्तर माहिती नोंदवतील. काही शंका असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद.– VIKHE PATIL FOUNDATION';
+  // 3. Last 4 digits of Aadhaar
+  const cleanAadhaar = aadhaarNumber.replace(/\D/g, '');
+  const aadhaarLast4 = cleanAadhaar.length >= 4
+    ? cleanAadhaar.substring(cleanAadhaar.length - 4)
+    : cleanAadhaar.padStart(4, '0');
 
-  const envTemplate = process.env.SMS_FORM_COMPLETION_TEMPLATE;
-  if (envTemplate) {
-    // Replace {REG_NUM} placeholder if present in custom template
-    if (registrationNumber && envTemplate.includes('{REG_NUM}')) {
-      return envTemplate.replace('{REG_NUM}', registrationNumber);
-    }
-    return envTemplate;
-  }
+  // Format: DDRC/mmyy/TAL/VIL/LAST4
+  const registrationNumber = `DDRC/${mmyy}/${talukaShort}/${villageShort}/${aadhaarLast4}`;
 
-  return template;
+  console.log('[SMS] Generated registration number:', {
+    registrationNumber,
+    aadhaar: `****${aadhaarLast4}`,
+    village,
+    taluka,
+    mmyy
+  });
+
+  return registrationNumber;
+}
+
+/**
+ * Get registration number with label
+ */
+export function getPublicFormCompletionTemplate(registrationNumber?: string): string {
+  const regNumVar = registrationNumber || 'DDRC/UNK/UNK/UNK/0000';
+  return `आपली प्राथमिक माहिती यशस्वीरित्या नोंदवली गेली आहे. आपला नोंदणी क्रमांक: ${regNumVar}. पुढील टप्प्यासाठी आमचे क्षेत्रीय सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधून सविस्तर माहिती नोंदवतील. काही शंका असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद.– VIKHE PATIL FOUNDATION`;
 }
 
 /**
  * Get the form completion SMS template for field officer form submissions (fully completed)
- * Can be configured via SMS_FIELD_OFFICER_COMPLETION_TEMPLATE environment variable
- * If not set, returns a default Marathi message for fully completed forms
  */
 function getFieldOfficerCompletionTemplate(): string {
-  // Default Marathi message informing divyang that their form is fully completed
-  // "Your survey form has been fully recorded..."
   const DEFAULT_TEMPLATE = 'आपला सर्वेक्षण फॉर्म पूर्णपणे नोंदवण्यात आला आहे. पुढील प्रक्रिया संबंधित विभागा मार्फत लवकरच राबवली जाईल. काही शंका असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद.– VIKHE PATIL FOUNDATION';
+  return process.env.SMS_FIELD_OFFICER_COMPLETION_TEMPLATE || DEFAULT_TEMPLATE;
+}
 
-  const template = process.env.SMS_FIELD_OFFICER_COMPLETION_TEMPLATE || DEFAULT_TEMPLATE;
-
-  return template;
+/**
+ * Field Officer submission notification template
+ */
+export function getFieldOfficerSubmissionNotificationTemplate(holderName: string, registrationNumber: string): string {
+  const regText = registrationNumber ? ` (रजिस्ट्रेशन नंबर: ${registrationNumber})` : '';
+  return `नवीन सर्वेक्षण प्राप्त झाले आहे: ${holderName}${regText}. कृपया पुढील कार्यवाहीसाठी तपासा. धन्यवाद.– VIKHE PATIL FOUNDATION`;
 }
 
 /**
  * Build SMS message for form completion notification
- * @param isFieldOfficerSubmission - true if submitted by field officer (fully completed), false for public (partial)
- * @param registrationNumber - Optional registration number to include in public form SMS
  */
 export function buildFormCompletionMessage(isFieldOfficerSubmission: boolean = false, registrationNumber?: string): string {
   const message = isFieldOfficerSubmission
@@ -311,41 +336,84 @@ export function extractDivyangPhone(surveyJson: any): string | null {
 
 /**
  * Send SMS to divyang after form completion
- * This is called asynchronously after successful form submission
+ * This function also handles sending notification SMS to the assigned/submitting field officer
+ * 
  * @param surveyJson - The survey data containing answers
  * @param surveyId - Optional survey ID for logging
  * @param isFieldOfficerSubmission - true if submitted by field officer (fully completed), false for public (partial)
  * @param registrationNumber - Optional registration number to include in SMS
+ * @param officerPhone - Optional phone number of the field officer to notify
  */
-export async function sendFormCompletionSMS(surveyJson: any, surveyId?: number, isFieldOfficerSubmission: boolean = false, registrationNumber?: string): Promise<{ ok: boolean; phone?: string; error?: string }> {
+export async function sendFormCompletionSMS(
+  surveyJson: any,
+  surveyId?: number,
+  isFieldOfficerSubmission: boolean = false,
+  registrationNumber?: string,
+  officerPhone?: string
+): Promise<{ ok: boolean; phone?: string; error?: string; officer_notified?: boolean }> {
   try {
     const phone = extractDivyangPhone(surveyJson);
+    const holderName = surveyJson?.holder_name || surveyJson?.name || 'Divyang';
 
     if (!phone) {
       console.log('[SMS] No valid phone number found in survey data', { survey_id: surveyId });
-      return { ok: false, error: 'No valid phone number found' };
+      // If we have an officer phone, we might still want to notify them?
+      // But usually we need the beneficiary phone for the primary SMS
     }
 
-    const message = buildFormCompletionMessage(isFieldOfficerSubmission, registrationNumber);
-    const result = await sendSMS(phone, message);
+    // 1. Send SMS to beneficiary/applicant
+    let success = false;
+    let smsError = '';
+    if (phone) {
+      const message = buildFormCompletionMessage(isFieldOfficerSubmission, registrationNumber);
+      const result = await sendSMS(phone, message);
+      success = result.ok;
+      smsError = result.error || '';
 
-    if (result.ok) {
-      console.log('[SMS] Form completion SMS sent successfully', {
-        phone: phone.substring(0, 3) + '****' + phone.substring(7),
-        survey_id: surveyId
-      });
-    } else {
-      console.error('[SMS] Failed to send form completion SMS', {
-        phone: phone.substring(0, 3) + '****' + phone.substring(7),
-        survey_id: surveyId,
-        error: result.error
-      });
+      if (success) {
+        console.log('[SMS] Form completion SMS sent to beneficiary successfully', {
+          phone: phone.substring(0, 3) + '****' + phone.substring(7),
+          survey_id: surveyId
+        });
+      } else {
+        console.error('[SMS] Failed to send form completion SMS to beneficiary', {
+          phone: phone.substring(0, 3) + '****' + phone.substring(7),
+          survey_id: surveyId,
+          error: smsError
+        });
+      }
+    }
+
+    // 2. Send notification SMS to the field officer (per requirements)
+    let officerNotified = false;
+    if (officerPhone) {
+      // Use registrationNumber from params or extract from surveyJson if possible
+      const regNum = registrationNumber || surveyJson?.registration_number || '';
+      const officerMessage = isFieldOfficerSubmission
+        ? `आपण ${holderName} यांचे सर्वेक्षण यशस्वीपणे पूर्ण केले आहे. (रजिस्ट्रेशन नंबर: ${regNum}). धन्यवाद.– VIKHE PATIL FOUNDATION`
+        : getFieldOfficerSubmissionNotificationTemplate(holderName, regNum);
+
+      const officerResult = await sendSMS(officerPhone, officerMessage);
+      officerNotified = officerResult.ok;
+
+      if (officerNotified) {
+        console.log('[SMS] Notification SMS sent to field officer successfully', {
+          officer_phone: officerPhone.substring(0, 3) + '****' + officerPhone.substring(7),
+          survey_id: surveyId
+        });
+      } else {
+        console.error('[SMS] Failed to send notification SMS to field officer', {
+          officer_phone: officerPhone.substring(0, 3) + '****' + officerPhone.substring(7),
+          error: officerResult.error
+        });
+      }
     }
 
     return {
-      ok: result.ok,
-      phone,
-      error: result.error,
+      ok: success,
+      phone: phone || undefined,
+      error: smsError || undefined,
+      officer_notified: officerNotified
     };
   } catch (error: any) {
     console.error('[SMS] Error in sendFormCompletionSMS:', {
@@ -358,5 +426,3 @@ export async function sendFormCompletionSMS(surveyJson: any, surveyId?: number, 
     };
   }
 }
-
-

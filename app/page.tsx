@@ -1,747 +1,274 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-// Use relative path for static assets to avoid hydration mismatch
 const LOGO_URL = '/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png';
+const HERO_BG = '/campaign_hero_bg_1769749378735.png';
+const SUPPORT_IMG = '/empowerment_support_1769749398366.png';
 
-// Translations object
-const translations = {
-  en: {
-    nav: {
-      publicSurvey: 'Public Survey',
-      login: 'Login',
-    },
-    carousel: [
-      {
-        title: 'दिव्यांग सर्वेक्षण अभियान - २०२६',
-        description: 'जिल्हा प्रशासन , जिल्हा दिव्यांग सक्षमीकरण विभाग व जिल्हा दिव्यांग पुनर्वसन केंद्र , अहिल्यानगर यांचे सयुंक्त विद्यमाने',
-      },
-      {
-        title: 'Secure & Encrypted Data Collection',
-        description: 'Your sensitive information is protected with industry-standard encryption',
-      },
-      {
-        title: 'Multi-Role Workflow System',
-        description: 'Streamlined process from data collection to verification and approval',
-      },
-    ],
-    carouselActions: {
-      startSurvey: 'Start Survey',
-    },
-    download: {
-      title: 'Download Mobile App',
-      subtitle: 'Available on Google Play Store',
-      forFieldOfficers: 'For Field Officers',
-      description: 'If you are a field officer, download our mobile app from the Google Play Store to collect survey data efficiently on the go. The app works offline and syncs automatically when connected.',
-      features: {
-        offline: 'Offline data collection',
-        ocr: 'OCR-based data extraction',
-        sync: 'Real-time synchronization',
-      },
-      comingSoon: 'Coming soon on Google Play Store',
-    },
-    about: {
-      title: 'About Disability Surveys',
-      text1: 'The DDRC Survey Portal is a comprehensive digital platform designed to collect, manage, and process disability-related information for the District Disability Rehabilitation Centre, Ahilyanagar. This system enables efficient data collection through multiple channels and ensures secure handling of sensitive personal information.',
-      text2: 'Our survey system captures detailed information including personal details, address information, education background, disability specifics, employment status, and various government scheme benefits. The platform uses advanced OCR (Optical Character Recognition) technology to automatically extract and pre-fill information from Aadhar cards and UDID certificates, reducing data entry time and minimizing errors.',
-      features: {
-        multiSection: 'Multi-section comprehensive data collection',
-        ocr: 'OCR-based automatic data extraction',
-        offline: 'Offline data collection capability',
-        sync: 'Real-time data synchronization',
-      },
-    },
-    roles: {
-      title: 'User Roles & Responsibilities',
-      subtitle: 'Each user role has specific responsibilities in the survey workflow',
-      fieldOfficer: {
-        title: 'Field Officer',
-        responsibilities: [
-          'Capture survey data using mobile application',
-          'Collect Aadhar card images and personal information',
-          'Verify beneficiary information on-site',
-          'Upload survey data to the system',
-          'Ensure data accuracy and completeness',
-          'Work in offline mode when connectivity is limited',
-        ],
-      },
-      verificationOfficer: {
-        title: 'Verification Officer',
-        responsibilities: [
-          'Review surveys assigned by administrators',
-          'Verify data accuracy and completeness',
-          'Edit survey data based on admin corrections',
-          'Mark surveys as verified after review',
-          'Ensure compliance with data standards',
-          'Handle clarification requests from beneficiaries',
-        ],
-      },
-      administrator: {
-        title: 'Administrator',
-        responsibilities: [
-          'Oversee entire survey workflow',
-          'Review and add correction suggestions to surveys',
-          'Assign surveys to verification officers',
-          'Approve verified surveys',
-          'Manage user accounts and permissions',
-          'Generate reports and analytics',
-          'Monitor system performance and data quality',
-        ],
-      },
-      beneficiary: {
-        title: 'Public User / Beneficiary',
-        responsibilities: [
-          'Access public survey form via web portal',
-          'Submit personal information and documents',
-          'Upload Aadhar card images',
-          'Review submitted information',
-          'Track survey status',
-          'Respond to clarification requests if needed',
-        ],
-      },
-    },
-    process: {
-      title: 'Survey Process Phases',
-      subtitle: 'End-to-end workflow from data collection to final approval',
-      steps: [
-        {
-          title: 'Data Collection',
-          subtitle: 'Data Collection',
-          description: 'Field officers or public users collect comprehensive disability-related information including personal details, address, education, disability specifics, and supporting documents. Data can be collected via mobile app or web portal.',
-        },
-        {
-          title: 'Initial Submission',
-          subtitle: 'Initial Submission',
-          description: 'Collected survey data is submitted to the system with status "pending". The system automatically processes uploaded documents using OCR technology to extract relevant information and pre-fill form fields.',
-        },
-        {
-          title: 'Admin Review',
-          subtitle: 'Admin Review',
-          description: 'Administrators review submitted surveys, check data quality, and add correction suggestions if needed. Surveys can be assigned to verification officers for detailed review. Status changes to "under_review".',
-        },
-        {
-          title: 'Verification',
-          subtitle: 'Verification',
-          description: 'Verification officers review assigned surveys, verify data accuracy, make necessary corrections based on admin suggestions, and mark surveys as "verified" after thorough review and validation.',
-        },
-        {
-          title: 'Final Approval',
-          subtitle: 'Final Approval',
-          description: 'Administrators review verified surveys and provide final approval. Once approved, surveys are marked as "approved" and become part of the official database. Approved surveys can be used for generating certificates and accessing government schemes.',
-        },
-      ],
-    },
-    security: {
-      title: 'Data Security & Encryption',
-      intro: 'Your sensitive information is our top priority. We understand that disability-related data contains highly sensitive personal information, and we have implemented multiple layers of security to protect your data.',
-      features: {
-        encryption: {
-          title: 'End-to-End Encryption',
-          description: 'All data transmitted between your device and our servers is encrypted using industry-standard TLS/SSL protocols. This ensures that your information cannot be intercepted or read during transmission.',
-        },
-        database: {
-          title: 'Database Encryption',
-          description: 'Sensitive data stored in our databases is encrypted at rest using AES-256 encryption, the same standard used by banks and government agencies. This means your data is protected even if physical access to servers is gained.',
-        },
-        access: {
-          title: 'Role-Based Access Control',
-          description: 'Access to sensitive data is strictly controlled through role-based permissions. Only authorized personnel with specific roles can access, view, or modify data relevant to their responsibilities.',
-        },
-        storage: {
-          title: 'Secure File Storage',
-          description: 'Uploaded documents such as Aadhar cards and certificates are stored in encrypted storage with restricted access. Files are only accessible to authorized personnel during the verification process.',
-        },
-        audit: {
-          title: 'Audit Logging',
-          description: 'All data access and modifications are logged with timestamps and user information. This creates a complete audit trail for compliance and security monitoring purposes.',
-        },
-        updates: {
-          title: 'Regular Security Updates',
-          description: 'Our security infrastructure is regularly updated to protect against emerging threats. We follow industry best practices and comply with government data protection guidelines.',
-        },
-      },
-      privacy: 'Privacy Commitment: Your personal information is used solely for the purpose of providing disability rehabilitation services. Data is never shared with third-party commercial entities or used for marketing purposes. All data handling complies with government regulations and privacy laws.',
-    },
-    cta: {
-      title: 'Ready to Get Started?',
-      text: 'Join us in our mission to empower persons with disabilities. Access our services or participate in our comprehensive survey program.',
-      startSurvey: 'Start Public Survey',
-    },
-    footer: {
-      title: 'DDRC Ahilyanagar',
-      description: 'District Disability Rehabilitation Centre, Ahilyanagar\nMinistry of Social Justice & Empowerment, Govt. of India',
-      quickLinks: 'Quick Links',
-      contact: 'Contact',
-      address: 'District Disability Rehabilitation Centre\nAhilyanagar, Maharashtra, India',
-      poweredBy: 'Powered by',
-      copyright: 'DDRC Ahilyanagar. All rights reserved.',
-    },
-  },
+const content = {
   mr: {
-    nav: {
-      publicSurvey: 'सार्वजनिक सर्वेक्षण',
-      login: 'लॉगिन',
-    },
-    carousel: [
-      {
-        title: 'दिव्यांग सर्वेक्षण अभियान - २०२६',
-        description: 'जिल्हा प्रशासन , जिल्हा दिव्यांग सक्षमीकरण विभाग व जिल्हा दिव्यांग पुनर्वसन केंद्र , अहिल्यानगर यांचे सयुंक्त विद्यमाने',
-      },
-      {
-        title: 'सुरक्षित आणि एन्क्रिप्टेड डेटा संकलन',
-        description: 'तुमची संवेदनशील माहिती उद्योग-मानक एन्क्रिप्शनसह संरक्षित आहे',
-      },
-      {
-        title: 'बहु-भूमिका कार्यप्रवाह प्रणाली',
-        description: 'डेटा संकलनापासून पडताळणी आणि मंजुरीपर्यंत सुव्यवस्थित प्रक्रिया',
-      },
-    ],
-    carouselActions: {
-      startSurvey: 'सर्वेक्षण सुरू करा',
-    },
-    download: {
-      title: 'मोबाइल ऍप डाउनलोड करा',
-      subtitle: 'गूगल प्ले स्टोअरवर उपलब्ध',
-      forFieldOfficers: 'क्षेत्र अधिकारींसाठी',
-      description: 'जर तुम्ही क्षेत्र अधिकारी आहात, तर गूगल प्ले स्टोअरवरून आमचा मोबाइल ऍप डाउनलोड करा जेणेकरून तुम्ही सर्वेक्षण डेटा कार्यक्षमतेने गोळा करू शकता. ऍप ऑफलाइन कार्य करते आणि कनेक्ट झाल्यावर स्वयंचलितपणे सिंक होते.',
-      features: {
-        offline: 'ऑफलाइन डेटा संकलन',
-        ocr: 'OCR-आधारित डेटा निष्कर्षण',
-        sync: 'वास्तविक-वेळ सिंक्रोनायझेशन',
-      },
-      comingSoon: 'लवकरच गूगल प्ले स्टोअरवर येणार आहे',
+    hero: {
+      title: 'दिव्यांग सर्वेक्षण अभियान – २०२६',
+      subtitle: 'जिल्हा प्रशासन, अहिल्यानगर व जिल्हा दिव्यांग पुनर्वसन केंद्र यांचा संयुक्त उपक्रम',
+      cta: 'सर्वेक्षण सुरू करा',
     },
     about: {
-      title: 'दिव्यांग सर्वेक्षणाबद्दल',
-      text1: 'DDRC सर्वेक्षण पोर्टल हे जिल्हा दिव्यांग पुनर्वसन केंद्र, अहिल्यानगरसाठी दिव्यांग-संबंधित माहिती गोळा करण्यासाठी, व्यवस्थापित करण्यासाठी आणि प्रक्रिया करण्यासाठी डिझाइन केलेले एक व्यापक डिजिटल प्लॅटफॉर्म आहे. ही प्रणाली अनेक चॅनेलद्वारे कार्यक्षम डेटा संकलन सक्षम करते आणि संवेदनशील वैयक्तिक माहितीचे सुरक्षित हाताळणी सुनिश्चित करते.',
-      text2: 'आमची सर्वेक्षण प्रणाली वैयक्तिक तपशील, पत्ता माहिती, शैक्षणिक पार्श्वभूमी, दिव्यांग तपशील, रोजगार स्थिती आणि विविध सरकारी योजना लाभ यासह तपशीलवार माहिती कॅप्चर करते. प्लॅटफॉर्म आधार कार्ड आणि UDID प्रमाणपत्रांमधून माहिती स्वयंचलितपणे काढण्यासाठी आणि फॉर्म फील्ड पूर्व-भरण्यासाठी प्रगत OCR (ऑप्टिकल कॅरेक्टर रिकग्निशन) तंत्रज्ञान वापरते, डेटा प्रवेश वेळ कमी करते आणि त्रुटी कमी करते.',
-      features: {
-        multiSection: 'बहु-विभाग व्यापक डेटा संकलन',
-        ocr: 'OCR-आधारित स्वयंचलित डेटा निष्कर्षण',
-        offline: 'ऑफलाइन डेटा संकलन क्षमता',
-        sync: 'वास्तविक-वेळ डेटा सिंक्रोनायझेशन',
-      },
-    },
-    roles: {
-      title: 'वापरकर्ता भूमिका आणि जबाबदाऱ्या',
-      subtitle: 'सर्वेक्षण कार्यप्रवाहात प्रत्येक वापरकर्ता भूमिकेची विशिष्ट जबाबदारी असते',
-      fieldOfficer: {
-        title: 'क्षेत्र अधिकारी',
-        responsibilities: [
-          'मोबाइल अनुप्रयोग वापरून सर्वेक्षण डेटा कॅप्चर करा',
-          'आधार कार्ड प्रतिमा आणि वैयक्तिक माहिती गोळा करा',
-          'साइटवर लाभार्थी माहिती सत्यापित करा',
-          'सिस्टममध्ये सर्वेक्षण डेटा अपलोड करा',
-          'डेटा अचूकता आणि पूर्णता सुनिश्चित करा',
-          'कनेक्टिव्हिटी मर्यादित असताना ऑफलाइन मोडमध्ये कार्य करा',
-        ],
-      },
-      verificationOfficer: {
-        title: 'पडताळणी अधिकारी',
-        responsibilities: [
-          'प्रशासकांद्वारे नियुक्त केलेल्या सर्वेक्षणांचे पुनरावलोकन करा',
-          'डेटा अचूकता आणि पूर्णता सत्यापित करा',
-          'प्रशासकीय सुधारणांवर आधारित सर्वेक्षण डेटा संपादित करा',
-          'पुनरावलोकनानंतर सर्वेक्षणे सत्यापित म्हणून चिन्हांकित करा',
-          'डेटा मानकांचे अनुपालन सुनिश्चित करा',
-          'लाभार्थ्यांकडून स्पष्टीकरण विनंत्या हाताळा',
-        ],
-      },
-      administrator: {
-        title: 'प्रशासक',
-        responsibilities: [
-          'संपूर्ण सर्वेक्षण कार्यप्रवाहाचे पर्यवेक्षण करा',
-          'सर्वेक्षणांचे पुनरावलोकन करा आणि सुधारणा सूचना जोडा',
-          'पडताळणी अधिकाऱ्यांना सर्वेक्षणे नियुक्त करा',
-          'सत्यापित सर्वेक्षणे मंजूर करा',
-          'वापरकर्ता खाती आणि परवानग्या व्यवस्थापित करा',
-          'अहवाल आणि विश्लेषण तयार करा',
-          'सिस्टम कार्यप्रदर्शन आणि डेटा गुणवत्ता निरीक्षण करा',
-        ],
-      },
-      beneficiary: {
-        title: 'सार्वजनिक वापरकर्ता / लाभार्थी',
-        responsibilities: [
-          'वेब पोर्टलद्वारे सार्वजनिक सर्वेक्षण फॉर्ममध्ये प्रवेश करा',
-          'वैयक्तिक माहिती आणि दस्तऐवज सबमिट करा',
-          'आधार कार्ड प्रतिमा अपलोड करा',
-          'सबमिट केलेली माहिती पुनरावलोकन करा',
-          'सर्वेक्षण स्थिती ट्रॅक करा',
-          'आवश्यक असल्यास स्पष्टीकरण विनंत्या उत्तर द्या',
-        ],
-      },
+      title: 'अभियानाबद्दल',
+      description: 'अहिल्यानगर जिल्ह्यातील सर्व दिव्यांग बांधवांचे अचूक, अद्ययावत व विश्वासार्ह माहिती संकलित करण्यासाठी हे विशेष सर्वेक्षण राबविण्यात येत आहे. या माहितीच्या आधारे दिव्यांग बांधवांना विविध शासकीय योजना व सेवा प्रभावीपणे उपलब्ध करून देण्यात येणार आहेत.',
     },
     process: {
-      title: 'सर्वेक्षण प्रक्रिया टप्पे',
-      subtitle: 'डेटा संकलनापासून अंतिम मंजुरीपर्यंत संपूर्ण कार्यप्रवाह',
+      title: 'सर्वेक्षण प्रक्रिया',
       steps: [
         {
-          title: 'डेटा संकलन',
-          subtitle: 'डेटा संकलन',
-          description: 'क्षेत्र अधिकारी किंवा सार्वजनिक वापरकर्ते वैयक्तिक तपशील, पत्ता, शिक्षण, दिव्यांग तपशील आणि समर्थन दस्तऐवज यासह व्यापक दिव्यांग-संबंधित माहिती गोळा करतात. डेटा मोबाइल ऍप किंवा वेब पोर्टलद्वारे गोळा केला जाऊ शकतो.',
+          title: 'प्रशिक्षित कर्मचारी',
+          desc: 'सर्वेक्षण आशा सेविका, अंगणवाडी सेविका व प्रशिक्षित स्वयंसेवकांमार्फत घरोघरी जाऊन करण्यात येईल.',
+          icon: '🏠'
         },
         {
-          title: 'प्रारंभिक सबमिशन',
-          subtitle: 'प्रारंभिक सबमिशन',
-          description: 'गोळा केलेला सर्वेक्षण डेटा "pending" स्थितीसह सिस्टममध्ये सबमिट केला जातो. सिस्टम OCR तंत्रज्ञान वापरून अपलोड केलेल्या दस्तऐवजांची स्वयंचलित प्रक्रिया करते जेणेकरून संबंधित माहिती काढली जाऊ शकते आणि फॉर्म फील्ड पूर्व-भरली जाऊ शकतात.',
+          title: 'डिजिटल नोंदणी',
+          desc: 'यासाठी स्वतंत्र मोबाईल अॅप व अधिकृत वेबसाइट विकसित करण्यात आली आहे.',
+          icon: '📱'
         },
         {
-          title: 'प्रशासकीय पुनरावलोकन',
-          subtitle: 'प्रशासकीय पुनरावलोकन',
-          description: 'प्रशासक सबमिट केलेल्या सर्वेक्षणांचे पुनरावलोकन करतात, डेटा गुणवत्ता तपासतात आणि आवश्यक असल्यास सुधारणा सूचना जोडतात. सर्वेक्षणे तपशीलवार पुनरावलोकनासाठी पडताळणी अधिकाऱ्यांना नियुक्त केली जाऊ शकतात. स्थिती "under_review" मध्ये बदलते.',
-        },
-        {
-          title: 'पडताळणी',
-          subtitle: 'पडताळणी',
-          description: 'पडताळणी अधिकारी नियुक्त केलेल्या सर्वेक्षणांचे पुनरावलोकन करतात, डेटा अचूकता सत्यापित करतात, प्रशासकीय सूचनांवर आधारित आवश्यक सुधारणा करतात आणि सखोल पुनरावलोकन आणि सत्यापनानंतर सर्वेक्षणे "verified" म्हणून चिन्हांकित करतात.',
-        },
-        {
-          title: 'अंतिम मंजुरी',
-          subtitle: 'अंतिम मंजुरी',
-          description: 'प्रशासक सत्यापित सर्वेक्षणांचे पुनरावलोकन करतात आणि अंतिम मंजुरी देतात. एकदा मंजूर झाल्यानंतर, सर्वेक्षणे "approved" म्हणून चिन्हांकित केली जातात आणि अधिकृत डेटाबेसमध्ये भाग बनतात. मंजूर सर्वेक्षणे प्रमाणपत्रे तयार करण्यासाठी आणि सरकारी योजनांमध्ये प्रवेश करण्यासाठी वापरली जाऊ शकतात.',
-        },
-      ],
+          title: 'संपर्क व पडताळणी',
+          desc: 'प्राथमिक माहिती भरल्यानंतर संबंधित व्यक्तीशी गावपातळीवर संपर्क साधून माहितीची नोंद पूर्ण केली जाईल.',
+          icon: '✅'
+        }
+      ]
     },
-    security: {
-      title: 'डेटा सुरक्षा आणि एन्क्रिप्शन',
-      intro: 'तुमची संवेदनशील माहिती ही आमची प्राथमिकता आहे. आम्ही समजतो की दिव्यांग-संबंधित डेटामध्ये अत्यंत संवेदनशील वैयक्तिक माहिती असते आणि आम्ही तुमच्या डेटाचे संरक्षण करण्यासाठी अनेक स्तरांची सुरक्षा लागू केली आहे.',
-      features: {
-        encryption: {
-          title: 'एंड-टू-एंड एन्क्रिप्शन',
-          description: 'तुमच्या डिव्हाइस आणि आमच्या सर्व्हरमधील सर्व डेटा उद्योग-मानक TLS/SSL प्रोटोकॉल वापरून एन्क्रिप्ट केला जातो. हे सुनिश्चित करते की प्रसारणादरम्यान तुमची माहिती अडवली किंवा वाचली जाऊ शकत नाही.',
-        },
-        database: {
-          title: 'डेटाबेस एन्क्रिप्शन',
-          description: 'आमच्या डेटाबेसमध्ये संग्रहित संवेदनशील डेटा AES-256 एन्क्रिप्शन वापरून विश्रांतीवर एन्क्रिप्ट केला जातो, बँका आणि सरकारी एजन्सीद्वारे वापरले जाणारे समान मानक. याचा अर्थ असा की सर्व्हरमध्ये भौतिक प्रवेश मिळाला तरीही तुमचा डेटा संरक्षित आहे.',
-        },
-        access: {
-          title: 'भूमिका-आधारित प्रवेश नियंत्रण',
-          description: 'संवेदनशील डेटामध्ये प्रवेश भूमिका-आधारित परवानग्यांद्वारे काटेकोरपणे नियंत्रित केला जातो. फक्त विशिष्ट भूमिका असलेले अधिकृत कर्मचारी त्यांच्या जबाबदाऱ्यांशी संबंधित डेटामध्ये प्रवेश, पाहू किंवा सुधारू शकतात.',
-        },
-        storage: {
-          title: 'सुरक्षित फाइल स्टोरेज',
-          description: 'आधार कार्ड आणि प्रमाणपत्रांसारख्या अपलोड केलेल्या दस्तऐवजांना प्रतिबंधित प्रवेशासह एन्क्रिप्टेड स्टोरेजमध्ये संग्रहित केले जाते. पडताळणी प्रक्रियेदरम्यान फक्त अधिकृत कर्मचाऱ्यांना फाइल्समध्ये प्रवेश मिळू शकतो.',
-        },
-        audit: {
-          title: 'ऑडिट लॉगिंग',
-          description: 'सर्व डेटा प्रवेश आणि सुधारणा वेळस्टॅम्प आणि वापरकर्ता माहितीसह लॉग केल्या जातात. हे अनुपालन आणि सुरक्षा निरीक्षण हेतूंसाठी एक संपूर्ण ऑडिट ट्रेल तयार करते.',
-        },
-        updates: {
-          title: 'नियमित सुरक्षा अद्यतने',
-          description: 'उदयोन्मुख धोक्यांपासून संरक्षण करण्यासाठी आमच्या सुरक्षा पायाभूत सुविधांची नियमित अद्यतने केली जातात. आम्ही उद्योग सर्वोत्तम पद्धतींचे अनुसरण करतो आणि सरकारी डेटा संरक्षण मार्गदर्शक तत्त्वांचे अनुपालन करतो.',
-        },
-      },
-      privacy: 'गोपनीयता वचन: तुमची वैयक्तिक माहिती केवळ दिव्यांग पुनर्वसन सेवा प्रदान करण्याच्या उद्देशाने वापरली जाते. डेटा तृतीय-पक्ष व्यावसायिक संस्थांसोबत कधीही सामायिक केला जात नाही किंवा विपणन हेतूंसाठी वापरला जात नाही. सर्व डेटा हाताळणी सरकारी नियम आणि गोपनीयता कायद्यांचे अनुपालन करते.',
+    benefits: {
+      title: 'सर्वेक्षणाचे फायदे',
+      items: [
+        'शासकीय योजनांचा लाभ',
+        'वैद्यकीय पुनर्वसन सेवा',
+        'UDID प्रमाणपत्र मदत',
+        'स्वयंरोजगाराच्या संधी',
+        'सहायक साधने उपलब्ध करणे'
+      ]
     },
-    cta: {
-      title: 'सुरू करण्यासाठी तयार आहात?',
-      text: 'दिव्यांग असलेल्या व्यक्तींना सक्षम करण्याच्या आमच्या मिशनमध्ये सामील व्हा. आमच्या सेवांमध्ये प्रवेश करा किंवा आमच्या व्यापक सर्वेक्षण कार्यक्रमात सहभागी व्हा.',
-      startSurvey: 'सार्वजनिक सर्वेक्षण सुरू करा',
+    documents: {
+      title: 'आवश्यक कागदपत्रे',
+      subtitle: 'नोंदणीसाठी खालील कागदपत्रे जवळ ठेवावीत:',
+      list: [
+        'दिव्यांग प्रमाणपत्र (UDID)',
+        'आधार कार्ड',
+        'रेशन कार्ड',
+        'निवडणूक ओळखपत्र',
+        'बँक पासबुक'
+      ]
     },
     footer: {
-      title: 'DDRC अहिल्यानगर',
-      description: 'जिल्हा दिव्यांग पुनर्वसन केंद्र, अहिल्यानगर\nसामाजिक न्याय आणि सक्षमीकरण मंत्रालय, भारत सरकार',
-      quickLinks: 'द्रुत दुवे',
-      contact: 'संपर्क',
-      address: 'जिल्हा दिव्यांग पुनर्वसन केंद्र\nअहिल्यानगर, महाराष्ट्र, भारत',
-      poweredBy: 'द्वारा संचालित',
-      copyright: 'DDRC अहिल्यानगर. सर्व हक्क राखीव.',
-    },
+      slogan: 'आपला सहभाग – आपल्या हक्कासाठी आवश्यक',
+      closing: 'एकत्र येऊया – सक्षम, समावेशक आणि संवेदनशील समाज घडवूया.',
+      contact: '०२४१ २७७ ७७७२'
+    }
   },
+  en: {
+    hero: {
+      title: 'Divyang Survey Campaign 2026',
+      subtitle: 'A prestigious joint initiative by the District Administration of Ahilyanagar and DDRC.',
+      cta: 'Start Survey',
+    },
+    about: {
+      title: 'About Campaign',
+      description: 'Executing a comprehensive data-driven initiative to maintain accurate and reliable demographics for every person with disabilities in the district, ensuring targeted delivery of government welfare.',
+    },
+    process: {
+      title: 'Workflow',
+      steps: [
+        {
+          title: 'Door-to-Door',
+          desc: 'Conducted by certified Asha workers and trained volunteers at the grassroots level.',
+          icon: '🏠'
+        },
+        {
+          title: 'Digital Ecosystem',
+          desc: 'Advanced mobile applications and web portals designed for seamless data integrity.',
+          icon: '📱'
+        },
+        {
+          title: 'Validation',
+          desc: 'Rigorous multi-level verification ensures every record is authentic and verified.',
+          icon: '✅'
+        }
+      ]
+    },
+    benefits: {
+      title: 'Core Objectives',
+      items: [
+        'Direct Benefit Transfer',
+        'Advanced Rehab Services',
+        'UDID Facilitation',
+        'Self-Employment Support',
+        'Assistive Tech Provision'
+      ]
+    },
+    documents: {
+      title: 'On-boarding Docs',
+      subtitle: 'Please keep digital or physical copies ready:',
+      list: [
+        'Disability Certificate',
+        'Aadhaar Identity Card',
+        'Ration Card',
+        'Voter ID Card',
+        'Bank Statement'
+      ]
+    },
+    footer: {
+      slogan: 'Your Voice, Your Rights',
+      closing: 'Together, let us build a barrier-free, inclusive, and compassionate society.',
+      contact: '0241 277 7772'
+    }
+  }
 };
 
-// Carousel slides data
-const carouselSlides = [
-  {
-    id: 1,
-    bgImage: '/app_back.jpg',
-  },
-  {
-    id: 2,
-    bgImage: '/app_back.jpg',
-  },
-  {
-    id: 3,
-    bgImage: '/app_back.jpg',
-  },
-];
-
 export default function LandingPage() {
-  const router = useRouter();
-  const downloadSectionRef = useRef<HTMLDivElement>(null);
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const [isAutoPlaying, setIsAutoPlaying] = useState(true);
-  // Language state - load from localStorage or default to 'mr' (Marathi)
-  const [language, setLanguage] = useState<'en' | 'mr'>(() => {
-    if (typeof window !== 'undefined') {
-      const storedLang = localStorage.getItem('app_language');
-      return (storedLang === 'en' || storedLang === 'mr') ? storedLang : 'mr';
-    }
-    return 'mr';
-  });
-
-  // Check if user is coming from login page and needs to scroll
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const userType = urlParams.get('userType');
-    const scrollToDownload = urlParams.get('scrollToDownload');
-    
-    if (scrollToDownload === 'true' && downloadSectionRef.current) {
-      setTimeout(() => {
-        downloadSectionRef.current?.scrollIntoView({ 
-          behavior: 'smooth',
-          block: 'start'
-        });
-      }, 500);
-    }
-  }, []);
-
-  // Auto-advance carousel
-  useEffect(() => {
-    if (!isAutoPlaying) return;
-    
-    const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % carouselSlides.length);
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [isAutoPlaying, carouselSlides.length]);
-
-  const goToSlide = (index: number) => {
-    setCurrentSlide(index);
-    setIsAutoPlaying(false);
-    setTimeout(() => setIsAutoPlaying(true), 10000);
-  };
-
-  const nextSlide = () => {
-    setCurrentSlide((prev) => (prev + 1) % carouselSlides.length);
-    setIsAutoPlaying(false);
-    setTimeout(() => setIsAutoPlaying(true), 10000);
-  };
-
-  const prevSlide = () => {
-    setCurrentSlide((prev) => (prev - 1 + carouselSlides.length) % carouselSlides.length);
-    setIsAutoPlaying(false);
-    setTimeout(() => setIsAutoPlaying(true), 10000);
-  };
-
-  const scrollToDownload = () => {
-    if (downloadSectionRef.current) {
-      downloadSectionRef.current.scrollIntoView({ 
-        behavior: 'smooth',
-        block: 'start'
-      });
-    }
-  };
-
-  // Toggle language and save to localStorage
-  const toggleLanguage = () => {
-    const newLanguage = language === 'en' ? 'mr' : 'en';
-    setLanguage(newLanguage);
-    localStorage.setItem('app_language', newLanguage);
-    // Optionally reload the page to apply language changes
-    // window.location.reload();
-  };
+  const [lang, setLang] = useState<'mr' | 'en'>('mr');
+  const t = content[lang];
 
   return (
-    <div className="landing-page">
-      {/* Navigation Bar */}
-      <nav className="landing-navbar">
-        <div className="container">
-          <div className="navbar-content">
-            <div className="navbar-brand">
-              <img src={LOGO_URL} alt="DDRC Logo" className="navbar-logo" />
-              <div className="navbar-brand-text">
-                <span className="brand-title">DDRC</span>
-                <span className="brand-subtitle">Ahilyanagar</span>
-              </div>
+    <div className="min-h-screen bg-[#FDFDFD] text-slate-900 overflow-x-hidden selection:bg-teal-500 selection:text-white">
+      {/* Dynamic Background Elements */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-teal-100/30 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-[-5%] right-[-5%] w-[35%] h-[35%] bg-blue-100/30 rounded-full blur-[100px]"></div>
+      </div>
+
+      {/* Navigation */}
+      <nav className="fixed top-0 w-full z-50 px-6 py-5">
+        <div className="max-w-7xl mx-auto flex justify-between items-center transition-all bg-white/40 backdrop-blur-xl border border-white/40 rounded-3xl px-6 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.05)]">
+          <div className="flex items-center gap-4">
+            <div className="bg-teal-600 p-2 rounded-xl shadow-lg">
+              <img src={LOGO_URL} alt="DDRC" className="w-8 h-8 object-contain brightness-0 invert" />
             </div>
-            <div className="navbar-center">
-              {/* Language Switch Button - Centered */}
-              <button
-                className="btn btn-link text-primary"
-                onClick={toggleLanguage}
-                title={language === 'en' ? 'Switch to Marathi' : 'Switch to English'}
-                style={{ textDecoration: 'none', padding: '0.5rem' }}
-              >
-                <i className="bi bi-translate" style={{ fontSize: '1.125rem' }}></i>
-                <span className="ms-1" style={{ fontSize: '0.875rem' }}>
-                  {language === 'en' ? 'MR' : 'EN'}
-                </span>
-              </button>
+            <div>
+              <h1 className="text-teal-950 font-black text-xl tracking-tight leading-none">DDRC</h1>
+              <span className="text-[10px] font-bold text-teal-600 uppercase tracking-[0.2em]">Ahilyanagar</span>
             </div>
-            <div className="navbar-actions">
-              <Link href="/public" className="btn btn-outline-primary btn-sm me-2">
-                {translations[language].nav.publicSurvey}
-              </Link>
-              <Link href="/login" className="btn btn-primary btn-sm">
-                {translations[language].nav.login}
-              </Link>
-            </div>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <button
+              onClick={() => setLang(l => l === 'mr' ? 'en' : 'mr')}
+              className="text-sm font-bold text-teal-900/60 hover:text-teal-600 transition-colors uppercase tracking-widest flex items-center gap-2"
+            >
+              <span className="w-5 h-[1px] bg-teal-200"></span>
+              {lang === 'mr' ? 'English' : 'मराठी'}
+            </button>
+            <Link href="/login" className="px-6 py-2.5 rounded-2xl bg-slate-950 text-white text-sm font-bold hover:bg-teal-900 transition-all shadow-xl active:scale-95">
+              {lang === 'mr' ? 'लॉगिन' : 'Staff Login'}
+            </Link>
           </div>
         </div>
       </nav>
 
-      {/* Full-Screen Carousel */}
-      <section className="hero-carousel">
-        {carouselSlides.map((slide, index) => (
-          <div
-            key={slide.id}
-            className={`carousel-slide ${index === currentSlide ? 'active' : ''}`}
-            style={{
-              backgroundImage: `url(${slide.bgImage})`,
-            }}
-          >
-            <div className="carousel-overlay"></div>
-            <div className="carousel-content">
-              <div className="container">
-                <div className="carousel-text">
-                  <h1 className="carousel-title animate__animated animate__fadeInDown">
-                    {translations[language].carousel[index].title}
-                  </h1>
-                  <p className="carousel-description animate__animated animate__fadeInUp">
-                    {translations[language].carousel[index].description}
-                  </p>
-                  <div className="carousel-actions animate__animated animate__fadeInUp">
-                    <Link href="/public" className="btn btn-primary btn-lg me-3">
-                      {translations[language].carouselActions.startSurvey}
-                    </Link>
-                    <Link href="/login" className="btn btn-outline-light btn-lg">
-                      {translations[language].nav.login}
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </div>
+      {/* Hero */}
+      <section className="relative pt-44 pb-32 px-6 flex flex-col items-center justify-center text-center">
+        <div className="relative z-10 max-w-4xl">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-teal-50 border border-teal-100 text-teal-700 text-[10px] font-black uppercase tracking-[0.3em] mb-10 mx-auto shadow-sm">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500"></span>
+            </span>
+            Campaign 2026
           </div>
-        ))}
 
-        {/* Carousel Controls */}
-        <button className="carousel-control prev" onClick={prevSlide} aria-label="Previous slide">
-          <i className="bi bi-chevron-left"></i>
-        </button>
-        <button className="carousel-control next" onClick={nextSlide} aria-label="Next slide">
-          <i className="bi bi-chevron-right"></i>
-        </button>
+          <h2 className="text-5xl md:text-8xl font-black text-slate-950 mb-8 leading-[0.95] tracking-tighter">
+            {t.hero.title}
+          </h2>
 
-        {/* Carousel Indicators */}
-        <div className="carousel-indicators">
-          {carouselSlides.map((_, index) => (
-            <button
-              key={index}
-              className={`indicator ${index === currentSlide ? 'active' : ''}`}
-              onClick={() => goToSlide(index)}
-              aria-label={`Go to slide ${index + 1}`}
-            />
-          ))}
+          <p className="text-xl md:text-2xl text-slate-600 font-medium max-w-2xl mx-auto mb-14 leading-relaxed opacity-80">
+            {t.hero.subtitle}
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-5">
+            <Link href="/public/survey" className="group relative px-10 py-5 rounded-3xl bg-teal-600 text-white text-xl font-bold transition-all hover:bg-teal-700 hover:shadow-[0_20px_40px_rgba(13,148,136,0.3)] hover:-translate-y-1 active:scale-95 overflow-hidden">
+              <span className="relative z-10 flex items-center gap-3">
+                {t.hero.cta}
+                <svg className="w-6 h-6 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+              </span>
+              <div className="absolute inset-0 bg-gradient-to-r from-teal-400/0 via-white/20 to-teal-400/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+            </Link>
+          </div>
         </div>
+
+        {/* Floating Abstract Shapes */}
+        <div className="absolute top-1/2 left-0 -translate-y-1/2 -translate-x-1/2 w-96 h-96 bg-gradient-to-br from-teal-400/10 to-transparent rounded-full blur-3xl opacity-50"></div>
+        <div className="absolute top-1/3 right-0 -translate-y-1/2 translate-x-1/2 w-[500px] h-[500px] bg-gradient-to-bl from-blue-400/10 to-transparent rounded-full blur-[100px] opacity-30"></div>
       </section>
 
-      {/* Download Mobile App Section */}
-      <section ref={downloadSectionRef} className="landing-section download-section">
-        <div className="container">
-          <div className="download-card">
-            <div className="download-header">
-              <div className="download-icon">
-                <i className="bi bi-phone"></i>
-              </div>
-              <h2 className="download-title">
-                {translations[language].download.title}
-              </h2>
-              <p className="download-subtitle">
-                {translations[language].download.subtitle}
+      {/* Grid Content */}
+      <section className="max-w-7xl mx-auto px-6 py-20">
+        <div className="grid lg:grid-cols-2 gap-12 items-stretch">
+
+          {/* About Glass Card */}
+          <div className="p-10 rounded-[40px] bg-white border border-slate-100 shadow-[0_20px_60px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+            <div>
+              <div className="text-teal-600 font-black text-xs uppercase tracking-widest mb-4">MISSION</div>
+              <h3 className="text-4xl font-black text-slate-900 mb-8 leading-tight">{t.about.title}</h3>
+              <p className="text-xl text-slate-500 font-medium leading-relaxed opacity-90">
+                {t.about.description}
               </p>
             </div>
-            <div className="download-content">
-              <div className="row align-items-center">
-                <div className="col-lg-6">
-                  <div className="download-info">
-                    <h3>{translations[language].download.forFieldOfficers}</h3>
-                    <p className="download-text">
-                      {translations[language].download.description}
-                    </p>
-                    <div className="download-features">
-                      <div className="download-feature-item">
-                        <i className="bi bi-check-circle-fill"></i>
-                        <span>{translations[language].download.features.offline}</span>
-                      </div>
-                      <div className="download-feature-item">
-                        <i className="bi bi-check-circle-fill"></i>
-                        <span>{translations[language].download.features.ocr}</span>
-                      </div>
-                      <div className="download-feature-item">
-                        <i className="bi bi-check-circle-fill"></i>
-                        <span>{translations[language].download.features.sync}</span>
-                      </div>
-                    </div>
+            <div className="mt-12 relative rounded-[30px] overflow-hidden group">
+              <img src={SUPPORT_IMG} alt="Impact" className="w-full h-80 object-cover grayscale-[0.2] transition-all duration-700 group-hover:scale-110 group-hover:rotate-1" />
+              <div className="absolute inset-0 bg-teal-900/10 group-hover:bg-teal-900/0 transition-colors"></div>
+            </div>
+          </div>
+
+          <div className="grid gap-8">
+            {/* Benefits List */}
+            <div className="p-10 rounded-[40px] bg-slate-950 text-white shadow-2xl overflow-hidden relative group">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-teal-500/20 blur-[80px] -mr-32 -mt-32"></div>
+              <h3 className="text-3xl font-black mb-8 relative z-10">{t.benefits.title}</h3>
+              <div className="flex flex-wrap gap-4 relative z-10">
+                {t.benefits.items.map((item, i) => (
+                  <div key={i} className="px-5 py-3 rounded-2xl bg-white/5 border border-white/10 text-sm font-bold flex items-center gap-3 hover:bg-white hover:text-slate-950 transition-all cursor-default">
+                    <span className="text-teal-400">●</span> {item}
                   </div>
-                </div>
-                <div className="col-lg-6 text-center">
-                  <div className="play-store-badge">
-                    <a 
-                      href="#"
-                      onClick={(e) => e.preventDefault()}
-                      className="play-store-link"
-                    >
-                      <img 
-                        src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" 
-                        alt="Get it on Google Play" 
-                        className="play-store-image"
-                      />
-                    </a>
-                    <p className="play-store-note">
-                      {translations[language].download.comingSoon}
-                    </p>
+                ))}
+              </div>
+            </div>
+
+            {/* Documents List */}
+            <div className="p-10 rounded-[40px] bg-teal-50 border border-teal-100">
+              <div className="flex justify-between items-start mb-8">
+                <h3 className="text-3xl font-black text-teal-900">{t.documents.title}</h3>
+                <span className="bg-teal-200/50 text-teal-800 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest">Required</span>
+              </div>
+              <div className="grid gap-3">
+                {t.documents.list.map((doc, i) => (
+                  <div key={i} className="group flex items-center justify-between p-4 rounded-2xl bg-white/50 border border-teal-200/50 shadow-sm transition-all hover:bg-white hover:-translate-x-1">
+                    <span className="font-bold text-teal-950">{doc}</span>
+                    <span className="opacity-20 group-hover:opacity-100 transition-opacity">📎</span>
                   </div>
-                </div>
+                ))}
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* About Surveys Section */}
-      <section className="landing-section about-surveys-section">
-        <div className="container">
-          <div className="section-header text-center mb-5">
-            <h2 className="section-title">
-              {translations[language].about.title}
-            </h2>
+      {/* Progress/Workflow */}
+      <section className="py-32 px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-20">
+            <h3 className="text-4xl md:text-6xl font-black text-slate-950 tracking-tighter mb-4">{t.process.title}</h3>
+            <div className="w-24 h-2 bg-teal-600 mx-auto rounded-full"></div>
           </div>
-          <div className="row">
-            <div className="col-lg-8 mx-auto">
-              <div className="content-card">
-                <p className="section-text">
-                  {translations[language].about.text1}
-                </p>
-                <p className="section-text">
-                  {translations[language].about.text2}
-                </p>
-                <div className="survey-features">
-                  <div className="row g-3">
-                    <div className="col-md-6">
-                      <div className="feature-box">
-                        <i className="bi bi-check-circle-fill text-primary"></i>
-                        <span>{translations[language].about.features.multiSection}</span>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="feature-box">
-                        <i className="bi bi-check-circle-fill text-primary"></i>
-                        <span>{translations[language].about.features.ocr}</span>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="feature-box">
-                        <i className="bi bi-check-circle-fill text-primary"></i>
-                        <span>{translations[language].about.features.offline}</span>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <div className="feature-box">
-                        <i className="bi bi-check-circle-fill text-primary"></i>
-                        <span>{translations[language].about.features.sync}</span>
-                      </div>
-                    </div>
+          <div className="grid md:grid-cols-3 gap-8">
+            {t.process.steps.map((step, i) => (
+              <div key={i} className="relative p-10 rounded-[40px] bg-white border border-slate-100 group transition-all hover:border-teal-200">
+                <div className="text-8xl font-black text-teal-50 absolute top-4 right-8 opacity-50 group-hover:text-teal-100 transition-colors">0{i + 1}</div>
+                <div className="relative z-10">
+                  <div className="w-20 h-20 rounded-3xl bg-teal-50 flex items-center justify-center text-4xl mb-8 shadow-inner group-hover:bg-teal-600 group-hover:scale-110 transition-all">
+                    {step.icon}
                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* User Roles Section */}
-      <section className="landing-section roles-section">
-        <div className="container">
-          <div className="section-header text-center mb-5">
-            <h2 className="section-title">
-              {translations[language].roles.title}
-            </h2>
-            <p className="section-subtitle">
-              {translations[language].roles.subtitle}
-            </p>
-          </div>
-          <div className="row g-4">
-            <div className="col-lg-6">
-              <div className="role-card">
-                <div className="role-icon">
-                  <i className="bi bi-phone"></i>
-                </div>
-                <h3 className="role-title">{translations[language].roles.fieldOfficer.title}</h3>
-                <ul className="role-responsibilities">
-                  {translations[language].roles.fieldOfficer.responsibilities.map((resp, idx) => (
-                    <li key={idx}>{resp}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-            <div className="col-lg-6">
-              <div className="role-card">
-                <div className="role-icon">
-                  <i className="bi bi-shield-check"></i>
-                </div>
-                <h3 className="role-title">{translations[language].roles.verificationOfficer.title}</h3>
-                <ul className="role-responsibilities">
-                  {translations[language].roles.verificationOfficer.responsibilities.map((resp, idx) => (
-                    <li key={idx}>{resp}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-            <div className="col-lg-6">
-              <div className="role-card">
-                <div className="role-icon">
-                  <i className="bi bi-person-badge"></i>
-                </div>
-                <h3 className="role-title">{translations[language].roles.administrator.title}</h3>
-                <ul className="role-responsibilities">
-                  {translations[language].roles.administrator.responsibilities.map((resp, idx) => (
-                    <li key={idx}>{resp}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-            <div className="col-lg-6">
-              <div className="role-card">
-                <div className="role-icon">
-                  <i className="bi bi-person"></i>
-                </div>
-                <h3 className="role-title">{translations[language].roles.beneficiary.title}</h3>
-                <ul className="role-responsibilities">
-                  {translations[language].roles.beneficiary.responsibilities.map((resp, idx) => (
-                    <li key={idx}>{resp}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Survey Process Phases Section */}
-      <section className="landing-section process-section">
-        <div className="container">
-          <div className="section-header text-center mb-5">
-            <h2 className="section-title">
-              {translations[language].process.title}
-            </h2>
-            <p className="section-subtitle">
-              {translations[language].process.subtitle}
-            </p>
-          </div>
-          <div className="process-timeline">
-            {translations[language].process.steps.map((step, index) => (
-              <div key={index} className="process-step">
-                <div className="step-number">{index + 1}</div>
-                <div className="step-content">
-                  <h3 className="step-title">{step.title}</h3>
-                  <p className="step-description">
-                    {step.description}
-                  </p>
+                  <h4 className="text-2xl font-black text-slate-900 mb-4 tracking-tight">{step.title}</h4>
+                  <p className="text-slate-500 font-medium leading-relaxed">{step.desc}</p>
                 </div>
               </div>
             ))}
@@ -749,157 +276,59 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Data Security Section - Highlighted */}
-      <section className="landing-section security-section">
-        <div className="container">
-          <div className="security-card">
-            <div className="security-header">
-              <div className="security-icon">
-                <i className="bi bi-shield-lock-fill"></i>
-              </div>
-              <h2 className="security-title">
-                {translations[language].security.title}
-              </h2>
-            </div>
-            <div className="security-content">
-              <p className="security-intro">
-                <strong>{translations[language].security.intro.split('.')[0]}.</strong> {translations[language].security.intro.split('.').slice(1).join('.').trim()}
+      {/* Footer / Final Action */}
+      <footer className="pt-20 pb-10 px-6 bg-slate-50 border-t border-slate-100 mt-20">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-slate-950 rounded-[50px] p-12 md:p-24 text-center overflow-hidden relative mb-20">
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] opacity-30"></div>
+            <div className="absolute top-0 left-0 w-1/2 h-full bg-teal-600/10 blur-[120px]"></div>
+
+            <div className="relative z-10">
+              <h4 className="text-3xl md:text-5xl font-black text-white mb-8 tracking-tighter">
+                {t.footer.slogan}
+              </h4>
+              <p className="text-teal-400/80 font-bold mb-12 uppercase tracking-[0.4em] text-sm">
+                Join the Movement
               </p>
-              
-              <div className="security-features">
-                <div className="row g-4">
-                  <div className="col-md-6">
-                    <div className="security-feature-item">
-                      <i className="bi bi-key-fill"></i>
-                      <div>
-                        <h4>{translations[language].security.features.encryption.title}</h4>
-                        <p>{translations[language].security.features.encryption.description}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="security-feature-item">
-                      <i className="bi bi-database-lock"></i>
-                      <div>
-                        <h4>{translations[language].security.features.database.title}</h4>
-                        <p>{translations[language].security.features.database.description}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="security-feature-item">
-                      <i className="bi bi-person-check-fill"></i>
-                      <div>
-                        <h4>{translations[language].security.features.access.title}</h4>
-                        <p>{translations[language].security.features.access.description}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="security-feature-item">
-                      <i className="bi bi-file-earmark-lock"></i>
-                      <div>
-                        <h4>{translations[language].security.features.storage.title}</h4>
-                        <p>{translations[language].security.features.storage.description}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="security-feature-item">
-                      <i className="bi bi-clock-history"></i>
-                      <div>
-                        <h4>{translations[language].security.features.audit.title}</h4>
-                        <p>{translations[language].security.features.audit.description}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="security-feature-item">
-                      <i className="bi bi-shield-check"></i>
-                      <div>
-                        <h4>{translations[language].security.features.updates.title}</h4>
-                        <p>{translations[language].security.features.updates.description}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="security-note">
-                <i className="bi bi-info-circle-fill"></i>
-                <p>
-                  <strong>{translations[language].security.privacy.split(':')[0]}:</strong> {translations[language].security.privacy.split(':').slice(1).join(':').trim()}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="landing-section cta-section">
-        <div className="container">
-          <div className="cta-content text-center">
-            <h2 className="cta-title">
-              {translations[language].cta.title}
-            </h2>
-            <p className="cta-text">
-              {translations[language].cta.text}
-            </p>
-            <div className="cta-actions">
-              <Link href="/public" className="btn btn-primary btn-lg me-3">
-                <i className="bi bi-clipboard-check me-2"></i>
-                {translations[language].cta.startSurvey}
+              <Link href="/public/survey" className="inline-flex items-center gap-4 px-12 py-6 rounded-[32px] bg-white text-slate-950 text-2xl font-black hover:bg-teal-50 hover:scale-[1.03] transition-all shadow-2xl active:scale-95">
+                {t.hero.cta}
               </Link>
-              <Link href="/login" className="btn btn-outline-primary btn-lg">
-                <i className="bi bi-box-arrow-in-right me-2"></i>
-                {translations[language].nav.login}
-              </Link>
+              <p className="mt-12 text-slate-500 text-sm max-w-lg mx-auto leading-relaxed">
+                {t.footer.closing}
+              </p>
             </div>
           </div>
-        </div>
-      </section>
 
-      {/* Footer */}
-      <footer className="landing-footer">
-        <div className="container">
-          <div className="row">
-            <div className="col-md-4">
-              <div className="footer-brand">
-                <img src={LOGO_URL} alt="DDRC Logo" className="footer-logo" />
-                <h3>{translations[language].footer.title}</h3>
-                <p>
-                  {translations[language].footer.description.split('\n').map((line, idx) => (
-                    <span key={idx}>{line}{idx === 0 && <br />}</span>
-                  ))}
-                </p>
-              </div>
+          <div className="flex flex-col md:flex-row justify-between items-center gap-10 border-t border-slate-200 pt-10">
+            <div className="flex items-center gap-3 opacity-50">
+              <img src={LOGO_URL} alt="Logo" className="w-6 h-6 object-contain" />
+              <span className="text-xs font-black uppercase tracking-widest text-slate-900 italic">DDRC AHILYANAGAR</span>
             </div>
-            <div className="col-md-4">
-              <h4>{translations[language].footer.quickLinks}</h4>
-              <ul className="footer-links">
-                <li><Link href="/public">{translations[language].nav.publicSurvey}</Link></li>
-                <li><Link href="/login">{translations[language].nav.login}</Link></li>
-                <li><Link href="/dashboard">Dashboard</Link></li>
-              </ul>
-            </div>
-            <div className="col-md-4">
-              <h4>{translations[language].footer.contact}</h4>
-              <p>
-                {translations[language].footer.address.split('\n').map((line, idx) => (
-                  <span key={idx}>{line}{idx === 0 && <br />}</span>
-                ))}
-              </p>
-              <p className="footer-powered">
-                {translations[language].footer.poweredBy} <a href="https://ddrcnagar.in" target="_blank" rel="noopener noreferrer" className="footer-utkrranti">UTKRRANTI</a>
-              </p>
+            <div className="flex items-center gap-12 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+              <p>HELPLINE: {t.footer.contact}</p>
+              <p>© 2026 OFFICIAL SURVEY PORTAL</p>
             </div>
           </div>
-          <div className="footer-bottom">
-            <p>&copy; {new Date().getFullYear()} {translations[language].footer.copyright}</p>
-        </div>
         </div>
       </footer>
+
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
+        
+        body {
+          font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          -webkit-font-smoothing: antialiased;
+        }
+
+        ::selection {
+          background: #0d9488;
+          color: white;
+        }
+
+        .min-h-screen {
+          scroll-behavior: smooth;
+        }
+      `}</style>
     </div>
   );
 }

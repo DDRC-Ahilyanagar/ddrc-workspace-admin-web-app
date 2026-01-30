@@ -5,32 +5,9 @@ import { requireAuth, verifyAuth } from '@/lib/auth';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { autoAssignSurveys } from '@/lib/auto-assign-surveys';
-import { sendFormCompletionSMS } from '@/lib/sms';
+import { sendFormCompletionSMS, generateRegistrationNumber } from '@/lib/sms';
 import { logTestUserActivity } from '@/lib/test-logger';
 
-/**
- * Generate short form for village/taluka name
- * Takes first 4-6 uppercase characters, removes spaces and special characters
- */
-function generateShortForm(name: string): string {
-  if (!name || typeof name !== 'string') return 'XXXX';
-
-  // Remove spaces, special characters, and convert to uppercase
-  let cleaned = name
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '') // Remove all non-alphanumeric
-    .replace(/\s+/g, ''); // Remove spaces
-
-  // Take first 4-6 characters
-  if (cleaned.length <= 4) {
-    return cleaned.padEnd(4, 'X'); // Pad if too short
-  } else if (cleaned.length >= 6) {
-    return cleaned.substring(0, 6);
-  } else {
-    return cleaned;
-  }
-}
 
 /**
  * Get current time in Asia/Kolkata timezone
@@ -48,36 +25,6 @@ function getISTDate(): Date {
 function getISTISOString(): string {
   const ist = getISTDate();
   return ist.toISOString().replace('Z', '+05:30');
-}
-
-/**
- * Generate registration number for public form submissions
- * Format: DDRC/DIVYANG/MMYY/GAAV_SHORT/TALUKA_SHORT/AADHAR_LAST4
- * Example: DDRC/DIVYANG/0224/SHIRD/RAHAT/5678
- */
-function generateRegistrationNumber(
-  aadhaarId: number,
-  village: string | null,
-  taluka: string | null
-): string {
-  // Get current month and year (MMYY format) in IST
-  const now = getISTDate();
-  const month = String(now.getMonth() + 1).padStart(2, '0'); // 01-12
-  const year = String(now.getFullYear()).slice(-2); // Last 2 digits
-  const mmYY = `${month}${year}`;
-
-  // Get last 4 digits of Aadhaar
-  const aadhaarStr = String(aadhaarId);
-  const aadhaarLast4 = aadhaarStr.length >= 4
-    ? aadhaarStr.slice(-4)
-    : aadhaarStr.padStart(4, '0');
-
-  // Generate short forms
-  const villageShort = village ? generateShortForm(village) : 'XXXX';
-  const talukaShort = taluka ? generateShortForm(taluka) : 'XXXX';
-
-  // Format: DDRC/DIVYANG/MMYY/TALUKA_SHORT/GAAV_SHORT/AADHAR_LAST4
-  return `DDRC/DIVYANG/${mmYY}/${talukaShort}/${villageShort}/${aadhaarLast4}`;
 }
 
 /**
@@ -615,6 +562,16 @@ export async function handleSubmit(request: NextRequest, user: any) {
             throw new Error('Failed to serialize merged survey data. Please try again.');
           }
 
+          // Generate registration number if missing
+          let registrationNumber = existing.registration_number;
+          if (!registrationNumber && aadhaarNumber) {
+            registrationNumber = generateRegistrationNumber(aadhaarNumber as string, logVillage || undefined, logTaluka || undefined);
+            Logger.info('REGISTRATION_NUMBER_GENERATED_ON_UPDATE', {
+              registration_number: registrationNumber,
+              aadhaar_id: aadhaarId
+            });
+          }
+
           await connection.execute(
             `UPDATE surveys 
              SET no_of_questions_answered = ?,
@@ -622,9 +579,10 @@ export async function handleSubmit(request: NextRequest, user: any) {
                  survey_json = ?,
                  json_path = ?,
                  source = ?,
+                 registration_number = COALESCE(?, registration_number),
                  updated_at = NOW()
              WHERE aadhaar_id = ?`,
-            [totalAnswered, totalUnanswered, mergedJsonString, relativePath, source, aadhaarId]
+            [totalAnswered, totalUnanswered, mergedJsonString, relativePath, source, registrationNumber, aadhaarId]
           );
 
           // Mark clarifications as resolved for any questions that were answered in this submission
@@ -665,10 +623,10 @@ export async function handleSubmit(request: NextRequest, user: any) {
             unanswered: totalUnanswered,
           });
         } else {
-          // Generate registration number for public form submissions
+          // Generate registration number for new submissions
           let registrationNumber: string | null = null;
-          if (source === 'Divyang Self' && userId === 1) {
-            registrationNumber = generateRegistrationNumber(aadhaarId, logVillage, logTaluka);
+          if (aadhaarNumber) {
+            registrationNumber = generateRegistrationNumber(aadhaarNumber as string, logVillage || undefined, logTaluka || undefined);
             Logger.info('REGISTRATION_NUMBER_GENERATED', {
               registration_number: registrationNumber,
               aadhaar_id: aadhaarId,
@@ -893,25 +851,33 @@ export async function handleSubmit(request: NextRequest, user: any) {
           });
         });
 
-        // Get registration number for SMS (for public forms only)
-        let registrationNumberForSMS: string | undefined = undefined;
-        try {
-          const [regNumResult] = await connection.query(
-            'SELECT registration_number FROM surveys WHERE id = ? LIMIT 1',
-            [surveyId]
-          );
-          if (Array.isArray(regNumResult) && (regNumResult as any[]).length > 0) {
-            registrationNumberForSMS = (regNumResult as any[])[0].registration_number || undefined;
-          }
-        } catch (regNumError) {
-          Logger.warn('REGISTRATION_NUMBER_FETCH_FAILED', { survey_id: surveyId, error: regNumError });
-        }
-
         // Send SMS to divyang after successful public form submission (fire and forget)
-        // Use responsePayload which contains the survey data with answers
+        // Also notifies the assigned field officer
         try {
           if (responsePayload) {
-            sendFormCompletionSMS(responsePayload, surveyId, false, registrationNumberForSMS).then((smsResult) => {
+            // Get registration number from DB if not available in current context
+            let regNum: string | undefined = undefined;
+            if (surveyId) {
+              const [rows] = await connection.query('SELECT registration_number FROM surveys WHERE id = ?', [surveyId]);
+              if (Array.isArray(rows) && rows.length > 0) regNum = (rows[0] as any).registration_number;
+            }
+
+            // Get assigned officer phone
+            let officerPhone: string | undefined = undefined;
+            if (surveyId) {
+              const [assignmentRows] = await connection.query(`
+                 SELECT u.phone 
+                 FROM survey_assignments sa
+                 JOIN users u ON sa.user_id = u.id
+                 WHERE sa.survey_id = ? AND sa.status != 'unassigned'
+                 LIMIT 1
+               `, [surveyId]);
+              if (Array.isArray(assignmentRows) && assignmentRows.length > 0) {
+                officerPhone = (assignmentRows[0] as any).phone;
+              }
+            }
+
+            sendFormCompletionSMS(responsePayload, surveyId, false, regNum, officerPhone).then((smsResult) => {
               if (smsResult.ok) {
                 Logger.info('FORM_COMPLETION_SMS_SENT', {
                   survey_id: surveyId,
@@ -945,11 +911,17 @@ export async function handleSubmit(request: NextRequest, user: any) {
           });
         }
       } else if (isFieldOfficerSubmission && surveyId) {
-        // Send SMS to divyang after successful field officer form submission (fully completed)
-        // Use responsePayload which contains the survey data with answers
+        // Send SMS to divyang and testifying officer after successful field officer form submission
         try {
           if (responsePayload) {
-            sendFormCompletionSMS(responsePayload, surveyId, true).then((smsResult) => {
+            // Get registration number
+            const [regRows] = await connection.query('SELECT registration_number FROM surveys WHERE id = ?', [surveyId]);
+            const regNum = (Array.isArray(regRows) && regRows.length > 0) ? (regRows[0] as any).registration_number : undefined;
+
+            // Officer phone is the one submitting
+            const officerPhone = user?.phone;
+
+            sendFormCompletionSMS(responsePayload, surveyId, true, regNum, officerPhone).then((smsResult) => {
               if (smsResult.ok) {
                 Logger.info('FORM_COMPLETION_SMS_SENT', {
                   survey_id: surveyId,
@@ -1087,4 +1059,3 @@ export const POST = async (request: NextRequest) => {
     );
   }
 };
-
