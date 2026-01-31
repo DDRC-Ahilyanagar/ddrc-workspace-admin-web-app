@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     if (!user) {
       return NextResponse.json({ ok: false, error: 'user_not_found' }, { status: 404 });
     }
-    
+
     // Determine effective user_type (from user_type column or user_types table)
     const userType = (user.user_type || '').toString().trim().toLowerCase();
     const relatedType = (user.related_type || '').toString().trim().toLowerCase();
@@ -64,15 +64,67 @@ export async function POST(req: NextRequest) {
     // Parallel work (DB IO is async; leverage pool.query in parallel).
     const recentPromise = pool
       .query(
-        `SELECT sa.id, sa.aadhar_no, sa.created_at, sa.updated_at
-         FROM survey_aadhar sa
-         WHERE sa.user_id = ?
-         ORDER BY sa.id DESC
-         LIMIT 5`,
-        [user.id]
+        `SELECT s.id, s.aadhaar_id, s.survey_json, s.updated_at, sa.aadhar_no
+         FROM surveys s
+         LEFT JOIN survey_aadhar sa ON sa.id = s.aadhaar_id
+         WHERE s.user_id = ?
+         OR EXISTS (
+             SELECT 1 FROM survey_assignments ass 
+             WHERE ass.survey_id = s.id AND ass.field_officer_id = ?
+         )
+         ORDER BY s.updated_at DESC
+         LIMIT 10`,
+        [user.id, user.id]
       )
-      .then(([r]) => (Array.isArray(r) ? (r as any[]) : []))
-      .catch(() => [] as any[]);
+      .then(async ([rows]) => {
+        const surveys = Array.isArray(rows) ? (rows as any[]) : [];
+        const requiredIds = await requiredQuestionsPromise;
+
+        return surveys.map((s) => {
+          let isComplete = false;
+          let surveyData = {};
+
+          try {
+            surveyData = typeof s.survey_json === 'string'
+              ? JSON.parse(s.survey_json)
+              : s.survey_json || {};
+
+            // Re-use logic for completion check
+            const answers = (surveyData as any).answers || [];
+            const answeredQuestionIds = new Set<number>();
+            answers.forEach((ans: any) => {
+              const qid = Number(ans.question_id);
+              const answer = String(ans.answer || '').trim();
+              if (qid && answer && answer !== '--' && answer !== '') {
+                answeredQuestionIds.add(qid);
+              }
+            });
+
+            isComplete = true;
+            for (const reqId of requiredIds) {
+              if (!answeredQuestionIds.has(reqId)) {
+                isComplete = false;
+                break;
+              }
+            }
+          } catch (e) {
+            console.error('Error parsing recent survey json', e);
+          }
+
+          return {
+            id: s.id,
+            aadhaar_id: s.aadhaar_id,
+            aadhar_no: s.aadhar_no,
+            updated_at: s.updated_at,
+            is_complete: isComplete,
+            survey_data: surveyData,
+          };
+        });
+      })
+      .catch((e) => {
+        console.error('Error fetching recent surveys', e);
+        return [] as any[];
+      });
 
     // Debug: Check total surveys count
     const debugCountPromise = pool
@@ -110,14 +162,19 @@ export async function POST(req: NextRequest) {
 
     const countsPromise = pool
       .query(
-        `SELECT id, survey_json, no_of_questions_answered, no_of_questions_unanswered
-         FROM surveys WHERE user_id = ?`,
-        [user.id]
+        `SELECT s.id, s.survey_json
+         FROM surveys s
+         WHERE s.user_id = ?
+         OR EXISTS (
+             SELECT 1 FROM survey_assignments sa 
+             WHERE sa.survey_id = s.id AND sa.field_officer_id = ?
+         )`,
+        [user.id, user.id]
       )
       .then(async (surveysResult) => {
         const requiredQuestionIds = await requiredQuestionsPromise;
         const totalSurveys = await debugCountPromise;
-        
+
         const surveys = Array.isArray(surveysResult[0]) ? (surveysResult[0] as any[]) : [];
         let completed = 0;
         let pending = 0;
@@ -129,13 +186,13 @@ export async function POST(req: NextRequest) {
           }
 
           try {
-            const surveyData = typeof survey.survey_json === 'string' 
-              ? JSON.parse(survey.survey_json) 
+            const surveyData = typeof survey.survey_json === 'string'
+              ? JSON.parse(survey.survey_json)
               : survey.survey_json;
-            
+
             const answers = surveyData.answers || [];
             const answeredQuestionIds = new Set<number>();
-            
+
             // Collect all answered question IDs (excluding '--' answers)
             answers.forEach((ans: any) => {
               const qid = Number(ans.question_id);
@@ -188,9 +245,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      user: { 
-        id: user.id, 
-        name: user.name, 
+      user: {
+        id: user.id,
+        name: user.name,
         phone: user.contact_number,
         user_type: effectiveUserType,
       },

@@ -193,7 +193,7 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
         FROM survey_assignments sa
         WHERE sa.survey_id = ?
       `, [surveyId]);
-      
+
       if (Array.isArray(existingAssignment) && existingAssignment.length > 0) {
         Logger.warn('AUTO_ASSIGN_SURVEY_ALREADY_ASSIGNED', {
           survey_id: surveyId,
@@ -210,7 +210,7 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
           FROM surveys
           WHERE id = ?
         `, [surveyId]);
-        
+
         if (Array.isArray(surveyCheck) && surveyCheck.length > 0) {
           const survey = surveyCheck[0];
           Logger.warn('AUTO_ASSIGN_SURVEY_EXCLUDED', {
@@ -219,8 +219,8 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
             source: survey.source,
             has_json: survey.has_json,
             reason: survey.user_id !== 1 ? 'user_id is not 1' :
-                    survey.source !== 'Divyang Self' ? `source is '${survey.source}' not 'Divyang Self'` :
-                    !survey.has_json ? 'survey_json is NULL or empty' : 'unknown'
+              survey.source !== 'Divyang Self' ? `source is '${survey.source}' not 'Divyang Self'` :
+                !survey.has_json ? 'survey_json is NULL or empty' : 'unknown'
           });
         } else {
           Logger.warn('AUTO_ASSIGN_SURVEY_NOT_FOUND', {
@@ -267,18 +267,18 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
         FROM users 
         WHERE id = 23
       `);
-      
+
       // Check if profile exists
       const [profile23Check]: any = await conn.query(`
         SELECT id, user_id, primary_gaav, additional_gaavs, current_gaav, taluka
         FROM field_officer_profiles
         WHERE user_id = 23
       `);
-      
+
       Logger.info('AUTO_ASSIGN_USER_23_CHECK', {
         user_23_data: Array.isArray(user23Check) && user23Check.length > 0 ? user23Check[0] : 'NOT FOUND',
         profile_23_data: Array.isArray(profile23Check) && profile23Check.length > 0 ? profile23Check[0] : 'NO PROFILE',
-        matches_field_officer: Array.isArray(user23Check) && user23Check.length > 0 
+        matches_field_officer: Array.isArray(user23Check) && user23Check.length > 0
           ? (user23Check[0].user_type === 'field_officer' || user23Check[0].user_type === 'field officer')
           : false,
         matches_status: Array.isArray(user23Check) && user23Check.length > 0
@@ -297,7 +297,7 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
         LEFT JOIN field_officer_profiles p ON u.id = p.user_id
         WHERE u.id = 23
       `);
-      
+
       Logger.info('AUTO_ASSIGN_TEST_QUERY_USER_23', {
         test_query_result: Array.isArray(testQuery) && testQuery.length > 0 ? testQuery[0] : 'NOT FOUND'
       });
@@ -312,14 +312,14 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
         AND (u.status = 'active' OR u.status IS NULL OR u.status = '')
         AND (u.is_active = 1 OR u.is_active = true OR u.is_active IS NULL)
       `);
-      
+
       // If still 0, try without is_active check to see if that's the blocker
       if (!Array.isArray(activeOfficers) || activeOfficers.length === 0) {
         Logger.warn('AUTO_ASSIGN_QUERY_RETURNED_ZERO_WITH_IS_ACTIVE', {
           message: 'Query with is_active check returned 0, trying without is_active',
           user_23_data: Array.isArray(user23Check) && user23Check.length > 0 ? user23Check[0] : null
         });
-        
+
         const [activeOfficersNoActiveCheck]: any = await conn.query(`
           SELECT u.id, p.primary_gaav, p.additional_gaavs, p.taluka, p.current_gaav
           FROM users u
@@ -327,12 +327,12 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
           WHERE (u.user_type = 'field_officer' OR u.user_type = 'field officer' OR u.user_type = 'verification_officer')
           AND (u.status = 'active' OR u.status IS NULL OR u.status = '')
         `);
-        
+
         Logger.info('AUTO_ASSIGN_QUERY_WITHOUT_IS_ACTIVE', {
           found_count: Array.isArray(activeOfficersNoActiveCheck) ? activeOfficersNoActiveCheck.length : 0,
           officer_ids: Array.isArray(activeOfficersNoActiveCheck) ? activeOfficersNoActiveCheck.map((o: any) => o.id) : []
         });
-        
+
         // Use the results without is_active check if we found officers
         if (Array.isArray(activeOfficersNoActiveCheck) && activeOfficersNoActiveCheck.length > 0) {
           activeOfficers = activeOfficersNoActiveCheck;
@@ -406,14 +406,14 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
           // Only include officers who have at least one gaav configured
           // This ensures we match against: current_gaav OR primary_gaav OR any of the 3 additional_gaavs
           if (villages.length > 0) {
-            officerGavMap.set(officer.id, { 
-              taluka, 
-              villages, 
+            officerGavMap.set(officer.id, {
+              taluka,
+              villages,
               current_gaav: officer.current_gaav,
               primary_gaav: officer.primary_gaav,
               additional_gaavs: officer.additional_gaavs
             });
-            
+
             Logger.info('AUTO_ASSIGN_OFFICER_GAAVS', {
               officer_id: officer.id,
               total_gaavs: villages.length,
@@ -437,7 +437,7 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
         }
       }
     } catch (profileError) {
-      Logger.error('AUTO_ASSIGN_PROFILE_ERROR', { 
+      Logger.error('AUTO_ASSIGN_PROFILE_ERROR', {
         error: (profileError as any)?.message,
         stack: (profileError as any)?.stack
       });
@@ -593,19 +593,19 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
             }
           }
         }
-        
+
         const surveyTaluka = talukaQuestionId ? extractVillageFromSurveyJson(surveyJson, talukaQuestionId) : null;
 
         if (!surveyVillage || surveyVillage.trim().length === 0) {
-          Logger.warn('AUTO_ASSIGN_NO_VILLAGE_IN_SURVEY', {
-            survey_id: survey.id,
-            aadhaar_id: survey.aadhaar_id,
-            has_survey_json: !!survey.survey_json,
-            village_question_id: villageQuestionId,
-            tried_question_id_30: true,
-            survey_json_keys: Object.keys(surveyJson),
-            answers_sample: Array.isArray(surveyJson.answers) ? surveyJson.answers.slice(0, 3) : 'not_array'
-          });
+          // Logger.warn('AUTO_ASSIGN_NO_VILLAGE_IN_SURVEY', {
+          //   survey_id: survey.id,
+          //   aadhaar_id: survey.aadhaar_id,
+          //   has_survey_json: !!survey.survey_json,
+          //   village_question_id: villageQuestionId,
+          //   tried_question_id_30: true,
+          //   survey_json_keys: Object.keys(surveyJson),
+          //   answers_sample: Array.isArray(surveyJson.answers) ? surveyJson.answers.slice(0, 3) : 'not_array'
+          // });
           continue;
         }
 
@@ -632,8 +632,8 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
           const hasVillageMatch = officerData.villages.some((v: string) => {
             const normalizedV = normalizeVillage(v);
             return surveyVillageNormalized === normalizedV ||
-                   surveyVillageNormalized.includes(normalizedV) ||
-                   normalizedV.includes(surveyVillageNormalized);
+              surveyVillageNormalized.includes(normalizedV) ||
+              normalizedV.includes(surveyVillageNormalized);
           });
 
           if (hasVillageMatch) {
@@ -641,8 +641,8 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
             const matchedGaavs = officerData.villages.filter((v: string) => {
               const normalizedV = normalizeVillage(v);
               return surveyVillageNormalized === normalizedV ||
-                     surveyVillageNormalized.includes(normalizedV) ||
-                     normalizedV.includes(surveyVillageNormalized);
+                surveyVillageNormalized.includes(normalizedV) ||
+                normalizedV.includes(surveyVillageNormalized);
             });
             Logger.info('AUTO_ASSIGN_VILLAGE_MATCH_FOUND', {
               survey_id: survey.id,
@@ -691,7 +691,7 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
             matchedOfficerId = officerId;
           }
         }
-        
+
         Logger.info('AUTO_ASSIGN_MATCHING_RESULT', {
           survey_id: survey.id,
           survey_village: surveyVillage,
@@ -745,9 +745,9 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
                  (survey_id, field_officer_id, source, status, assigned_at)
                  VALUES (?, ?, ?, 'pending', NOW())
                `, [survey.id, matchedOfficerId, survey.source || 'Divyang Self']);
-              
+
               const insertId = (insertResult as any)?.insertId || ((insertResult as any[])?.[0]?.insertId);
-              
+
               Logger.info('AUTO_ASSIGN_INSERTED_SUCCESS', {
                 survey_id: survey.id,
                 officer_id: matchedOfficerId,
@@ -804,7 +804,7 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
             }
 
           } catch (assignError: any) {
-            Logger.error('AUTO_ASSIGN_INSERT_ERROR', { 
+            Logger.error('AUTO_ASSIGN_INSERT_ERROR', {
               survey_id: survey.id,
               officer_id: matchedOfficerId,
               error: assignError?.message || String(assignError),

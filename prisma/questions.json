@@ -1449,7 +1449,7 @@
     "question": "आपणास खालील पैकी उपचारांची गरज आहे का?",
     "question_type": "MCQ",
     "multi_select": "No",
-    "options": "भौतिकोपचार,वाचाउपचार,मानसिक उपचार,श्रवण यंत्र,कृत्रिम अवयव,सुधारात्मक  शस्त्रक्रिया,इतर वैद्यकीय उपचार",
+    "options": "भौतिकोपचार,वाचाउपचार,मानसिक उपचार,श्रवण यंत्र,कृत्रिम अवयव,सुधारात्मक  शस्त्रक्रिया,इतर वैद्यकीय उपचार,नाही",
     "rendering_condition": "No",
     "rendering_question": null,
     "rendering_value": null,
@@ -1667,9 +1667,9 @@
     "created_on": "2024-09-27 00:00:00",
     "updated_by": null,
     "updated_on": null,
-    "regex": "",
-    "valid_input": "alphanumeric",
-    "max_length": 10
+    "regex": "^\\d{12}$",
+    "valid_input": "numeric",
+    "max_length": 12
   },
   {
     "id": "87",
@@ -3843,7 +3843,7 @@
     "question": "आपणास खालील सार्वजनिक ठिकाणी हालचालीस अडचण येते का?",
     "question_type": "MCQ",
     "multi_select": "Yes",
-    "options": "शाळा/महाविद्यालय,शासकीय कार्यालय,बस/रेल्वे स्थानक,रूग्नालय,मंदिर,बाजार,वरील सर्व",
+    "options": "शाळा/महाविद्यालय,शासकीय कार्यालय,बस/रेल्वे स्थानक,रूग्नालय,मंदिर,बाजार,वरील सर्व,नाही",
     "rendering_condition": "No",
     "rendering_question": null,
     "rendering_value": null,
