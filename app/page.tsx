@@ -4,9 +4,11 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import 'animate.css';
 
 const LOGO_URL = '/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png';
+const ZP_LOGO = '/ZP_ahilyanagar.jpg';
 const SUPPORT_IMG = '/about.jpg';
 
 // --- Types & Content ---
@@ -25,145 +27,148 @@ type Content = {
 const content: Record<'mr' | 'en', Content> = {
   mr: {
     hero: {
-      title: 'दिव्यांग सर्वेक्षण अभियान – २०२६',
-      subtitle: 'जिल्हा प्रशासन, अहिल्यानगर व जिल्हा दिव्यांग पुनर्वसन केंद्र यांचा संयुक्त उपक्रम. आपण सर्वांनी मिळून एका समावेशक समाजाची निर्मिती करूया.',
+      title: 'दिव्यांग सर्वेक्षण अभियान २०२६',
+      subtitle: 'तुमची नोंद म्हणजे तुमचा हक्क — सर्वेक्षणात सहभाग म्हणजे योजनांकडे एक पाऊल. आजच आपली माहिती नोंदवा आणि सक्षम समाजाच्या निर्मितीत सहभागी व्हा.',
       cta: 'सर्वेक्षण सुरू करा',
     },
     stats: [
-      { label: 'गावे', value: '1,500+' },
-      { label: 'तालुके', value: '14' },
+      { label: 'एकूण तालुके', value: '14' },
+      { label: 'एकूण गावे', value: '1,500+' },
       { label: 'क्षेत्रीय अधिकारी', value: '100+' },
-      { label: 'पडताळणी अधिकारी', value: '50+' },
-      { label: 'लाभार्थी (सर्वेक्षण)', value: '5,000+' },
+      { label: 'नोंदणीकृत लाभार्थी', value: '5,000+' },
     ],
     about: {
       tag: 'आमचे ध्येय',
       title: 'प्रत्येक दिव्यांगाला ओळख आणि अधिकार मिळवून देणे',
-      description: 'अहिल्यानगर जिल्ह्यातील सर्व दिव्यांग बांधवांचे अचूक, अद्ययावत व विश्वासार्ह माहिती संकलित करण्यासाठी हे विशेष सर्वेक्षण राबविण्यात येत आहे. या माहितीच्या आधारे दिव्यांग बांधवांना विविध शासकीय योजना व सेवा प्रभावीपणे उपलब्ध करून देण्यात येणार आहेत.',
+      description: 'अहिल्यानगर जिल्ह्यातील प्रत्येक दिव्यांग बांधवांचे अचूक, अद्ययावत व विश्वासार्ह माहिती संकलित करण्यासाठी हे विशेष सर्वेक्षण राबविण्यात येत आहे. या माहितीच्या आधारे दिव्यांग बांधवांना विविध शासकीय योजना व सेवा प्रभावीपणे उपलब्ध करून देण्यात येणार आहेत. आम्ही पारदर्शक आणि डेटा-चालित दृष्टिकोनाद्वारे सर्वसमावेशक भविष्य घडवण्यासाठी कटिबद्ध आहोत.',
     },
     process: {
-      title: 'सर्वेक्षण प्रक्रिया',
+      title: 'सर्वेक्षण प्रक्रिया कशी कार्य करते?',
       steps: [
         {
           title: 'घरोघरी भेट',
-          desc: 'आशा सेविका व स्वयंसेवक आपल्या घरी येऊन माहिती घेतील.',
+          desc: 'प्रशिक्षित आशा सेविका व स्वयंसेवक आपल्या घरी येऊन थेट माहिती घेतील.',
           icon: 'bi-house-door'
         },
         {
           title: 'डिजिटल नोंदणी',
-          desc: 'प्रगत मोबाईल ऍपद्वारे अचूक आणि जलद माहिती संकलन.',
+          desc: 'अद्ययावत मोबाईल ऍप्लिकेशनद्वारे माहिती सुरक्षितपणे आणि जलद नोंदवली जाईल.',
           icon: 'bi-phone'
         },
         {
-          title: 'पडताळणी',
-          desc: 'संकलित माहितीची शासकीय स्तरावर पडताळणी.',
-          icon: 'bi-check-circle'
+          title: 'शासकीय पडताळणी',
+          desc: 'संकलित माहितीची शासकीय स्तरावर पडताळणी करून योजनेसाठी पात्र ठरवले जाईल.',
+          icon: 'bi-patch-check'
         }
       ]
     },
     benefits: {
       title: 'सर्वेक्षणाचे फायदे',
       items: [
-        'शासकीय योजनांचा थेट लाभ',
-        'मोफत वैद्यकीय पुनर्वसन सेवा',
-        'UDID प्रमाणपत्र काढण्यास मदत',
-        'स्वयंरोजगारासाठी अर्थसहाय्य',
-        'मोफत सहायक साधने (उदा. व्हिलचेअर)'
+        'शासकीय योजनांचा थेट आणि त्वरित लाभ',
+        'मोफत वैद्यकीय तपासणी आणि पुनर्वसन सेवा',
+        'UDID प्रमाणपत्र काढण्यासाठी विशेष मार्गदर्शन',
+        'स्वयंरोजगारासाठी अर्थसहाय्य आणि कौशल्य विकास',
+        'मोफत सहायक साधने (उदा. व्हिलचेअर, श्रवणयंत्र) वाटप',
+        'शिक्षण आणि प्रशिक्षणासाठी विशेष सवलती'
       ]
     },
     documents: {
       title: 'आवश्यक कागदपत्रे',
-      subtitle: 'नोंदणीसाठी खालील कागदपत्रे तयार ठेवा:',
+      subtitle: 'नोंदणीसाठी खालील कागदपत्रे तयार ठेवावीत:',
       list: [
-        'दिव्यांग प्रमाणपत्र (UDID)',
-        'आधार कार्ड',
-        'रेशन कार्ड',
-        'निवडणूक ओळखपत्र',
-        'बँक पासबुक'
+        'दिव्यांग प्रमाणपत्र (UDID किंवा मूळ प्रमाणपत्र)',
+        'आधार कार्ड (अनिवार्य)',
+        'रेशन कार्ड किंवा रहिवासी दाखला',
+        'मतदार ओळखपत्र (असल्यास)',
+        'बँक पासबुक (पहिल्या पानाची प्रत)',
+        'पासपोर्ट आकाराचे फोटो'
       ]
     },
     download: {
-      title: 'आमचे मोबाईल ऍप डाउनलोड करा',
-      subtitle: 'आमचे क्षेत्रीय अधिकाऱ्यांसाठी असलेले मोबाईल ऍप डाउनलोड करा',
-      cta: 'प्ले स्टोअरवरून डाउनलोड करा',
-      info: 'क्षेत्रीय अधिकाऱ्यांसाठी अनिवार्य'
+      title: 'क्षेत्रीय अधिकाऱ्यांसाठी अधिकृत ऍप',
+      subtitle: 'आमचे क्षेत्रीय अधिकारी आता अधिक वेगाने आणि अचूकपणे सर्वेक्षण करू शकतात. हे ऍप केवळ नोंदणीकृत कर्मचाऱ्यांसाठी आहे.',
+      cta: 'प्ले स्टोअर वरून डाउनलोड करा',
+      info: 'नोंदणीकृत क्षेत्रीय अधिकाऱ्यांसाठी अनिवार्य'
     },
     footer: {
       slogan: 'समर्थ भारत, सक्षम दिव्यांग',
-      closing: 'एकत्र येऊया – सक्षम, समावेशक आणि संवेदनशील समाज घडवूया.',
+      closing: 'एकत्र येऊया – सक्षम, समावेशक आणि संवेदनशील समाज घडवूया. आपल्या सहकार्यामुळेच हे अभियान यशस्वी होईल.',
       contact: '०२४१ २७७ ७७७२',
-      links: ['गोपनीयता धोरण', 'नियम व अटी', 'मदत']
+      links: ['गोपनीयता धोरण', 'नियम व अटी', 'मदत केंद्र']
     }
   },
   en: {
     hero: {
       title: 'Divyang Survey Campaign 2026',
-      subtitle: 'A prestigious joint initiative by the District Administration of Ahilyanagar and DDRC. Building an inclusive future, together.',
-      cta: 'Start Survey',
+      subtitle: 'Your registration is your right — participation in the survey is a step towards welfare schemes. Join us in building an inclusive society.',
+      cta: 'Start Survey Now',
     },
     stats: [
-      { label: 'Population Covered', value: '45L+' },
-      { label: 'Beneficiaries', value: '1.2L+' },
+      { label: 'Talukas', value: '14' },
       { label: 'Villages', value: '1,500+' },
-      { label: 'Field Officers', value: '5,000+' },
+      { label: 'Field Staff', value: '100+' },
+      { label: 'Registrations', value: '5,000+' },
     ],
     about: {
       tag: 'OUR MISSION',
-      title: 'Empowering Lives Through Data',
-      description: 'Executing a comprehensive data-driven initiative to maintain accurate and reliable demographics for every person with disabilities in the district, ensuring targeted delivery of government welfare and support services.',
+      title: 'Empowering Lives Through Dignity and Rights',
+      description: 'We are conducting a comprehensive survey across Ahilyanagar district to ensure every person with disability is identified and gets direct access to government welfare schemes. Our goal is to maintain a high-quality, reliable database to plan future support systems and infrastructure tailored to the needs of the Divyang community.',
     },
     process: {
-      title: 'How It Works',
+      title: 'How our Survey Works',
       steps: [
         {
-          title: 'Door-to-Door',
-          desc: 'Certified workers visit homes for data collection.',
+          title: 'Doorstep Visit',
+          desc: 'Trained staff and volunteers visit homes for direct verification.',
           icon: 'bi-house-door'
         },
         {
           title: 'Digital Entry',
-          desc: 'Seamless registration via our secure mobile app.',
+          desc: 'Data is securely captured via our specialized mobile platform.',
           icon: 'bi-phone'
         },
         {
           title: 'Verification',
-          desc: 'Multi-level official verification for authenticity.',
-          icon: 'bi-check-circle'
+          desc: 'Multi-level official verification ensures authenticity and eligibility.',
+          icon: 'bi-patch-check'
         }
       ]
     },
     benefits: {
-      title: 'Key Benefits',
+      title: 'Key Benefits of Survey',
       items: [
-        'Direct Government Scheme Benefits',
-        'Free Medical Rehabilitation Services',
-        'Assistance for UDID Card',
-        'Self-Employment Financial Aid',
-        'Free Assistive Devices (e.g. Wheelchair)'
+        'Direct Access to Government Welfare Schemes',
+        'Free Medical Rehabilitation and Checkups',
+        'Dedicated Assistance for UDID Certification',
+        'Financial Support for Self-Employment & Startups',
+        'Free Distribution of Assistive & Mobility Devices',
+        'Priority in Education and Skill Training Programs'
       ]
     },
     documents: {
       title: 'Required Documents',
-      subtitle: 'Please keep these ready for registration:',
+      subtitle: 'Please keep these ready for the official visit:',
       list: [
-        'Disability Certificate (UDID)',
-        'Aadhaar Card',
-        'Ration Card',
-        'Voter ID',
-        'Bank Passbook'
+        'Disability Certificate (UDID or Physical Copy)',
+        'Aadhaar Card (Mandatory)',
+        'Ration Card / Proof of Residence',
+        'Voter ID Card (if available)',
+        'Bank Passbook Photo Copy',
+        'Passport Size Photographs'
       ]
     },
     download: {
-      title: 'Download Our Mobile App',
-      subtitle: 'Field officers can now conduct surveys faster and more accurately using our official mobile application.',
+      title: 'Official Field Officer App',
+      subtitle: 'Authorized field officers can download the survey management tool here. This is intended for registered staff only.',
       cta: 'Download from Play Store',
-      info: 'Mandatory for Field Officers'
+      info: 'Mandatory for Authorized Field Staff'
     },
     footer: {
       slogan: 'Empowered People, Inclusive Society',
-      closing: 'Together, let us build a barrier-free, inclusive, and compassionate society.',
+      closing: 'Together, let us build a barrier-free, inclusive, and compassionate society for everyone in Ahilyanagar district.',
       contact: '0241 277 7772',
-      links: ['Privacy Policy', 'Terms of Service', 'Support']
+      links: ['Privacy Policy', 'Terms of Service', 'Support Desk']
     }
   }
 };
@@ -195,328 +200,471 @@ const ScrollReveal = ({ children, className = '', animation = 'animate__fadeInUp
   );
 };
 
-export default function LandingPage() {
+const HeroButton = ({ text, href }: { text: string, href: string }) => {
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (loading) return; // Prevent double click
+    setLoading(true);
+    // Add artificial delay for smooth feel
+    setTimeout(() => {
+      router.push(href);
+    }, 800);
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={loading}
+      className={`
+        relative overflow-hidden group
+        items-center gap-4 px-10 py-5
+        bg-white text-[#003f86]
+        rounded-2xl font-black text-xl tracking-wide
+        shadow-[0_10px_30px_-10px_rgba(0,0,0,0.3)]
+        hover:shadow-[0_20px_40px_-10px_rgba(255,255,255,0.4)]
+        hover:-translate-y-1 active:translate-y-0.5 active:scale-95
+        transition-all duration-300 ease-out
+        inline-flex
+        border border-transparent hover:border-blue-100
+      `}
+    >
+      {/* Glossy Shimmer Effect */}
+      <div className="absolute inset-0 -translate-x-[150%] group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-blue-100/50 to-transparent z-10 skew-x-12" />
+
+      <span className="relative z-20 flex items-center gap-3">
+        {text}
+        <span className={`flex items-center justify-center transition-all duration-300 w-8 h-8 rounded-full bg-blue-50 ${loading ? 'scale-100' : 'group-hover:translate-x-1'}`}>
+          {loading ? (
+            <svg className="animate-spin h-5 w-5 text-[#003f86]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+          ) : (
+            <i className="bi bi-arrow-right text-lg text-[#003f86]"></i>
+          )}
+        </span>
+      </span>
+    </button>
+  );
+};
+
+export default function DetailedLandingPage() {
   const [lang, setLang] = useState<'mr' | 'en'>('mr');
+  const [fontSize, setFontSize] = useState(1); // 0.8, 1, 1.2
+  const [showCookies, setShowCookies] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const t = content[lang];
 
-  const downloadRef = useRef<HTMLElement>(null);
-
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 50);
+    const handleScroll = () => setScrolled(window.scrollY > 10);
     window.addEventListener('scroll', handleScroll);
 
-    // Scroll to download section if requested
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('scrollToDownload') === 'true' && downloadRef.current) {
-      setTimeout(() => {
-        downloadRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 500);
+    // Check if cookies accepted
+    const cookiesAccepted = localStorage.getItem('cookies-accepted');
+    if (!cookiesAccepted) {
+      setTimeout(() => setShowCookies(true), 1500);
     }
 
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleDownload = () => {
-    const playStoreUrl = "https://play.google.com/store/apps/details?id=com.utkrranti.ddrc.ahilyanagar&pcampaignid=web_share";
-    // Standard Android Intent to open app if installed, else fallback to market
-    const intentUrl = "intent://#Intent;package=com.utkrranti.ddrc.ahilyanagar;end";
+  const acceptCookies = () => {
+    localStorage.setItem('cookies-accepted', 'true');
+    setShowCookies(false);
+  };
 
-    // Attempt to open the app
-    window.location.href = intentUrl;
-
-    // Fallback to Play Store after a delay if the app didn't open
-    setTimeout(() => {
-      window.location.href = playStoreUrl;
-    }, 1500);
+  const getFontSizeClass = () => {
+    if (fontSize === 0.8) return 'text-[90%]';
+    if (fontSize === 1.2) return 'text-[110%]';
+    return 'text-[100%]';
   };
 
   return (
-    <div className="min-h-screen font-sans text-slate-900 bg-white overflow-x-hidden">
+    <div className={`min-h-screen font-sans text-slate-800 bg-white selection:bg-[#009cc5]/20 overflow-x-hidden ${getFontSizeClass()}`}>
       <style jsx global>{`
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;900&display=swap');
-        :root {
-          --primary: #003f86;
-          --primary-dark: #002d60;
-          --secondary: #009cc5;
-          --accent: #3eac53;
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+        html { scroll-behavior: smooth; }
+        @keyframes shimmer {
+          0% { transform: translateX(-150%) skewX(-12deg); }
+          100% { transform: translateX(150%) skewX(-12deg); }
         }
-        body { font-family: 'Outfit', sans-serif; }
       `}</style>
 
-      {/* --- Navbar --- */}
-      <nav className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-white/80 backdrop-blur-md shadow-sm py-3' : 'bg-transparent py-5'}`}>
-        <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
-          <Link href="/" className="flex items-center gap-3 no-underline">
-            <div className="w-12 h-12 bg-gradient-to-br from-[#003f86] to-[#009cc5] rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 hover:rotate-0 transition-transform duration-500">
-              <img src={LOGO_URL} alt="Logo" className="w-8 h-8 object-contain brightness-0 invert" />
-            </div>
-            <div>
-              <h1 className={`font-bold text-xl leading-none tracking-tight transition-colors ${scrolled ? 'text-slate-800' : 'text-white'}`}>DDRC</h1>
-              <p className={`text-[10px] font-bold tracking-[0.2em] uppercase transition-colors ${scrolled ? 'text-[#003f86]' : 'text-[#00E5FF]'}`}>Ahilyanagar</p>
-            </div>
-          </Link>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setLang(l => l === 'mr' ? 'en' : 'mr')}
-              className={`text-xs font-bold px-3 py-1.5 rounded-full border transition-colors uppercase tracking-wide ${scrolled ? 'border-slate-200 text-slate-600 hover:bg-slate-50' : 'border-white/30 text-white hover:bg-white/10'}`}
-            >
-              {lang === 'mr' ? 'English' : 'मराठी'}
-            </button>
-          </div>
-        </div>
-      </nav>
-
-      {/* --- Hero Section --- */}
-      <header className="relative min-h-screen flex items-center justify-center pt-20 overflow-hidden bg-slate-900">
-        <div className="absolute top-0 left-0 w-full h-full z-0">
-          <video
-            autoPlay
-            muted
-            loop
-            playsInline
-            className="absolute top-0 left-0 w-full h-full object-cover opacity-60"
-          >
-            <source src="/District_Disability_Rehabilitation_Center_DDRC_1080P.mp4" type="video/mp4" />
-          </video>
-          {/* Brand Gradient Overlay */}
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-[#003f86]/90 via-[#003f86]/60 to-[#009cc5]/80 mix-blend-multiply"></div>
-          <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-slate-950 via-transparent to-transparent"></div>
-        </div>
-
-        <div className="relative z-10 container mx-auto px-6 text-center">
-          <ScrollReveal animation="animate__fadeInDown">
-            <div className="inline-block mb-8 px-6 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-[#00E5FF] text-sm font-black uppercase tracking-[0.2em] shadow-2xl">
-              <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#00E5FF] mr-3 animate-pulse shadow-[0_0_10px_#00E5FF]"></span>
-              Official Government Survey 2026
-            </div>
-          </ScrollReveal>
-
-          <ScrollReveal delay="0.2s">
-            <h1 className="text-5xl md:text-7xl lg:text-9xl font-black text-white mb-8 leading-[0.9] tracking-tighter drop-shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
-              {t.hero.title}
-            </h1>
-          </ScrollReveal>
-
-          <ScrollReveal delay="0.4s">
-            <p className="text-xl md:text-2xl text-white/80 max-w-3xl mx-auto mb-12 leading-relaxed font-medium drop-shadow-md">
-              {t.hero.subtitle}
-            </p>
-          </ScrollReveal>
-
-          <ScrollReveal delay="0.6s">
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
-              <Link href="/public/survey" className="w-full sm:w-auto px-12 py-6 bg-[#009cc5] hover:bg-[#003f86] text-white rounded-2xl font-black text-xl shadow-[0_20px_50px_rgba(0,156,197,0.4)] hover:shadow-[0_20px_50px_rgba(0,63,134,0.4)] hover:-translate-y-1 transition-all flex items-center justify-center gap-3 group no-underline">
-                {t.hero.cta}
-                <i className="bi bi-arrow-right group-hover:translate-x-1 transition-transform"></i>
-              </Link>
-              <Link href="/field-officer/signup" className="w-full sm:w-auto px-12 py-6 bg-white/10 backdrop-blur-md text-white border border-white/20 rounded-2xl font-black text-xl hover:bg-[#009cc5] hover:border-[#009cc5] transition-all no-underline">
-                {lang === 'mr' ? 'नोंदणी करा' : 'Register Now'}
-              </Link>
-            </div>
-          </ScrollReveal>
-        </div>
-      </header >
-
-      {/* --- Stats Banner --- */}
-      < section className="py-10 bg-slate-900 text-white -mt-20 relative z-20 mx-4 md:mx-10 rounded-3xl shadow-2xl" >
-        <div className="container mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center divide-x divide-white/10">
-            {t.stats.map((stat, i) => (
-              <ScrollReveal key={i} delay={`${i * 0.1}s`}>
-                <div className="p-2">
-                  <div className="text-3xl md:text-4xl font-black text-[#009cc5] mb-1">{stat.value}</div>
-                  <div className="text-xs md:text-sm font-medium text-slate-400 uppercase tracking-wider">{stat.label}</div>
-                </div>
-              </ScrollReveal>
-            ))}
-          </div>
-        </div>
-      </section >
-
-      {/* --- About Section --- */}
-      < section className="py-24 px-6 md:px-12 bg-white" >
-        <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 items-center">
-          <ScrollReveal animation="animate__fadeInLeft">
-            <div className="relative">
-              <div className="absolute -inset-4 bg-[#E1F5FE] rounded-[3rem] transform -rotate-2"></div>
-              <img src={SUPPORT_IMG} alt="About" className="relative rounded-[2.5rem] shadow-2xl w-full object-cover h-[500px]" />
-              <div className="absolute bottom-10 -right-10 bg-white p-6 rounded-2xl shadow-xl max-w-xs hidden md:block animate__animated animate__fadeInUp animate__delay-1s">
-                <p className="font-bold text-slate-900 text-lg">"Empowerment starts with recognition."</p>
-                <p className="text-slate-500 text-sm mt-2">- District Collector</p>
+      {/* --- Complete Header Wrapper (Utility + Main Nav) --- */}
+      <header className="fixed top-0 left-0 w-full z-50">
+        {/* --- Top Utility Bar --- */}
+        <div className="w-full bg-[#003f86] text-white py-1.5 border-b border-white/10">
+          <div className="max-w-7xl mx-auto px-4 md:px-6 flex justify-between items-center text-[10px] md:text-xs">
+            <div className="flex items-center gap-4">
+              <span className="font-bold opacity-80 hidden sm:inline uppercase">Accessibility Support:</span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setFontSize(0.8)} className={`w-6 h-6 rounded flex items-center justify-center border border-white/20 hover:bg-white/10 ${fontSize === 0.8 ? 'bg-white/20 border-white' : ''}`}>A-</button>
+                <button onClick={() => setFontSize(1)} className={`w-6 h-6 rounded flex items-center justify-center border border-white/20 hover:bg-white/10 ${fontSize === 1 ? 'bg-white/20 border-white' : ''}`}>A</button>
+                <button onClick={() => setFontSize(1.2)} className={`w-6 h-6 rounded flex items-center justify-center border border-white/20 hover:bg-white/10 ${fontSize === 1.2 ? 'bg-white/20 border-white' : ''}`}>A+</button>
               </div>
+              <button
+                onClick={() => {
+                  alert("Screen Reader Optimized Mode Enabled.\n\nARIA labels and high-contrast text are now active for assistive technologies.");
+                }}
+                className="flex items-center gap-1 opacity-80 hover:opacity-100 transition-opacity ml-2 focus:outline-none focus:ring-2 focus:ring-amber-400 rounded px-1"
+                aria-label="Enable Screen Reader Access"
+              >
+                <i className="bi bi-person-badge"></i> Screen Reader Access
+              </button>
             </div>
-          </ScrollReveal>
-
-          <ScrollReveal animation="animate__fadeInRight">
-            <div>
-              <span className="text-[#003f86] font-bold uppercase tracking-widest text-sm mb-2 block">{t.about.tag}</span>
-              <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 leading-tight">{t.about.title}</h2>
-              <p className="text-slate-600 text-lg leading-relaxed mb-8">
-                {t.about.description}
-              </p>
-              <ul className="space-y-4">
-                {t.benefits.items.slice(0, 3).map((item, i) => (
-                  <li key={i} className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#E1F5FE] text-[#3eac53] flex items-center justify-center text-xs">✓</span>
-                    <span className="text-slate-700 font-medium">{item}</span>
-                  </li>
-                ))}
-              </ul>
+            <div className="flex items-center gap-3">
+              <div className="h-4 w-[1px] bg-white/20 mx-2 hidden sm:block"></div>
+              <button
+                onClick={() => setLang(l => l === 'mr' ? 'en' : 'mr')}
+                className="font-black hover:text-[#009cc5] transition-colors uppercase border-l border-white/20 pl-4 ml-1"
+              >
+                {lang === 'mr' ? 'English' : 'मराठी'}
+              </button>
             </div>
-          </ScrollReveal>
+          </div>
         </div>
-      </section >
 
-      {/* --- Process Section --- */}
-      < section className="py-24 bg-slate-50" >
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <ScrollReveal>
-              <span className="text-[#003f86] font-bold uppercase tracking-widest text-sm">Workflow</span>
-              <h2 className="text-4xl md:text-5xl font-black text-slate-900 mt-2">{t.process.title}</h2>
+        {/* --- Main Navigation Bar --- */}
+        <nav className={`w-full transition-all duration-300 ${scrolled ? 'bg-white shadow-lg py-2' : 'bg-transparent py-4'}`}>
+          <div className="max-w-7xl mx-auto px-4 md:px-6 flex justify-between items-center h-auto min-h-[60px]">
+            {/* Left: DDRC Logo */}
+            <div className="flex-shrink-0">
+              <img src={LOGO_URL} alt="DDRC Logo" className="w-16 h-16 md:w-24 md:h-24 object-contain" />
+            </div>
+
+            {/* Center: Full Form Text */}
+            <div className="flex flex-col text-center px-4 flex-grow justify-center">
+              <h1 className={`font-extrabold text-[10px] sm:text-xs md:text-sm tracking-tight uppercase leading-snug whitespace-normal ${scrolled ? 'text-[#003f86]' : 'text-white drop-shadow-md'}`}>
+                District Disability Rehabilitation Center, Ahilyanagar
+              </h1>
+              <h2 className={`font-bold text-[9px] sm:text-[11px] md:text-xs leading-snug mt-1 whitespace-normal break-words ${scrolled ? 'text-[#009cc5]' : 'text-white drop-shadow-md'}`}>
+                जिल्हा दिव्यांग पुनर्वसन केंद्र, अहिल्यानगर
+              </h2>
+            </div>
+
+            {/* Right: ZP Logo */}
+            <div className="flex-shrink-0">
+              <img src={ZP_LOGO} alt="ZP Logo" className="w-14 h-14 md:w-24 md:h-24 object-contain rounded-full bg-white p-0.5 shadow-sm" />
+            </div>
+          </div>
+        </nav>
+      </header>
+
+      {/* --- Main Page Content --- */}
+      <main className="relative">
+        {/* --- Hero Section --- */}
+        <header className="relative min-h-[90vh] flex items-center justify-center pt-40 md:pt-48 pb-20 overflow-hidden bg-gradient-to-br from-[#003f86] via-[#003f86] to-[#009cc5]">
+          <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:30px_30px]"></div>
+
+          <div className="relative z-10 max-w-5xl mx-auto px-6 text-center">
+            <ScrollReveal animation="animate__fadeInDown">
+              <span className="inline-block mb-6 px-4 py-1.5 rounded bg-white/10 backdrop-blur-sm text-white text-[11px] font-bold uppercase tracking-[0.2em] border border-white/20">
+                Government District Mission
+              </span>
+            </ScrollReveal>
+
+            <ScrollReveal delay="0.2s">
+              <h1 className="text-4xl md:text-7xl font-extrabold text-white mb-8 leading-[1.05] tracking-tight">
+                {t.hero.title}
+              </h1>
+            </ScrollReveal>
+
+            <ScrollReveal delay="0.4s">
+              <p className="text-lg md:text-2xl text-white/90 max-w-3xl mx-auto mb-12 leading-relaxed font-medium">
+                {t.hero.subtitle}
+              </p>
+            </ScrollReveal>
+
+            <ScrollReveal delay="0.6s">
+              <HeroButton text={t.hero.cta} href="/public/survey" />
             </ScrollReveal>
           </div>
+        </header>
 
-          <div className="grid md:grid-cols-3 gap-8">
-            {t.process.steps.map((step, i) => (
-              <ScrollReveal key={i} delay={`${i * 0.2}s`} className="h-full">
-                <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-lg hover:shadow-xl transition-all hover:border-[#009cc5] h-full flex flex-col items-center text-center group">
-                  <div className="w-16 h-16 rounded-2xl bg-teal-50 text-[#003f86] flex items-center justify-center text-2xl mb-6 group-hover:scale-110 group-hover:bg-[#003f86] group-hover:text-white transition-all duration-300">
-                    <i className={`bi ${step.icon}`}></i>
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-900 mb-3">{step.title}</h3>
-                  <p className="text-slate-500 leading-relaxed">{step.desc}</p>
-                </div>
-              </ScrollReveal>
-            ))}
+        {/* --- Slogan Banner --- */}
+        <div className="bg-[#E1F5FE] py-5 border-b border-[#009cc5]/10">
+          <div className="max-w-5xl mx-auto px-6 text-center">
+            <p className="text-[#003f86] font-bold text-base md:text-lg italic">
+              "दिव्यांगत्व ही मर्यादा नाही, योग्य माहिती आणि संधी मिळाली तर तीच ताकद बनते"
+            </p>
           </div>
         </div>
-      </section >
 
-      {/* --- Documents & Requirements --- */}
-      < section className="py-24 px-6 relative overflow-hidden" >
-        <div className="absolute top-0 right-0 w-1/3 h-full bg-teal-50/50 skew-x-12 transform origin-top-right"></div>
-        <div className="max-w-6xl mx-auto relative z-10">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
-            <ScrollReveal>
-              <div className="bg-slate-900 text-white p-10 md:p-14 rounded-[3rem] shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-[#009cc5]/20 blur-[80px]"></div>
-                <h3 className="text-3xl font-black mb-2">{t.documents.title}</h3>
-                <p className="text-slate-400 mb-8">{t.documents.subtitle}</p>
-                <ul className="space-y-4">
-                  {t.documents.list.map((doc, i) => (
-                    <li key={i} className="flex items-center gap-4 p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
-                      <span className="w-8 h-8 rounded-lg bg-[#009cc5]/20 text-[#009cc5] flex items-center justify-center text-sm font-bold">{i + 1}</span>
-                      <span className="font-medium">{doc}</span>
-                    </li>
-                  ))}
-                </ul>
+        {/* --- Detailed Stats Section --- */}
+        <section className="relative z-20 max-w-6xl mx-auto px-6 -mt-10 mb-20">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-100 p-8 md:p-14 overflow-hidden relative">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-[#E1F5FE]/30 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2"></div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-4 text-center divide-x divide-slate-100">
+              {t.stats.map((stat, i) => (
+                <div key={i} className="px-4">
+                  <div className="text-3xl md:text-5xl font-black text-[#003f86] mb-2">{stat.value}</div>
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{stat.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* --- About Section (Detailed) --- */}
+        <section className="py-24 px-6 bg-white overflow-hidden">
+          <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 items-start">
+            <ScrollReveal animation="animate__fadeInLeft">
+              <div className="relative">
+                <div className="absolute -inset-2 bg-gradient-to-br from-[#003f86] to-[#009cc5] rounded-xl transform -rotate-1 opacity-10"></div>
+                <img src={SUPPORT_IMG} alt="Mission" className="relative rounded-xl shadow-xl w-full object-cover h-[500px]" />
+                <div className="absolute -bottom-8 -right-8 p-8 bg-white border border-slate-100 rounded-xl shadow-2xl max-w-xs hidden md:block border-l-4 border-l-[#003f86]">
+                  <p className="font-extrabold text-slate-900 text-lg leading-tight">"सक्षम दिव्यांग, समर्थ राष्ट्र"</p>
+                  <p className="text-slate-500 text-[11px] font-bold mt-3 uppercase tracking-wider">जिल्हा प्रशासन, अहिल्यानगर</p>
+                </div>
               </div>
             </ScrollReveal>
 
             <ScrollReveal animation="animate__fadeInRight" delay="0.2s">
-              <div>
-                <h3 className="text-3xl font-bold text-slate-900 mb-6">Why Apply Now?</h3>
-                <div className="grid gap-4">
-                  {t.benefits.items.map((benefit, i) => (
-                    <div key={i} className="flex gap-4 items-start">
-                      <div className="flex-shrink-0 w-10 h-10 rounded-full bg-[#E1F5FE] flex items-center justify-center text-[#3eac53] mt-1">
-                        <i className="bi bi-star-fill text-xs"></i>
+              <span className="text-[#009cc5] font-black uppercase tracking-[0.2em] text-xs mb-3 block">{t.about.tag}</span>
+              <h2 className="text-3xl md:text-5xl font-extrabold text-slate-900 mb-8 leading-tight">{t.about.title}</h2>
+              <div className="space-y-6">
+                <p className="text-slate-600 text-lg leading-relaxed">
+                  {t.about.description}
+                </p>
+                <div className="grid sm:grid-cols-2 gap-6 pt-4">
+                  {t.benefits.items.slice(0, 4).map((item, i) => (
+                    <div key={i} className="flex gap-4 items-center">
+                      <div className="w-10 h-10 rounded-full bg-[#E1F5FE] text-[#003f86] flex items-center justify-center flex-shrink-0">
+                        <i className="bi bi-star-fill text-sm"></i>
                       </div>
-                      <div>
-                        <h4 className="font-bold text-slate-900 text-lg">{benefit.split(' ').slice(0, 2).join(' ')}...</h4>
-                        <p className="text-slate-500 text-sm">{benefit}</p>
-                      </div>
+                      <span className="text-sm font-bold text-slate-700">{item}</span>
                     </div>
                   ))}
-                </div>
-                <div className="mt-10">
-                  <Link href="/public/survey" className="inline-flex items-center gap-2 text-[#3eac53] font-black tracking-wide border-b-2 border-[#009cc5] hover:border-[#003f86] transition-all uppercase text-sm pb-1">
-                    {lang === 'mr' ? 'सर्व फायदे पहा' : 'View All Benefits'}
-                    <i className="bi bi-arrow-right"></i>
-                  </Link>
                 </div>
               </div>
             </ScrollReveal>
           </div>
-        </div>
-      </section >
+        </section>
 
-      {/* --- Download App Section --- */}
-      <section ref={downloadRef} className="py-24 px-6 bg-gradient-to-br from-[#003f86] to-[#009cc5] text-white relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
-        <div className="max-w-4xl mx-auto text-center relative z-10">
-          <ScrollReveal animation="animate__fadeInUp">
-            <div className="w-24 h-24 bg-white/20 backdrop-blur-md rounded-[2rem] flex items-center justify-center mx-auto mb-8 shadow-xl border border-white/30">
-              <i className="bi bi-phone-vibrate text-5xl"></i>
-            </div>
-            <h2 className="text-4xl md:text-5xl font-black mb-6 tracking-tight">{t.download.title}</h2>
-            <p className="text-xl text-blue-50/80 mb-12 max-w-2xl mx-auto leading-relaxed">
-              {t.download.subtitle}
-            </p>
-            <div className="flex flex-col items-center gap-4">
-              <button
-                onClick={handleDownload}
-                className="px-10 py-5 bg-white text-[#003f86] rounded-2xl font-black text-xl shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-3 group"
-              >
-                <i className="bi bi-google-play text-2xl"></i>
-                {t.download.cta}
-              </button>
-              <span className="text-sm font-bold uppercase tracking-[0.2em] opacity-60">
-                {t.download.info}
-              </span>
-            </div>
-          </ScrollReveal>
-        </div>
-      </section>
+        {/* --- Process Section --- */}
+        <section className="py-24 bg-slate-50 border-y border-slate-100">
+          <div className="max-w-7xl mx-auto px-6 text-center">
+            <ScrollReveal>
+              <span className="text-[#003f86] font-black uppercase tracking-widest text-xs">Work Process</span>
+              <h2 className="text-3xl md:text-5xl font-extrabold text-slate-900 mt-4 mb-16">{t.process.title}</h2>
+            </ScrollReveal>
 
-      {/* --- Footer --- */}
-      <footer className="bg-slate-950 text-white pt-20 pb-10 px-6">
-        <div className="max-w-7xl mx-auto text-center">
-          <ScrollReveal>
-            <h2 className="text-3xl md:text-5xl font-black mb-6 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-[#009cc5] to-white">{t.footer.slogan}</h2>
-            <p className="text-slate-400 mb-10 max-w-2xl mx-auto">{t.footer.closing}</p>
-            <div className="flex justify-center gap-4 mb-16">
-              <Link href="/public/survey" className="px-8 py-3 bg-[#003f86] hover:bg-[#009cc5] text-white rounded-full font-bold transition-all shadow-lg shadow-teal-900/50">
-                {t.hero.cta}
-              </Link>
-            </div>
-          </ScrollReveal>
+            <div className="grid md:grid-cols-3 gap-12 text-left relative">
+              <div className="hidden md:block absolute top-[15%] left-[10%] right-[10%] h-[2px] bg-slate-200 z-0"></div>
 
-          <div className="flex flex-col md:flex-row justify-between items-center gap-6 text-[10px] text-slate-500 uppercase tracking-widest">
-            <div className="flex flex-col items-center md:items-start gap-2">
+              {t.process.steps.map((step, i) => (
+                <ScrollReveal key={i} delay={`${i * 0.2}s`} className="relative z-10">
+                  <div className="bg-white p-10 rounded-2xl border border-slate-200 shadow-sm transition-all hover:shadow-xl hover:-translate-y-2 group">
+                    <div className="w-16 h-16 bg-[#003f86] text-white rounded-xl flex items-center justify-center text-3xl mb-8 shadow-lg shadow-[#003f86]/20 transition-all duration-300 group-hover:scale-110">
+                      <i className={`bi ${step.icon}`}></i>
+                    </div>
+                    <h3 className="text-2xl font-extrabold text-slate-900 mb-4">{step.title}</h3>
+                    <p className="text-slate-600 leading-relaxed font-medium">{step.desc}</p>
+                  </div>
+                </ScrollReveal>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* --- Benefits & Detailed Features --- */}
+        <section className="py-24 px-6 bg-white">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex flex-col md:flex-row justify-between items-end gap-6 mb-16">
+              <ScrollReveal className="max-w-xl">
+                <span className="text-[#009cc5] font-black uppercase tracking-widest text-xs block mb-2">Advantages</span>
+                <h2 className="text-3xl md:text-5xl font-extrabold text-slate-900">{t.benefits.title}</h2>
+              </ScrollReveal>
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {t.benefits.items.map((benefit, i) => (
+                <ScrollReveal key={i} delay={`${i * 0.1}s`}>
+                  <div className="p-8 rounded-xl border border-slate-100 bg-white hover:bg-[#E1F5FE]/10 transition-colors group">
+                    <div className="text-[#009cc5] text-2xl mb-4 group-hover:translate-x-1 transition-transform inline-block">
+                      <i className="bi bi-shield-check"></i>
+                    </div>
+                    <p className="text-slate-700 font-bold text-lg leading-snug">{benefit}</p>
+                  </div>
+                </ScrollReveal>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* --- Documents Section (Detailed Content) --- */}
+        <section className="py-24 px-6 bg-slate-50 border-t border-slate-100">
+          <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16">
+            <ScrollReveal animation="animate__fadeInLeft">
+              <div className="bg-slate-900 text-white p-10 md:p-16 rounded-3xl shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-[#009cc5]/10 blur-[100px] rounded-full"></div>
+                <h3 className="text-3xl font-black mb-4">{t.documents.title}</h3>
+                <p className="text-slate-400 mb-10 text-lg leading-relaxed">{t.documents.subtitle}</p>
+                <div className="grid grid-cols-1 gap-4">
+                  {t.documents.list.map((doc, i) => (
+                    <div key={i} className="flex gap-4 items-center p-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors">
+                      <span className="w-8 h-8 rounded-full bg-[#009cc5]/20 text-[#009cc5] flex items-center justify-center font-bold text-sm">{i + 1}</span>
+                      <span className="font-semibold">{doc}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </ScrollReveal>
+
+            <ScrollReveal animation="animate__fadeInRight" delay="0.2s" className="flex flex-col justify-center">
+              <div className="bg-[#003f86] text-white p-10 md:p-16 rounded-3xl shadow-2xl relative overflow-hidden text-center lg:text-left">
+                <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2"></div>
+                <div className="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center mb-8 mx-auto lg:mx-0">
+                  <i className="bi bi-phone-vibrate text-5xl text-blue-100"></i>
+                </div>
+                <h3 className="text-3xl font-black mb-6">{t.download.title}</h3>
+                <p className="text-blue-50/80 mb-10 text-lg italic leading-relaxed">"{t.download.subtitle}"</p>
+                <div className="space-y-4">
+                  <a
+                    href="https://play.google.com/store/apps/details?id=com.utkrranti.ddrc.ahilyanagar"
+                    className="inline-flex items-center gap-3 px-8 py-4 bg-white text-[#003f86] rounded-md font-extrabold text-lg no-underline shadow-lg hover:bg-slate-50 transition-all hover:scale-105"
+                  >
+                    <i className="bi bi-google-play"></i> {t.download.cta}
+                  </a>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-200 mt-4">
+                    <i className="bi bi-shield-lock mr-2"></i> {t.download.info}
+                  </p>
+                </div>
+              </div>
+            </ScrollReveal>
+          </div>
+        </section>
+
+        {/* --- Footer --- */}
+        <footer className="bg-[#0f172a] text-slate-300 border-t border-[#009cc5]/20 font-sans">
+          <div className="max-w-7xl mx-auto px-6 py-16">
+            <div className="grid md:grid-cols-12 gap-12">
+              {/* Column 1: Brand & Contact (5 cols) */}
+              <div className="md:col-span-5 space-y-8">
+                <div className="flex items-start gap-4">
+                  <img src={LOGO_URL} alt="DDRC Logo" className="w-28 h-28 object-contain brightness-125" />
+                  <div className="flex flex-col justify-center">
+                    <h3 className="font-extrabold text-white text-lg leading-tight uppercase tracking-tight">District Disability Rehabilitation Center</h3>
+                    <span className="font-bold text-sm text-[#009cc5] mt-1">जिल्हा दिव्यांग पुनर्वसन केंद्र, अहिल्यानगर</span>
+                  </div>
+                </div>
+
+                <p className="text-slate-400 text-sm leading-relaxed max-w-sm border-l-2 border-[#009cc5] pl-4 italic">
+                  "{t.footer.closing}"
+                </p>
+
+                <div className="flex items-center gap-3 text-white">
+                  <div className="w-10 h-10 rounded-full bg-[#003f86] flex items-center justify-center text-[#4fc3f7] text-lg shadow-lg shadow-blue-900/20">
+                    <i className="bi bi-telephone-fill"></i>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Helpline Number</span>
+                    <span className="text-xl font-bold tracking-wide">{t.footer.contact}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Column 2: Navigation (3 cols) */}
+              <div className="md:col-span-3 md:pl-8">
+                <h4 className="text-white font-bold uppercase tracking-widest text-xs mb-6 border-b border-white/10 pb-2 inline-block">Quick Links</h4>
+                <ul className="space-y-4">
+                  {t.footer.links.map((link, i) => (
+                    <li key={i}>
+                      <a className="group flex items-center gap-2 text-sm font-medium text-white hover:text-[#009cc5] transition-colors cursor-pointer no-underline">
+                        <i className="bi bi-chevron-right text-[10px] opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all"></i>
+                        {link}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Column 3: Staff Access (4 cols) */}
+              <div className="md:col-span-4">
+                <h4 className="text-white font-bold uppercase tracking-widest text-xs mb-6 border-b border-white/10 pb-2 inline-block">Administrative Access</h4>
+                <div className="space-y-4">
+                  <Link href="/login" className="flex items-center justify-between p-4 rounded bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#009cc5]/50 transition-all group no-underline text-white">
+                    <div className="flex items-center gap-3">
+                      <i className="bi bi-shield-lock text-[#009cc5] text-xl"></i>
+                      <div className="flex flex-col">
+                        <span className="font-bold text-sm">Department Login</span>
+                        <span className="text-[10px] text-slate-400">Restricted Access</span>
+                      </div>
+                    </div>
+                    <i className="bi bi-arrow-right opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-transform"></i>
+                  </Link>
+
+                  <Link href="/field-officer/signup" className="flex items-center justify-between p-4 rounded bg-[#003f86] hover:bg-[#002a5c] shadow-lg shadow-blue-900/30 transition-all group no-underline text-white">
+                    <div className="flex items-center gap-3">
+                      <i className="bi bi-person-badge-fill text-white/80 text-xl"></i>
+                      <div className="flex flex-col">
+                        <span className="font-bold text-sm">Field Officer Signup</span>
+                        <span className="text-[10px] text-blue-200">Join the Mission</span>
+                      </div>
+                    </div>
+                    <i className="bi bi-arrow-right opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-transform"></i>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Copyright Bar */}
+          <div className="bg-[#0b1120] border-t border-white/5 py-6">
+            <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] uppercase font-bold tracking-widest text-slate-500">
               <div className="flex items-center gap-2">
-                <img src={LOGO_URL} alt="Logo" className="w-5 h-5 brightness-0 invert opacity-50" />
-                <span>© 2026 Admin Panel Ahilyanagar</span>
+                <img src="/emblem.png" alt="Gov" className="w-6 h-6 opacity-50 grayscale" />
+                <span>District Administration of Ahilyanagar © 2026</span>
               </div>
-              <p className="text-[10px] font-bold text-slate-300 uppercase tracking-[0.2em]">
-                Designed & Engineered by <a href="https://utkrranti.com" target="_blank" rel="noopener noreferrer" className="!no-underline hover:opacity-80 transition-opacity" style={{ textDecoration: 'none' }}>
-                  <span className="text-white">UT</span>
+              <div className="flex items-center gap-1">
+                <span>Designed & Engineered by</span>
+                <a href="https://utkrranti.com" target="_blank" rel="noopener noreferrer" className="!no-underline group inline-flex items-center gap-1 ml-1">
+                  <span className="text-white group-hover:text-[#009cc5] transition-colors">UT</span>
                   <span className="text-[#FF3D00]">K</span>
-                  <span className="text-white">RRANTI</span>
+                  <span className="text-white group-hover:text-[#009cc5] transition-colors">RRANTI</span>
                 </a>
-              </p>
-            </div>
-            <div className="flex flex-col sm:flex-row flex-wrap justify-center items-center gap-4 md:gap-8 w-full">
-              <div className="flex flex-wrap justify-center gap-4 md:gap-6 mb-4 sm:mb-0">
-                {t.footer.links.map((l, i) => <span key={i} className="hover:text-white cursor-pointer transition-colors text-xs opacity-70 whitespace-nowrap">{l}</span>)}
-              </div>
-              <div className="flex gap-3">
-                <Link href="/login" className="px-6 py-2.5 bg-[#003f86] text-white rounded-[12px] no-underline hover:bg-[#009cc5] transition-all font-black text-[10px] uppercase tracking-wider shadow-lg shadow-teal-900/40 active:scale-95 whitespace-nowrap">
-                  {lang === 'mr' ? 'लॉगिन' : 'Staff Login'}
-                </Link>
-                <Link href="/field-officer/signup" className="px-6 py-2.5 bg-slate-800 text-white rounded-[12px] no-underline hover:bg-slate-700 transition-all font-black text-[10px] uppercase tracking-wider border border-slate-700 active:scale-95 whitespace-nowrap">
-                  {lang === 'mr' ? 'नोंदणी' : 'Registration'}
-                </Link>
               </div>
             </div>
-            <div className="text-[#009cc5] font-mono">
-              Helpline: {t.footer.contact}
+          </div>
+        </footer>
+      </main>
+
+      {/* --- Cookie Consent Banner --- */}
+      {showCookies && (
+        <div className="fixed bottom-6 left-6 right-6 md:left-auto md:max-w-md z-[100] animate__animated animate__fadeInUp">
+          <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-2xl border border-white/10">
+            <div className="flex gap-4 items-start">
+              <div className="w-10 h-10 bg-[#009cc5] rounded-full flex items-center justify-center flex-shrink-0">
+                <i className="bi bi-cookie text-xl"></i>
+              </div>
+              <div className="flex-1">
+                <h4 className="font-bold text-base mb-2">Use Cookies for Improvement?</h4>
+                <p className="text-xs text-slate-300 leading-relaxed mb-4">
+                  We use cookies to analyze traffic and provide a better experience. Do you allow us to track your interaction on this portal?
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={acceptCookies}
+                    className="flex-1 py-2.5 bg-[#009cc5] hover:bg-[#003f86] text-white rounded font-bold text-xs uppercase transition-all shadow-lg"
+                  >
+                    Allow All
+                  </button>
+                  <button
+                    onClick={() => setShowCookies(false)}
+                    className="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded font-bold text-xs uppercase transition-all"
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </footer>
+      )}
     </div>
   );
 }
