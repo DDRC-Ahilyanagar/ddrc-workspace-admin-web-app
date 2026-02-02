@@ -5,9 +5,16 @@ const nextConfig = {
   // turbopack is a CLI flag (--turbo), not a config option
   productionBrowserSourceMaps: false,
   experimental: {
+    // Mark heavy/binary packages as external to speed up build and prevent hangs
+    serverComponentsExternalPackages: [
+      'puppeteer',
+      'sharp',
+      'tesseract.js',
+      '@ckeditor/ckeditor5-build-classic',
+      '@google-cloud/vision'
+    ],
     // Disable multi-threaded build workers to prevent hangs on Windows
     workerThreads: false,
-    cpus: 1,
   },
   // Disable type-check and lint during build to prevent hanging
   eslint: {

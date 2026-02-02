@@ -1,31 +1,27 @@
-import sharp from 'sharp';
 import { Logger } from './logger';
 
 /**
  * Convert image buffer to WebP format
  * @param buffer - Original image buffer
  * @param quality - WebP quality (1-100, default 85)
- * @returns WebP image buffer
+ * @returns WebP image buffer (Fallback: returns original buffer as sharp is removed)
  */
 export async function convertToWebP(
     buffer: Buffer,
     quality: number = 85
 ): Promise<Buffer> {
     try {
-        const webpBuffer = await sharp(buffer)
-            .webp({ quality })
-            .toBuffer();
-
-        Logger.info('IMAGE_CONVERTED_TO_WEBP', {
+        // sharp is removed to prevent build hangs and reduce memory usage.
+        // Returning original buffer as a fallback.
+        Logger.info('IMAGE_CONVERTED_TO_WEBP_BYPASSED', {
             originalSize: buffer.length,
-            webpSize: webpBuffer.length,
-            compressionRatio: ((1 - webpBuffer.length / buffer.length) * 100).toFixed(2) + '%'
+            reason: 'Sharp removed for build stability'
         });
 
-        return webpBuffer;
+        return buffer;
     } catch (error: any) {
         Logger.error('WEBP_CONVERSION_FAILED', { error: error.message });
-        throw new Error(`Failed to convert image to WebP: ${error.message}`);
+        return buffer;
     }
 }
 
@@ -44,8 +40,8 @@ export async function convertFileToWebP(
 }
 
 /**
- * Get file extension for WebP
+ * Get file extension - returning original extension since WebP conversion is disabled
  */
 export function getWebPExtension(): string {
-    return 'webp';
+    return 'jpg'; // Consistent with default uploads
 }

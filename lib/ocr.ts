@@ -1,6 +1,4 @@
 import { ImageAnnotatorClient } from '@google-cloud/vision';
-import { createWorker } from 'tesseract.js';
-import sharp from 'sharp';
 import { Logger } from './logger';
 
 export interface AadhaarInfo {
@@ -36,7 +34,7 @@ function getVisionClient(): ImageAnnotatorClient | null {
         useGoogleVision = true;
         Logger.info('OCR_ENGINE_INIT', { engine: 'Google Cloud Vision' });
       } catch (error) {
-        Logger.info('OCR_ENGINE_INIT_FAILED', { error: 'Google Vision init failed, will use Tesseract fallback' });
+        Logger.info('OCR_ENGINE_INIT_FAILED', { error: 'Google Vision init failed' });
         useGoogleVision = false;
       }
     }
@@ -50,9 +48,9 @@ async function extractTextWithGoogleVision(imageBuffer: Buffer): Promise<string>
   if (!client) {
     throw new Error('Google Cloud Vision client not initialized');
   }
-  
+
   Logger.info('OCR_START', { bufferSize: imageBuffer.length, engine: 'Google Cloud Vision' });
-  
+
   // Perform text detection using Google Cloud Vision API
   const [result] = await client.textDetection({
     image: { content: imageBuffer },
@@ -67,128 +65,37 @@ async function extractTextWithGoogleVision(imageBuffer: Buffer): Promise<string>
 
   // The first annotation contains all detected text
   const fullText = detections[0].description || '';
-  
-  Logger.info('OCR_COMPLETE', { 
+
+  Logger.info('OCR_COMPLETE', {
     textLength: fullText.length,
     detectedBlocks: detections.length - 1,
     engine: 'Google Cloud Vision'
   });
-  
+
   return fullText;
 }
 
+// Tesseract fallback removed for build stability and resource optimization.
+// Relying on Google Cloud Vision.
 async function extractTextWithTesseract(imageBuffer: Buffer): Promise<string> {
-  let worker: any = null;
-  
-  try {
-    // Initialize Tesseract worker with minimal configuration
-    // For server-side Next.js, we need to let Tesseract handle worker initialization
-    worker = await createWorker('eng+hin', 1, {
-      logger: (m: any) => {
-        if (m.status === 'recognizing text') {
-          Logger.info('OCR_PROGRESS', { progress: Math.round(m.progress * 100), engine: 'Tesseract' });
-        }
-      },
-      // Use CDN for worker files if local paths fail (fallback)
-      workerBlobURL: undefined,
-    });
-
-    Logger.info('OCR_START', { 
-      bufferSize: imageBuffer.length, 
-      engine: 'Tesseract.js (fallback)',
-      note: 'Processing may take 2-10 minutes for large images'
-    });
-    
-    // Process image with Tesseract
-    const { data: { text } } = await worker.recognize(imageBuffer);
-
-    Logger.info('OCR_COMPLETE', { textLength: text.length, engine: 'Tesseract.js' });
-    return text;
-  } catch (error: any) {
-    Logger.error('TESSERACT_ERROR', { 
-      error: error.message,
-      stack: error.stack,
-      code: error.code,
-      suggestion: 'Please configure Google Cloud Vision API for better OCR support'
-    });
-    
-    // Provide helpful error message
-    if (error.message?.includes('MODULE_NOT_FOUND') || error.message?.includes('worker')) {
-      throw new Error('Tesseract.js worker files not found. Please configure Google Cloud Vision API credentials (GOOGLE_APPLICATION_CREDENTIALS) for OCR functionality, or reinstall tesseract.js: npm install tesseract.js');
-    }
-    
-    throw error;
-  } finally {
-    if (worker) {
-      try {
-        await worker.terminate();
-      } catch (e) {
-        // Ignore termination errors
-      }
-    }
-  }
+  Logger.warn('TESSERACT_FALLBACK_CALLED', { message: 'Tesseract is disabled. Please configure Google Vision.' });
+  return '';
 }
 
 /**
  * Preprocess image for better OCR - enhance contrast and sharpness
  */
 async function preprocessImage(imageBuffer: Buffer): Promise<Buffer> {
-  try {
-    const processed = await sharp(imageBuffer)
-      .greyscale() // Convert to grayscale for better OCR
-      .normalize() // Enhance contrast
-      .sharpen() // Sharpen edges
-      .toBuffer();
-    
-    Logger.info('OCR_IMAGE_PREPROCESSED', { 
-      originalSize: imageBuffer.length,
-      processedSize: processed.length
-    });
-    
-    return processed;
-  } catch (error: any) {
-    Logger.info('OCR_PREPROCESS_FAILED', { error: error.message, usingOriginal: true });
-    return imageBuffer; // Return original if preprocessing fails
-  }
+  // sharp is removed to prevent build hangs. Returning original buffer.
+  return imageBuffer;
 }
 
 /**
  * Crop and zoom specific region from image (for focusing on specific sections)
  */
 async function cropImageRegion(imageBuffer: Buffer, x: number, y: number, width: number, height: number, zoomFactor: number = 2): Promise<Buffer> {
-  try {
-    const metadata = await sharp(imageBuffer).metadata();
-    const imgWidth = metadata.width || 1;
-    const imgHeight = metadata.height || 1;
-    
-    // Calculate crop coordinates (percentage to pixels)
-    const cropX = Math.max(0, Math.floor((x / 100) * imgWidth));
-    const cropY = Math.max(0, Math.floor((y / 100) * imgHeight));
-    const cropWidth = Math.min(imgWidth - cropX, Math.floor((width / 100) * imgWidth));
-    const cropHeight = Math.min(imgHeight - cropY, Math.floor((height / 100) * imgHeight));
-    
-    const cropped = await sharp(imageBuffer)
-      .extract({ left: cropX, top: cropY, width: cropWidth, height: cropHeight })
-      .resize(Math.floor(cropWidth * zoomFactor), Math.floor(cropHeight * zoomFactor), { // Zoom for better OCR
-        kernel: sharp.kernel.lanczos3,
-      })
-      .greyscale()
-      .normalize()
-      .sharpen(1.5, 1, 2) // Enhanced sharpening: sigma, flat, jagged
-      .toBuffer();
-    
-    Logger.info('OCR_IMAGE_CROPPED', { 
-      region: `${x}%,${y}%,${width}%,${height}%`,
-      zoom: `${zoomFactor}x`,
-      originalSize: imageBuffer.length,
-      croppedSize: cropped.length
-    });
-    
-    return cropped;
-  } catch (error: any) {
-    Logger.error('OCR_CROP_FAILED', { error: error.message });
-    throw error;
-  }
+  // sharp is removed. Multi-region OCR will now just use the full image.
+  return imageBuffer;
 }
 
 /**
@@ -201,7 +108,7 @@ async function cropImageRegion(imageBuffer: Buffer, x: number, y: number, width:
  */
 async function extractAadhaarRegions(imageBuffer: Buffer, ocrFunction: (buffer: Buffer) => Promise<string>): Promise<string> {
   const regions: string[] = [];
-  
+
   try {
     // Region 1: Name region (right side, top 10-40% of card height)
     // Aadhaar cards have photo on left (30-35%), name on right (35-100%)
@@ -211,7 +118,7 @@ async function extractAadhaarRegions(imageBuffer: Buffer, ocrFunction: (buffer: 
       regions.push(`NAME_REGION:\n${nameText}`);
       Logger.info('OCR_AADHAAR_NAME', { textLength: nameText.length });
     }
-    
+
     // Region 2: DOB and Gender region (right side, middle 40-65% of card height)
     const dobGenderRegion = await cropImageRegion(imageBuffer, 35, 40, 60, 25, 4);
     const dobGenderText = await ocrFunction(dobGenderRegion);
@@ -219,7 +126,7 @@ async function extractAadhaarRegions(imageBuffer: Buffer, ocrFunction: (buffer: 
       regions.push(`DOB_GENDER_REGION:\n${dobGenderText}`);
       Logger.info('OCR_AADHAAR_DOB_GENDER', { textLength: dobGenderText.length });
     }
-    
+
     // Region 3: Aadhaar number (bottom, full width, last 10-15% of card)
     // Aadhaar number is typically at the very bottom in large font
     const aadhaarNumberRegion = await cropImageRegion(imageBuffer, 0, 85, 100, 12, 5);
@@ -228,13 +135,13 @@ async function extractAadhaarRegions(imageBuffer: Buffer, ocrFunction: (buffer: 
       regions.push(`AADHAAR_NUMBER_REGION:\n${aadhaarNumberText}`);
       Logger.info('OCR_AADHAAR_NUMBER', { textLength: aadhaarNumberText.length });
     }
-    
+
     // Also process full image for any missed information
     const fullImageText = await ocrFunction(await preprocessImage(imageBuffer));
     if (fullImageText.trim()) {
       regions.push(`FULL_IMAGE:\n${fullImageText}`);
     }
-    
+
     return regions.join('\n\n');
   } catch (error: any) {
     Logger.error('OCR_REGIONS_FAILED', { error: error.message });
@@ -248,7 +155,7 @@ async function extractAadhaarRegions(imageBuffer: Buffer, ocrFunction: (buffer: 
  */
 async function extractUDIDRegions(imageBuffer: Buffer, ocrFunction: (buffer: Buffer) => Promise<string>): Promise<string> {
   const regions: string[] = [];
-  
+
   try {
     // Region 1: Top section (UDID number) - typically top 25% of card
     const topRegion = await cropImageRegion(imageBuffer, 5, 5, 90, 25, 3.5);
@@ -257,7 +164,7 @@ async function extractUDIDRegions(imageBuffer: Buffer, ocrFunction: (buffer: Buf
       regions.push(`TOP_REGION:\n${topText}`);
       Logger.info('OCR_UDID_TOP', { textLength: topText.length });
     }
-    
+
     // Region 2: Middle section (Disability type, percentage) - typically middle 30% of card
     const middleRegion = await cropImageRegion(imageBuffer, 5, 30, 90, 30, 3);
     const middleText = await ocrFunction(middleRegion);
@@ -265,7 +172,7 @@ async function extractUDIDRegions(imageBuffer: Buffer, ocrFunction: (buffer: Buf
       regions.push(`MIDDLE_REGION:\n${middleText}`);
       Logger.info('OCR_UDID_MIDDLE', { textLength: middleText.length });
     }
-    
+
     // Region 3: Bottom section (Dates - validity, issue) - typically bottom 35% of card
     const bottomRegion = await cropImageRegion(imageBuffer, 5, 65, 90, 30, 3);
     const bottomText = await ocrFunction(bottomRegion);
@@ -273,7 +180,7 @@ async function extractUDIDRegions(imageBuffer: Buffer, ocrFunction: (buffer: Buf
       regions.push(`BOTTOM_REGION:\n${bottomText}`);
       Logger.info('OCR_UDID_BOTTOM', { textLength: bottomText.length });
     }
-    
+
     return regions.join('\n\n');
   } catch (error: any) {
     Logger.error('OCR_REGIONS_FAILED', { error: error.message });
@@ -285,7 +192,7 @@ async function extractUDIDRegions(imageBuffer: Buffer, ocrFunction: (buffer: Buf
 export async function extractTextFromImage(imageBuffer: Buffer, cardType?: 'aadhaar' | 'udid'): Promise<string> {
   // Preprocess base image for better OCR accuracy
   const processedBuffer = await preprocessImage(imageBuffer);
-  
+
   // OCR function that will be used for region extraction
   const performOCR = async (buffer: Buffer): Promise<string> => {
     // Try Google Cloud Vision first if configured
@@ -294,23 +201,23 @@ export async function extractTextFromImage(imageBuffer: Buffer, cardType?: 'aadh
       try {
         return await extractTextWithGoogleVision(buffer);
       } catch (error: any) {
-        Logger.info('OCR_GOOGLE_VISION_FAILED', { 
+        Logger.info('OCR_GOOGLE_VISION_FAILED', {
           error: error.message,
           code: error.code,
-          fallingBack: 'Tesseract.js'
+          fallingBack: 'None (Tesseract disabled)'
         });
-        
+
         // Only fallback if it's not a credential/permission error
         if (!error.message?.includes('credentials') && !error.message?.includes('PERMISSION_DENIED')) {
           throw error;
         }
       }
     }
-    
-    // Fallback to Tesseract.js
-    return await extractTextWithTesseract(buffer);
+
+    // Fallback disabled
+    return '';
   };
-  
+
   // If card type is specified, use region-based extraction for better accuracy
   if (cardType === 'aadhaar') {
     Logger.info('OCR_USING_REGIONS', { cardType: 'aadhaar', method: 'region-based extraction' });
@@ -329,14 +236,14 @@ export async function extractTextFromImage(imageBuffer: Buffer, cardType?: 'aadh
       // Fallback to full image OCR
     }
   }
-  
+
   // Default: Process full image with preprocessing
   Logger.info('OCR_FULL_IMAGE', { cardType: cardType || 'unknown' });
   try {
     return await performOCR(processedBuffer);
   } catch (error: any) {
-    Logger.error('OCR_ERROR', { 
-      error: error.message, 
+    Logger.error('OCR_ERROR', {
+      error: error.message,
       stack: error.stack,
       engine: 'Tesseract.js'
     });
@@ -346,19 +253,19 @@ export async function extractTextFromImage(imageBuffer: Buffer, cardType?: 'aadh
 
 export function extractAadhaarInfo(ocrText: string): AadhaarInfo {
   const info: AadhaarInfo = {};
-  
+
   // Extract text from specific regions if available
   const nameRegionMatch = ocrText.match(/NAME_REGION:\s*([\s\S]*?)(?=\n(?:DOB_GENDER_REGION|AADHAAR_NUMBER_REGION|FULL_IMAGE)|$)/i);
   const dobGenderRegionMatch = ocrText.match(/DOB_GENDER_REGION:\s*([\s\S]*?)(?=\n(?:AADHAAR_NUMBER_REGION|FULL_IMAGE|NAME_REGION)|$)/i);
   const aadhaarNumberRegionMatch = ocrText.match(/AADHAAR_NUMBER_REGION:\s*([\s\S]*?)(?=\n(?:FULL_IMAGE|NAME_REGION|DOB_GENDER_REGION)|$)/i);
   const fullImageMatch = ocrText.match(/FULL_IMAGE:\s*([\s\S]*?)$/i);
-  
+
   // Prioritize region-specific text, fallback to full text
   const nameText = nameRegionMatch ? nameRegionMatch[1] : ocrText;
   const dobGenderText = dobGenderRegionMatch ? dobGenderRegionMatch[1] : ocrText;
   const aadhaarNumberText = aadhaarNumberRegionMatch ? aadhaarNumberRegionMatch[1] : ocrText;
   const fullText = fullImageMatch ? fullImageMatch[1] : ocrText;
-  
+
   // Clean up region markers for general parsing
   const cleanText = ocrText.replace(/(?:NAME_REGION|DOB_GENDER_REGION|AADHAAR_NUMBER_REGION|FULL_IMAGE|TOP_REGION|MIDDLE_REGION|BOTTOM_REGION):/gi, '').trim();
   // Remove common non-address boilerplate often OCR'd from Aadhaar cards
@@ -380,22 +287,22 @@ export function extractAadhaarInfo(ocrText: string): AadhaarInfo {
   for (const pattern of aadhaarPatterns) {
     const match = aadhaarNumberText.replace(/[^\d\s-]/g, ' ').match(pattern);
     if (match) {
-      const digits = match[1]?.replace(/\D/g, '') || 
-                     (match[1] && match[2] && match[3] ? match[1] + match[2] + match[3] : '').replace(/\D/g, '');
+      const digits = match[1]?.replace(/\D/g, '') ||
+        (match[1] && match[2] && match[3] ? match[1] + match[2] + match[3] : '').replace(/\D/g, '');
       if (digits.length === 12) {
         info.aadhaar = `${digits.substring(0, 4)}-${digits.substring(4, 8)}-${digits.substring(8, 12)}`;
         break;
       }
     }
   }
-  
+
   // Fallback to full text if not found in number region
   if (!info.aadhaar) {
     for (const pattern of aadhaarPatterns) {
       const match = cleanText.replace(/[^\d\s-]/g, ' ').match(pattern);
       if (match) {
-        const digits = match[1]?.replace(/\D/g, '') || 
-                       (match[1] && match[2] && match[3] ? match[1] + match[2] + match[3] : '').replace(/\D/g, '');
+        const digits = match[1]?.replace(/\D/g, '') ||
+          (match[1] && match[2] && match[3] ? match[1] + match[2] + match[3] : '').replace(/\D/g, '');
         if (digits.length === 12) {
           info.aadhaar = `${digits.substring(0, 4)}-${digits.substring(4, 8)}-${digits.substring(8, 12)}`;
           break;
@@ -431,39 +338,39 @@ export function extractAadhaarInfo(ocrText: string): AadhaarInfo {
   const normalizeGender = (text: string): string | null => {
     if (!text) return null;
     const lower = text.toLowerCase().trim();
-    
+
     // Exact matches first
     if (lower === 'm' || lower === 'म') return 'पुरुष';
     if (lower === 'f') return 'स्त्री';
-    
+
     // Handle "Male" with OCR errors (l -> | or 1)
-    if (lower.match(/^ma[|1l]e$/i) || 
-        lower.match(/^ma[|1]e$/i) || 
-        lower.match(/^m[|1]le$/i) ||
-        lower.includes('male') || 
-        lower.includes('पुरुष')) {
+    if (lower.match(/^ma[|1l]e$/i) ||
+      lower.match(/^ma[|1]e$/i) ||
+      lower.match(/^m[|1]le$/i) ||
+      lower.includes('male') ||
+      lower.includes('पुरुष')) {
       return 'पुरुष';
     }
-    
+
     // Handle "Female" with OCR errors
-    if (lower.match(/^fe[|1l]ma[|1l]e$/i) || 
-        lower.match(/^fema[|1l]e$/i) || 
-        lower.match(/^f[|1l]male$/i) ||
-        lower.includes('female') || 
-        lower.includes('स्त्री') || 
-        lower.includes('महिला')) {
+    if (lower.match(/^fe[|1l]ma[|1l]e$/i) ||
+      lower.match(/^fema[|1l]e$/i) ||
+      lower.match(/^f[|1l]male$/i) ||
+      lower.includes('female') ||
+      lower.includes('स्त्री') ||
+      lower.includes('महिला')) {
       return 'स्त्री';
     }
-    
+
     return null;
   };
 
   // First try DOB_GENDER_REGION (most accurate)
-  Logger.info('OCR_GENDER_EXTRACTION', { 
+  Logger.info('OCR_GENDER_EXTRACTION', {
     region: 'DOB_GENDER_REGION',
     textPreview: dobGenderText.substring(0, 200)
   });
-  
+
   for (const pattern of genderPatterns) {
     const match = dobGenderText.match(pattern);
     if (match) {
@@ -473,7 +380,7 @@ export function extractAadhaarInfo(ocrText: string): AadhaarInfo {
         const normalized = normalizeGender(genderText);
         if (normalized) {
           info.gender = normalized;
-          Logger.info('OCR_GENDER_FOUND', { 
+          Logger.info('OCR_GENDER_FOUND', {
             region: 'DOB_GENDER_REGION',
             raw: genderText,
             normalized: normalized
@@ -483,14 +390,14 @@ export function extractAadhaarInfo(ocrText: string): AadhaarInfo {
       }
     }
   }
-  
+
   // Fallback to full text if not found in region
   if (!info.gender) {
-    Logger.info('OCR_GENDER_FALLBACK', { 
+    Logger.info('OCR_GENDER_FALLBACK', {
       region: 'FULL_TEXT',
       textPreview: cleanText.substring(0, 300)
     });
-    
+
     for (const pattern of genderPatterns) {
       const match = cleanText.match(pattern);
       if (match) {
@@ -499,7 +406,7 @@ export function extractAadhaarInfo(ocrText: string): AadhaarInfo {
           const normalized = normalizeGender(genderText);
           if (normalized) {
             info.gender = normalized;
-            Logger.info('OCR_GENDER_FOUND', { 
+            Logger.info('OCR_GENDER_FOUND', {
               region: 'FULL_TEXT',
               raw: genderText,
               normalized: normalized
@@ -518,7 +425,7 @@ export function extractAadhaarInfo(ocrText: string): AadhaarInfo {
     if (lineMatch && lineMatch[2]) {
       const genderChar = lineMatch[2].toUpperCase();
       info.gender = genderChar === 'M' ? 'पुरुष' : 'स्त्री';
-      Logger.info('OCR_GENDER_FOUND_FALLBACK', { 
+      Logger.info('OCR_GENDER_FOUND_FALLBACK', {
         method: 'DOB_LINE_PROXIMITY',
         raw: genderChar,
         normalized: info.gender
@@ -527,7 +434,7 @@ export function extractAadhaarInfo(ocrText: string): AadhaarInfo {
   }
 
   if (!info.gender) {
-    Logger.info('OCR_GENDER_NOT_FOUND', { 
+    Logger.info('OCR_GENDER_NOT_FOUND', {
       dobGenderRegion: dobGenderText.substring(0, 100),
       fullTextPreview: cleanText.substring(0, 200)
     });
@@ -574,7 +481,7 @@ export function extractAadhaarInfo(ocrText: string): AadhaarInfo {
     const day = parseInt(dayStr);
     const month = parseInt(monthStr);
     const year = parseInt(yearStr);
-    
+
     if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900 && year <= new Date().getFullYear()) {
       const dobStr = `${day}-${month}-${year}`;
       // Check if it's an excluded date (print/issue date)
@@ -586,7 +493,7 @@ export function extractAadhaarInfo(ocrText: string): AadhaarInfo {
   };
 
   // First try DOB_GENDER_REGION with prefix patterns (strict)
-  Logger.info('OCR_DOB_EXTRACTION', { 
+  Logger.info('OCR_DOB_EXTRACTION', {
     region: 'DOB_GENDER_REGION',
     textPreview: dobGenderText.substring(0, 200)
   });
@@ -608,7 +515,7 @@ export function extractAadhaarInfo(ocrText: string): AadhaarInfo {
           if (age > 0 && age < 150) {
             info.age = `${age} वर्षे`;
           }
-          Logger.info('OCR_DOB_FOUND', { 
+          Logger.info('OCR_DOB_FOUND', {
             region: 'DOB_GENDER_REGION',
             method: 'PREFIX_STRICT',
             dob: dobStr,
@@ -639,7 +546,7 @@ export function extractAadhaarInfo(ocrText: string): AadhaarInfo {
             if (age > 0 && age < 150) {
               info.age = `${age} वर्षे`;
             }
-            Logger.info('OCR_DOB_FOUND', { 
+            Logger.info('OCR_DOB_FOUND', {
               region: 'DOB_GENDER_REGION',
               method: 'PREFIX_FLEXIBLE',
               dob: dobStr,
@@ -655,7 +562,7 @@ export function extractAadhaarInfo(ocrText: string): AadhaarInfo {
 
   // Priority 3: Standalone date patterns (ONLY in DOB_GENDER_REGION as last resort)
   if (!info.dob) {
-    Logger.info('OCR_DOB_FALLBACK', { 
+    Logger.info('OCR_DOB_FALLBACK', {
       region: 'DOB_GENDER_REGION',
       method: 'STANDALONE_DATE',
       note: 'Using standalone pattern as last resort in DOB_GENDER_REGION only'
@@ -676,7 +583,7 @@ export function extractAadhaarInfo(ocrText: string): AadhaarInfo {
             if (age > 0 && age < 150) {
               info.age = `${age} वर्षे`;
             }
-            Logger.info('OCR_DOB_FOUND', { 
+            Logger.info('OCR_DOB_FOUND', {
               region: 'DOB_GENDER_REGION',
               method: 'STANDALONE_DATE',
               dob: dobStr,
@@ -689,15 +596,15 @@ export function extractAadhaarInfo(ocrText: string): AadhaarInfo {
       if (info.dob) break;
     }
   }
-  
+
   // Fallback to full text if not found in DOB_GENDER_REGION (ONLY with prefix patterns)
   if (!info.dob) {
-    Logger.info('OCR_DOB_FALLBACK', { 
+    Logger.info('OCR_DOB_FALLBACK', {
       region: 'FULL_TEXT',
       method: 'PREFIX_ONLY',
       note: 'Searching full text with prefix patterns only'
     });
-    
+
     // Try prefix patterns in full text
     for (const pattern of [...dobWithPrefixPatterns, ...dobWithPrefixFlexiblePatterns]) {
       const matches = cleanText.matchAll(new RegExp(pattern.source, 'gi'));
@@ -715,7 +622,7 @@ export function extractAadhaarInfo(ocrText: string): AadhaarInfo {
             if (age > 0 && age < 150) {
               info.age = `${age} वर्षे`;
             }
-            Logger.info('OCR_DOB_FOUND', { 
+            Logger.info('OCR_DOB_FOUND', {
               region: 'FULL_TEXT',
               method: 'PREFIX_PATTERN',
               dob: dobStr,
@@ -730,7 +637,7 @@ export function extractAadhaarInfo(ocrText: string): AadhaarInfo {
   }
 
   if (!info.dob) {
-    Logger.info('OCR_DOB_NOT_FOUND', { 
+    Logger.info('OCR_DOB_NOT_FOUND', {
       dobGenderRegion: dobGenderText.substring(0, 150),
       fullTextPreview: cleanText.substring(0, 300),
       note: 'No DOB found with prefix patterns. Ensure Aadhaar card has DOB prefix visible.'
@@ -751,29 +658,29 @@ export function extractAadhaarInfo(ocrText: string): AadhaarInfo {
     const nameMatch = nameText.match(namePattern);
     if (nameMatch && nameMatch[1]) {
       let nameTextValue = nameMatch[1].trim();
-      
+
       const cleanedLines = nameTextValue
         .split('\n')
         .map(l => l.trim())
         .filter(l => {
           const lower = l.toLowerCase();
-          return l && 
-                 l.length >= 2 && 
-                 l.length <= 80 &&
-                 !lower.includes('dob') && 
-                 !lower.includes('जन्म') && 
-                 !lower.includes('gender') && 
-                 !lower.includes('लिंग') && 
-                 !lower.includes('date') &&
-                 !lower.includes('print') && 
-                 !lower.includes('government') && 
-                 !lower.includes('india') && 
-                 !lower.includes('www.') && 
-                 !lower.includes('@') &&
-                 !lower.includes('aadhaar') &&
-                 !lower.includes('आधार');
+          return l &&
+            l.length >= 2 &&
+            l.length <= 80 &&
+            !lower.includes('dob') &&
+            !lower.includes('जन्म') &&
+            !lower.includes('gender') &&
+            !lower.includes('लिंग') &&
+            !lower.includes('date') &&
+            !lower.includes('print') &&
+            !lower.includes('government') &&
+            !lower.includes('india') &&
+            !lower.includes('www.') &&
+            !lower.includes('@') &&
+            !lower.includes('aadhaar') &&
+            !lower.includes('आधार');
         });
-      
+
       if (cleanedLines.length > 0) {
         const cleanedName = cleanedLines[0];
         if (/[A-Za-zअ-ह]/.test(cleanedName)) {
@@ -783,58 +690,58 @@ export function extractAadhaarInfo(ocrText: string): AadhaarInfo {
       }
     }
   }
-  
+
   // If no name found, try extracting from first line of NAME_REGION (usually the name)
   if (!info.name && nameText) {
     const lines = nameText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     for (const line of lines.slice(0, 3)) {
       const lower = line.toLowerCase();
-      if (line.length >= 2 && 
-          line.length <= 80 &&
-          !lower.includes('dob') && 
-          !lower.includes('जन्म') && 
-          !lower.includes('gender') && 
-          !lower.includes('लिंग') && 
-          !lower.includes('date') &&
-          !lower.includes('print') && 
-          !lower.includes('government') && 
-          !lower.includes('india') &&
-          /[A-Za-zअ-ह]/.test(line)) {
+      if (line.length >= 2 &&
+        line.length <= 80 &&
+        !lower.includes('dob') &&
+        !lower.includes('जन्म') &&
+        !lower.includes('gender') &&
+        !lower.includes('लिंग') &&
+        !lower.includes('date') &&
+        !lower.includes('print') &&
+        !lower.includes('government') &&
+        !lower.includes('india') &&
+        /[A-Za-zअ-ह]/.test(line)) {
         info.name = line;
         break;
       }
     }
   }
-  
+
   // Fallback to full text if not found
   if (!info.name) {
     for (const namePattern of namePatterns) {
       const nameMatch = cleanText.match(namePattern);
       if (nameMatch && nameMatch[1]) {
         let nameTextValue = nameMatch[1].trim();
-        
+
         const cleanedLines = nameTextValue
           .split('\n')
           .map(l => l.trim())
           .filter(l => {
             const lower = l.toLowerCase();
-            return l && 
-                   l.length >= 2 && 
-                   l.length <= 80 &&
-                   !lower.includes('dob') && 
-                   !lower.includes('जन्म') && 
-                   !lower.includes('gender') && 
-                   !lower.includes('लिंग') && 
-                   !lower.includes('date') &&
-                   !lower.includes('print') && 
-                   !lower.includes('government') && 
-                   !lower.includes('india') && 
-                   !lower.includes('www.') && 
-                   !lower.includes('@') &&
-                   !lower.includes('aadhaar') &&
-                   !lower.includes('आधार');
+            return l &&
+              l.length >= 2 &&
+              l.length <= 80 &&
+              !lower.includes('dob') &&
+              !lower.includes('जन्म') &&
+              !lower.includes('gender') &&
+              !lower.includes('लिंग') &&
+              !lower.includes('date') &&
+              !lower.includes('print') &&
+              !lower.includes('government') &&
+              !lower.includes('india') &&
+              !lower.includes('www.') &&
+              !lower.includes('@') &&
+              !lower.includes('aadhaar') &&
+              !lower.includes('आधार');
           });
-        
+
         if (cleanedLines.length > 0) {
           const cleanedName = cleanedLines[0];
           if (/[A-Za-zअ-ह]/.test(cleanedName)) {
@@ -858,20 +765,20 @@ export function extractAadhaarInfo(ocrText: string): AadhaarInfo {
         const lower = l.toLowerCase();
         // Exclude boilerplate/non-address content
         return !lower.includes('note:') &&
-               !lower.includes('children on attaining') &&
-               !lower.includes('biometric information') &&
-               !lower.includes('establish identity') &&
-               !lower.includes('authenticate online') &&
-               !lower.includes('services in future') &&
-               !lower.includes('government') && 
-               !lower.includes('india') &&
-               !lower.includes('aadhaar') &&
-               !lower.includes('आधार');
+          !lower.includes('children on attaining') &&
+          !lower.includes('biometric information') &&
+          !lower.includes('establish identity') &&
+          !lower.includes('authenticate online') &&
+          !lower.includes('services in future') &&
+          !lower.includes('government') &&
+          !lower.includes('india') &&
+          !lower.includes('aadhaar') &&
+          !lower.includes('आधार');
       })
       // Remove phone-like numbers from address lines
       .map(l => l.replace(/\b\+?\d{10,}\b/g, '').replace(/\s{2,}/g, ' ').replace(/^,|,$/g, '').trim())
       .slice(0, 10);
-    
+
     if (addressLines.length > 0) {
       info.address = addressLines.join(', ');
     }
@@ -941,8 +848,8 @@ export function extractUDIDInfo(ocrText: string): UDIDInfo {
   }
 
   // Extract Validity Date
-  if (ocrText.toLowerCase().includes('permanent') && 
-      (ocrText.toLowerCase().includes('valid') || ocrText.toLowerCase().includes('वैध'))) {
+  if (ocrText.toLowerCase().includes('permanent') &&
+    (ocrText.toLowerCase().includes('valid') || ocrText.toLowerCase().includes('वैध'))) {
     info.validity_date = 'Permanent';
   } else {
     const validityPatterns = [
