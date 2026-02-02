@@ -32,8 +32,8 @@ export async function POST(request: NextRequest) {
     // Validate user_id - must be a positive number
     const userIdNum = user_id ? Number(user_id) : 0;
     if (!user_id || userIdNum <= 0 || isNaN(userIdNum)) {
-      Logger.error('field_officer_profile_missing_user_id', { 
-        user_id, 
+      Logger.error('field_officer_profile_missing_user_id', {
+        user_id,
         userIdNum,
         body_keys: Object.keys(body)
       });
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
           CONSTRAINT fk_profile_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
       `);
-      
+
       // Add current_gaav column if it doesn't exist (for existing tables)
       try {
         await conn.execute(`
@@ -106,12 +106,12 @@ export async function POST(request: NextRequest) {
            LIMIT 1`,
           [phone, validatedUserId]
         );
-        
+
         if (Array.isArray(phoneCheck) && phoneCheck.length > 0) {
           const phoneUser = phoneCheck[0];
           const phoneUserStatus = (phoneUser.status || '').toLowerCase().trim();
           const phoneUserIsActive = Number(phoneUser.is_active) === 1;
-          
+
           if (phoneUserStatus === 'active' && phoneUserIsActive) {
             conn.release();
             Logger.info('field_officer_profile_phone_taken', { phone, user_id: validatedUserId, existing_user_id: phoneUser.id });
@@ -136,12 +136,12 @@ export async function POST(request: NextRequest) {
            LIMIT 1`,
           [email.toLowerCase().trim(), validatedUserId]
         );
-        
+
         if (Array.isArray(emailCheck) && emailCheck.length > 0) {
           const emailUser = emailCheck[0];
           const emailUserStatus = (emailUser.status || '').toLowerCase().trim();
           const emailUserIsActive = Number(emailUser.is_active) === 1;
-          
+
           if (emailUserStatus === 'active' && emailUserIsActive) {
             conn.release();
             Logger.info('field_officer_profile_email_taken', { email, user_id: validatedUserId, existing_user_id: emailUser.id });
@@ -308,7 +308,7 @@ export async function POST(request: NextRequest) {
             step: 'bank_details_saved',
             step_number: 5,
             status: 'completed',
-            data: { 
+            data: {
               has_account_details: true,
               has_upi: !!upi_id,
               has_qr_code: !!qr_code,
@@ -398,7 +398,7 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      return NextResponse.json({
+      const responseData = {
         ok: true,
         profile: {
           user_id: user.id,
@@ -417,7 +417,19 @@ export async function GET(request: NextRequest) {
           qr_code: profile?.qr_code || null,
           profile_complete: profile?.profile_complete === 1,
         },
+      };
+
+      Logger.info('field_officer_profile_get_success', {
+        user_id: userId,
+        has_name: !!user.name,
+        has_phone: !!user.contact_number,
+        has_email: !!user.email,
+        name: user.name,
+        phone: user.contact_number,
+        email: user.email,
       });
+
+      return NextResponse.json(responseData);
     } finally {
       conn.release();
     }
