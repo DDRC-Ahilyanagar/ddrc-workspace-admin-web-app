@@ -149,7 +149,8 @@ model AccessRequest {
   name      String              @db.VarChar(150)
   phone     String              @db.VarChar(20)
   email     String?             @db.VarChar(255)
-  selfieUrl String              @map("selfie_url") @db.VarChar(255)
+  selfieUrl String?             @map("selfie_url") @db.VarChar(255)
+  userType  String              @default("FIELD_OFFICER") @map("user_type") @db.VarChar(50)
   status    AccessRequestStatus @default(pending)
   adminNote String?             @map("admin_note") @db.Text
   createdAt DateTime            @default(now()) @map("created_at")

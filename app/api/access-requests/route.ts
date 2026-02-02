@@ -9,7 +9,7 @@ const VALID_STATUSES = ['pending', 'approved', 'declined'];
 export const GET = requireAuth(async (request: NextRequest, user) => {
   try {
     console.log('Access Requests API called:', { user_id: user.id, user_type: user.user_type });
-    
+
     if (!user.user_type || user.user_type.toLowerCase() !== 'admin') {
       Logger.error('ACCESS_REQUESTS_FORBIDDEN', { user_id: user.id, user_type: user.user_type });
       return NextResponse.json({ ok: false, error: 'परवानगी नाही' }, { status: 403 });
@@ -18,7 +18,7 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
     const url = new URL(request.url);
     const statusParam = url.searchParams.get('status');
     console.log('Access Requests filter status:', statusParam);
-    
+
     const conditions: string[] = [];
     const params: any[] = [];
 
@@ -31,7 +31,9 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
     const sql = `SELECT id,
             name,
             phone,
+            email,
             selfie_url,
+            user_type,
             status,
             admin_note,
             created_at,
@@ -44,7 +46,7 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
     console.log('Access Requests SQL:', sql, 'Params:', params);
 
     const rows = await dbQuery<any>(sql, params);
-    
+
     console.log('Access Requests query result:', { count: rows?.length || 0, sample: rows?.[0] });
 
     return NextResponse.json({ ok: true, data: rows || [] });

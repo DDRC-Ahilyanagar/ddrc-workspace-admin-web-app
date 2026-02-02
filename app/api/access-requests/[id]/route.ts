@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';
+import { sendSMS, getFieldOfficerApprovalTemplate } from '@/lib/sms';
 
 const VALID_STATUSES = ['approved', 'declined'];
 const DEFAULT_MOBILE_ROLE = 'field_officer';
@@ -29,7 +30,7 @@ export const PATCH = requireAuth(async (request: NextRequest, user) => {
   const pool = getDbPool();
 
   const [existing]: any = await pool.query(
-    'SELECT id, status, name, phone, email FROM access_requests WHERE id = ? LIMIT 1',
+    'SELECT id, status, name, phone, email, user_type FROM access_requests WHERE id = ? LIMIT 1',
     [id]
   );
 
@@ -57,6 +58,12 @@ export const PATCH = requireAuth(async (request: NextRequest, user) => {
   if (status === 'approved') {
     try {
       await ensureMobileUserExists(pool, existing[0]);
+
+      // Send Approval SMS
+      if (existing[0]?.phone) {
+        const approvalMsg = getFieldOfficerApprovalTemplate();
+        await sendSMS(existing[0].phone, approvalMsg);
+      }
     } catch (err: any) {
       Logger.error('ACCESS_REQUEST_USER_SYNC_FAILED', {
         id,
@@ -79,29 +86,42 @@ async function ensureMobileUserExists(pool: ReturnType<typeof getDbPool>, reques
   }
   const displayName = (requestRow?.name ?? '').toString().trim() || 'Field Officer';
   const email = (requestRow?.email ?? '').toString().trim() || null;
+  const requestedUserType = (requestRow?.user_type ?? 'FIELD_OFFICER').toString().trim();
+
+  // Map the user type from access request to database user_type
+  const userTypeMapping: { [key: string]: string } = {
+    'FIELD_OFFICER': 'field_officer',
+    'VERIFICATION_OFFICER': 'supervisor', // Verification officers are supervisors in the system
+  };
+  const dbUserType = userTypeMapping[requestedUserType] || 'field_officer';
 
   const [existingUser]: any = await pool.query(
     'SELECT id, user_type, user_type_id FROM users WHERE contact_number = ? LIMIT 1',
     [phone],
   );
 
-  const [foType]: any = await pool.query(
-    `SELECT id FROM user_types WHERE LOWER(user_type) IN ('field officer', 'field_officer') LIMIT 1`,
+  // Get the appropriate user type ID from user_types table
+  const userTypeSearchTerms = dbUserType === 'supervisor'
+    ? ['supervisor', 'verification officer', 'verification_officer']
+    : ['field officer', 'field_officer'];
+
+  const [userTypeResult]: any = await pool.query(
+    `SELECT id FROM user_types WHERE LOWER(user_type) IN (${userTypeSearchTerms.map(() => '?').join(',')}) LIMIT 1`,
+    userTypeSearchTerms
   );
-  const fieldOfficerTypeId =
-    Array.isArray(foType) && foType.length > 0 ? foType[0]?.id ?? null : null;
+  const userTypeId = Array.isArray(userTypeResult) && userTypeResult.length > 0 ? userTypeResult[0]?.id ?? null : null;
 
   if (!Array.isArray(existingUser) || existingUser.length === 0) {
     await pool.query(
       `INSERT INTO users (name, contact_number, email, user_type, user_type_id, status, is_active, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, 'active', 1, NOW(), NOW())`,
-      [displayName, phone, email, DEFAULT_MOBILE_ROLE, fieldOfficerTypeId],
+      [displayName, phone, email, dbUserType, userTypeId],
     );
     Logger.info('ACCESS_REQUEST_USER_AUTO_CREATED', {
       phone,
       name: displayName,
       email,
-      user_type: DEFAULT_MOBILE_ROLE,
+      user_type: dbUserType,
     });
     return;
   }
@@ -109,7 +129,7 @@ async function ensureMobileUserExists(pool: ReturnType<typeof getDbPool>, reques
   const existingId = existingUser[0]?.id;
   if (!existingId) return;
 
-  const params: any[] = [DEFAULT_MOBILE_ROLE];
+  const params: any[] = [dbUserType];
   let sql = `
     UPDATE users
        SET status = 'active',
@@ -119,10 +139,17 @@ async function ensureMobileUserExists(pool: ReturnType<typeof getDbPool>, reques
              ELSE user_type
            END`;
 
-  if (fieldOfficerTypeId) {
+  // Update name if provided and user doesn't have one or it's empty
+  if (displayName && displayName !== 'Field Officer') {
+    sql += `,
+           name = COALESCE(NULLIF(name, ''), ?)`;
+    params.push(displayName);
+  }
+
+  if (userTypeId) {
     sql += `,
            user_type_id = COALESCE(user_type_id, ?)`;
-    params.push(fieldOfficerTypeId);
+    params.push(userTypeId);
   }
 
   // Update email if provided and user doesn't have one
@@ -139,7 +166,7 @@ async function ensureMobileUserExists(pool: ReturnType<typeof getDbPool>, reques
   params.push(existingId);
 
   await pool.query(sql, params);
-  Logger.info('ACCESS_REQUEST_USER_AUTO_ACTIVATED', { user_id: existingId, phone, email });
+  Logger.info('ACCESS_REQUEST_USER_AUTO_ACTIVATED', { user_id: existingId, phone, email, name: displayName });
 }
 
 

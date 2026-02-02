@@ -10,7 +10,9 @@ type AccessRequest = {
   id: number;
   name: string;
   phone: string;
+  email?: string | null;
   selfie_url: string;
+  user_type: string;
   status: 'pending' | 'approved' | 'declined';
   admin_note?: string | null;
   created_at: string;
@@ -42,14 +44,14 @@ export default function AccessRequestsPage() {
       });
       console.log('Access Requests API Response Status:', res.status);
       const json = await res.json();
-      console.log('Access Requests API Response:', { 
-        ok: json.ok, 
-        dataCount: json.data?.length || 0, 
+      console.log('Access Requests API Response:', {
+        ok: json.ok,
+        dataCount: json.data?.length || 0,
         error: json.error,
         status: res.status,
-        sampleData: json.data?.[0] 
+        sampleData: json.data?.[0]
       });
-      
+
       if (json.ok) {
         setRequests(json.data || []);
         console.log('Access requests set:', json.data?.length || 0, 'requests');
@@ -142,6 +144,7 @@ export default function AccessRequestsPage() {
                   <tr>
                     <th>नाव</th>
                     <th>मोबाईल क्रमांक</th>
+                    <th>वापरकर्ता प्रकार</th>
                     <th>सेल्फी</th>
                     <th>स्थिती</th>
                     <th>विनंती वेळ</th>
@@ -151,7 +154,7 @@ export default function AccessRequestsPage() {
                 <tbody>
                   {requests.length === 0 && !loading && (
                     <tr>
-                      <td colSpan={6} className="text-center py-4 text-muted">
+                      <td colSpan={7} className="text-center py-4 text-muted">
                         विनंत्या उपलब्ध नाहीत
                       </td>
                     </tr>
@@ -159,7 +162,7 @@ export default function AccessRequestsPage() {
 
                   {loading && (
                     <tr>
-                      <td colSpan={6} className="text-center py-4">
+                      <td colSpan={7} className="text-center py-4">
                         <div className="spinner-border text-primary" role="status">
                           <span className="visually-hidden">लोड होत आहे...</span>
                         </div>
@@ -172,16 +175,26 @@ export default function AccessRequestsPage() {
                       <td>
                         <div className="fw-semibold">{request.name}</div>
                         <small className="text-muted">#{request.id}</small>
+                        {request.email && <small className="text-muted d-block">{request.email}</small>}
                       </td>
                       <td>{request.phone}</td>
                       <td>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-info"
-                          onClick={() => setPreviewUrl(getAbsoluteImageUrl(request.selfie_url))}
-                        >
-                          पाहा
-                        </button>
+                        <span className={`badge ${request.user_type === 'VERIFICATION_OFFICER' ? 'bg-info' : 'bg-primary'}`}>
+                          {request.user_type === 'VERIFICATION_OFFICER' ? 'पडताळणी अधिकारी' : 'क्षेत्रीय अधिकारी'}
+                        </span>
+                      </td>
+                      <td>
+                        {request.selfie_url ? (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-info"
+                            onClick={() => setPreviewUrl(getAbsoluteImageUrl(request.selfie_url))}
+                          >
+                            पाहा
+                          </button>
+                        ) : (
+                          <span className="text-muted small">उपलब्ध नाही</span>
+                        )}
                       </td>
                       <td>
                         <span className={`badge bg-${request.status === 'approved' ? 'success' : request.status === 'declined' ? 'danger' : 'warning'} text-uppercase`}>
