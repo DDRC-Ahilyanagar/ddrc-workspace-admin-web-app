@@ -71,12 +71,14 @@ export default function LoginPage() {
         {/* Left Side - 60% */}
         <div className="login-left-side d-flex flex-column align-items-center justify-content-center animate__animated animate__fadeInLeft">
           <div className="login-branding text-center">
-            <img
-              src={LOGO_URL}
-              alt="DDRC Logo"
-              className="login-logo mb-5 animate__animated animate__fadeInDown"
-              style={{ maxWidth: '450px', width: '100%', height: 'auto' }}
-            />
+            <Link href="/" className="no-underline">
+              <img
+                src={LOGO_URL}
+                alt="DDRC Logo"
+                className="login-logo mb-5 animate__animated animate__fadeInDown"
+                style={{ maxWidth: '450px', width: '100%', height: 'auto' }}
+              />
+            </Link>
             <div className="login-title-section animate__animated animate__fadeInUp">
               <h1 className="login-title-main text-white">
                 District Disability Rehabilitation Centre, Ahilyanagar
@@ -99,11 +101,13 @@ export default function LoginPage() {
           {/* Mobile-only branding section */}
           <div className="login-mobile-branding">
             <div className="text-center mb-4">
-              <img
-                src={LOGO_URL}
-                alt="DDRC Logo"
-                className="login-mobile-logo mb-3"
-              />
+              <Link href="/" className="no-underline">
+                <img
+                  src={LOGO_URL}
+                  alt="DDRC Logo"
+                  className="login-mobile-logo mb-3"
+                />
+              </Link>
               <h1 className="login-mobile-title-main">
                 District Disability Rehabilitation Centre, Ahilyanagar
               </h1>
@@ -166,7 +170,7 @@ export default function LoginPage() {
               </div>
             </div>
             <div className="text-center mt-5">
-              <small className="text-muted">Powered by UT<span className="text-danger">K</span>RRANTI</small>
+              <small className="text-muted opacity-50">Powered by UT<span className="text-[#009cc5]">K</span>RRANTI</small>
             </div>
           </div>
         </div>

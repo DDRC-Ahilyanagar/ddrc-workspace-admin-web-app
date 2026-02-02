@@ -6,21 +6,21 @@ const SMS_CONFIG = {
   contentType: process.env.SMS_CONTENT_TYPE || 'english',
 };
 
-function getDLTTemplate(): string {
-  // Default template with {#var#} placeholder
-  const DEFAULT_OTP_TEMPLATE = 'Dear User, Your OTP to login at DDRC, Nagar is {#var#} Please do not share this with anyone. For Queries contact. 9022147060. VIKHE PATIL FOUNDATION';
+function getDLTTemplate(type: 'login' | 'registration' = 'login'): string {
+  // New approved English template as the primary default
+  const DEFAULT_TEMPLATE = 'Dear User, Your OTP to login at DDRC, Nagar is {#var#} Please do not share this with anyone. For Queries contact. 9022147060. VIKHE PATIL FOUNDATION ';
 
-  const template = process.env.SMS_OTP_TEMPLATE || DEFAULT_OTP_TEMPLATE;
+  const template = process.env.SMS_OTP_TEMPLATE || DEFAULT_TEMPLATE;
 
   if (!template.includes('{#var#}')) {
     console.warn('[SMS] WARNING: Template does not contain {#var#} placeholder, using default template');
-    return DEFAULT_OTP_TEMPLATE;
+    return DEFAULT_TEMPLATE;
   }
 
   return template;
 }
 
-export function buildDLTMessage(otp: string): string {
+export function buildDLTMessage(otp: string, type: 'login' | 'registration' = 'login'): string {
   if (!otp || typeof otp !== 'string') {
     throw new Error('OTP must be a non-empty string');
   }
@@ -30,7 +30,7 @@ export function buildDLTMessage(otp: string): string {
     throw new Error('OTP must contain at least one digit');
   }
 
-  const template = getDLTTemplate();
+  const template = getDLTTemplate(type);
   const message = template.replace('{#var#}', cleanOtp);
 
   const isProduction = process.env.NODE_ENV === 'production';
@@ -41,6 +41,7 @@ export function buildDLTMessage(otp: string): string {
   console.log('[SMS] DLT Message built:', {
     length: message.length,
     preview: logPreview,
+    type
   });
 
   return message;
@@ -221,14 +222,14 @@ export function generateRegistrationNumber(
  */
 export function getPublicFormCompletionTemplate(registrationNumber?: string): string {
   const regNumVar = registrationNumber || 'DDRC/UNK/UNK/UNK/0000';
-  return `आपली प्राथमिक माहिती यशस्वीरित्या नोंदवली गेली आहे. आपला नोंदणी क्रमांक: ${regNumVar}. पुढील टप्प्यासाठी आमचे क्षेत्रीय सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधून सविस्तर माहिती नोंदवतील. काही शंका असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद.– VIKHE PATIL FOUNDATION`;
+  return `आपली प्राथमिक माहिती यशस्वीरित्या नोंदवली गेली आहे. आपला नोंदणी क्रमांक: ${regNumVar}. पुढील टप्प्यासाठी आमचे क्षेत्रीय सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधून सविस्तर माहिती नोंदवतील. काही शंका असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद. PADMSHRI DR VITHALRAO VIKHE PATIL FOUNDATION`;
 }
 
 /**
  * Get the form completion SMS template for field officer form submissions (fully completed)
  */
 function getFieldOfficerCompletionTemplate(): string {
-  const DEFAULT_TEMPLATE = 'आपला सर्वेक्षण फॉर्म पूर्णपणे नोंदवण्यात आला आहे. पुढील प्रक्रिया संबंधित विभागा मार्फत लवकरच राबवली जाईल. काही शंका असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद.– VIKHE PATIL FOUNDATION';
+  const DEFAULT_TEMPLATE = 'आपला सर्वेक्षण फॉर्म पूर्णपणे नोंदवण्यात आला आहे. पुढील प्रक्रिया संबंधित विभागा मार्फत लवकरच राबवली जाईल. काही शंका असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद. PADMSHRI DR VITHALRAO VIKHE PATIL FOUNDATION';
   return process.env.SMS_FIELD_OFFICER_COMPLETION_TEMPLATE || DEFAULT_TEMPLATE;
 }
 
@@ -237,7 +238,7 @@ function getFieldOfficerCompletionTemplate(): string {
  */
 export function getFieldOfficerSubmissionNotificationTemplate(holderName: string, registrationNumber: string): string {
   const regText = registrationNumber ? ` (रजिस्ट्रेशन नंबर: ${registrationNumber})` : '';
-  return `नवीन सर्वेक्षण प्राप्त झाले आहे: ${holderName}${regText}. कृपया पुढील कार्यवाहीसाठी तपासा. धन्यवाद.– VIKHE PATIL FOUNDATION`;
+  return `नवीन सर्वेक्षण प्राप्त झाले आहे: ${holderName}${regText}. कृपया पुढील कार्यवाहीसाठी तपासा. धन्यवाद. PADMSHRI DR VITHALRAO VIKHE PATIL FOUNDATION`;
 }
 
 /**
@@ -259,6 +260,20 @@ export function buildFormCompletionMessage(isFieldOfficerSubmission: boolean = f
   });
 
   return message;
+}
+
+/**
+ * Get the field officer signup success SMS template
+ */
+export function getFieldOfficerSignupTemplate(): string {
+  return 'आपण यशस्वीपणे नोंदणी केली आहे. Admin मंजुरीनंतर लॉगिन करता येईल. मंजुरी SMS द्वारे कळवली जाईल.PADMSHRI DR VITHALRAO VIKHE PATIL FOUNDATION';
+}
+
+/**
+ * Get the field officer approval success SMS template
+ */
+export function getFieldOfficerApprovalTemplate(): string {
+  return 'आपले खाते Admin कडून मंजूर झाले आहे. आता आपण लॉगिन करू शकता. PADMSHRI DR VITHALRAO VIKHE PATIL FOUNDATION';
 }
 
 /**
@@ -390,7 +405,7 @@ export async function sendFormCompletionSMS(
       // Use registrationNumber from params or extract from surveyJson if possible
       const regNum = registrationNumber || surveyJson?.registration_number || '';
       const officerMessage = isFieldOfficerSubmission
-        ? `आपण ${holderName} यांचे सर्वेक्षण यशस्वीपणे पूर्ण केले आहे. (रजिस्ट्रेशन नंबर: ${regNum}). धन्यवाद.– VIKHE PATIL FOUNDATION`
+        ? `आपण ${holderName} यांचे सर्वेक्षण यशस्वीपणे पूर्ण केले आहे. (रजिस्ट्रेशन नंबर: ${regNum}). धन्यवाद. PADMSHRI DR VITHALRAO VIKHE PATIL FOUNDATION`
         : getFieldOfficerSubmissionNotificationTemplate(holderName, regNum);
 
       const officerResult = await sendSMS(officerPhone, officerMessage);

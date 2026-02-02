@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -108,6 +110,7 @@ export default function FieldOfficerSignup() {
                             </label>
                             <input
                                 type="text"
+                                id="signup_name"
                                 required
                                 className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-100 focus:bg-white transition-all font-bold text-slate-900 text-sm md:text-base placeholder:text-slate-300"
                                 placeholder="उदा. राजेश कुमार"
@@ -121,13 +124,14 @@ export default function FieldOfficerSignup() {
                                 वापरकर्ता प्रकार (User Type) <span className="text-red-500">*</span>
                             </label>
                             <select
+                                id="signup_user_type"
                                 required
                                 className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-100 focus:bg-white transition-all font-bold text-slate-900 text-sm md:text-base"
                                 value={formData.userType}
                                 onChange={(e) => setFormData({ ...formData, userType: e.target.value as 'FIELD_OFFICER' | 'VERIFICATION_OFFICER' })}
                             >
-                                <option value="FIELD_OFFICER">क्षेत्रीय अधिकारी (Field Officer)</option>
-                                <option value="VERIFICATION_OFFICER">पडताळणी अधिकारी (Verification Officer)</option>
+                                <option id="option_field_officer" value="FIELD_OFFICER">क्षेत्रीय अधिकारी (Field Officer)</option>
+                                <option id="option_verification_officer" value="VERIFICATION_OFFICER">पडताळणी अधिकारी (Verification Officer)</option>
                             </select>
                         </div>
 
@@ -137,6 +141,7 @@ export default function FieldOfficerSignup() {
                             </label>
                             <input
                                 type="tel"
+                                id="signup_phone"
                                 required
                                 pattern="[0-9]{10}"
                                 className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-100 focus:bg-white transition-all font-bold text-slate-900 text-sm md:text-base placeholder:text-slate-300"
@@ -152,6 +157,7 @@ export default function FieldOfficerSignup() {
                             </label>
                             <input
                                 type="email"
+                                id="signup_email"
                                 className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-100 focus:bg-white transition-all font-bold text-slate-900 text-sm md:text-base placeholder:text-slate-300"
                                 placeholder="example@email.com"
                                 value={formData.email}
@@ -170,6 +176,7 @@ export default function FieldOfficerSignup() {
 
                         <button
                             type="submit"
+                            id="signup_submit_btn"
                             disabled={loading}
                             className="w-full py-4.5 md:py-5 bg-[#003f86] text-white rounded-2xl font-black text-base md:text-lg tracking-wide transition-all hover:bg-[#3eac53] hover:shadow-[0_20px_40px_rgba(37,99,235,0.3)] hover:-translate-y-1 active:scale-95 disabled:opacity-50 disabled:pointer-events-none mt-4 relative overflow-hidden group shadow-xl shadow-[#003f86]/20"
                         >

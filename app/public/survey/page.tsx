@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { apiCall, getQuestions, submitAnswers, uploadImage } from '@/lib/api-client';
@@ -31,6 +33,7 @@ interface QuestionSection {
 type Step = 'upload-front' | 'upload-back' | 'aadhar-info' | 'personal-info' | 'complete';
 
 const LOGO_URL = '/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png';
+const getQuestionIdNumber = (id: number | string): number => typeof id === 'string' ? parseInt(id, 10) : id;
 
 export default function PublicFormPage() {
   const [lang, setLang] = useState<'mr' | 'en'>('mr');
@@ -45,7 +48,18 @@ export default function PublicFormPage() {
   const [existingSurveyData, setExistingSurveyData] = useState<any>(null);
   const [checkingExisting, setCheckingExisting] = useState(false);
   const [allQuestions, setAllQuestions] = useState<Question[]>([]);
-  const [questionSections, setQuestionSections] = useState<QuestionSection[]>([]);
+  const questionSections = useMemo(() => {
+    const normalized = allQuestions.map(q => ({ ...q, id: typeof q.id === 'string' ? parseInt(q.id, 10) : q.id }));
+    const sectionsMap = new Map<string, Question[]>();
+    normalized.forEach(q => {
+      const title = q.title || 'Other';
+      if (!sectionsMap.has(title)) sectionsMap.set(title, []);
+      sectionsMap.get(title)!.push(q);
+    });
+    const sections = Array.from(sectionsMap.entries()).map(([title, qs]) => ({ title, questions: qs }));
+    sections.sort((a, b) => getQuestionIdNumber(a.questions[0].id) - getQuestionIdNumber(b.questions[0].id));
+    return sections;
+  }, [allQuestions]);
   const [answers, setAnswers] = useState<Record<number | string, any>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -60,7 +74,6 @@ export default function PublicFormPage() {
   const [disabilityTypes, setDisabilityTypes] = useState<string[]>([]);
   const [loadingDisabilityTypes, setLoadingDisabilityTypes] = useState(false);
 
-  const getQuestionIdNumber = (id: number | string): number => typeof id === 'string' ? parseInt(id, 10) : id;
 
   const stepsOrder: Step[] = ['upload-front', 'upload-back', 'aadhar-info', 'personal-info'];
   const currentStepIndex = stepsOrder.indexOf(currentStep);
@@ -74,6 +87,39 @@ export default function PublicFormPage() {
     if (allQuestions.length > 0) loadDisabilityTypes();
   }, [allQuestions.length]);
 
+  // Prefill name, aadhaar, and district when entering personal-info step
+  useEffect(() => {
+    if (currentStep === 'personal-info' && allQuestions.length > 0) {
+      setAnswers(prev => {
+        const updates: Record<number | string, any> = { ...prev };
+
+        // Prefill name
+        const nameQuestion = allQuestions.find(q =>
+          (q.question?.includes('दिव्यांगांचे') && q.question?.includes('नाव')) ||
+          (q.question?.includes('नाव') && q.title === 'वैयक्तिक माहिती') ||
+          (q.id.toString() === '1')
+        );
+        if (nameQuestion && divyangName && !updates[nameQuestion.id]) {
+          updates[nameQuestion.id] = divyangName;
+        }
+
+        // Prefill aadhaar
+        const aadhaarQuestion = allQuestions.find(q => q.question?.includes('आधार'));
+        if (aadhaarQuestion && aadharNo && !updates[aadhaarQuestion.id]) {
+          updates[aadhaarQuestion.id] = aadharNo;
+        }
+
+        // Prefill district as अहिल्यानगर
+        const districtQuestion = allQuestions.find(q => q.question?.includes('जि.') || q.question?.includes('जिल्हा'));
+        if (districtQuestion && !updates[districtQuestion.id]) {
+          updates[districtQuestion.id] = 'अहिल्यानगर';
+        }
+
+        return updates;
+      });
+    }
+  }, [currentStep, allQuestions, divyangName, aadharNo]);
+
   const loadQuestions = async () => {
     setLoading(true);
     try {
@@ -82,18 +128,12 @@ export default function PublicFormPage() {
         const questions = resp.data as Question[];
         const normalized = questions.map(q => ({ ...q, id: typeof q.id === 'string' ? parseInt(q.id, 10) : q.id }));
         setAllQuestions(normalized);
-        const sectionsMap = new Map<string, Question[]>();
-        normalized.forEach(q => {
-          const title = q.title || 'Other';
-          if (!sectionsMap.has(title)) sectionsMap.set(title, []);
-          sectionsMap.get(title)!.push(q);
-        });
-        const sections = Array.from(sectionsMap.entries()).map(([title, qs]) => ({ title, questions: qs }));
-        sections.sort((a, b) => getQuestionIdNumber(a.questions[0].id) - getQuestionIdNumber(b.questions[0].id));
-        setQuestionSections(sections);
       }
-    } catch (err: any) { setError('Questions error: ' + err.message); }
-    finally { setLoading(false); }
+    } catch (err: any) {
+      setError('Questions error: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const loadTalukas = async () => {
@@ -193,24 +233,31 @@ export default function PublicFormPage() {
     const visible: Question[] = [];
     let hasValidationError = false;
 
-    questionSections.forEach(s => s.questions.forEach(q => {
+    const updatedQuestions = allQuestions.map(q => {
       if (shouldShowQuestion(q)) {
         visible.push(q);
         const val = answers[q.id] || '';
         const validationError = validateInput(q, String(val));
         if (validationError) {
           hasValidationError = true;
-          setAllQuestions(questions => questions.map(qu => qu.id === q.id ? { ...qu, error: validationError } : qu));
+          return { ...q, error: validationError };
         }
       }
-    }));
+      return { ...q, error: undefined }; // Clear previous errors
+    });
 
     if (hasValidationError) {
+      setAllQuestions(updatedQuestions);
       setError("कृपया लाल रंगातील त्रुटी तपासा (Please fix the validation errors)");
       setSubmitting(false);
-      // Scroll to first error
-      const firstError = document.querySelector('.border-red-500');
-      if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      // Give React a moment to render the error states before scrolling
+      setTimeout(() => {
+        const firstError = document.querySelector('.border-red-500');
+        if (firstError) {
+          firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
       return;
     }
 
@@ -230,17 +277,64 @@ export default function PublicFormPage() {
   const shouldShowQuestion = (q: Question): boolean => {
     const cond = (q.rendering_condition || '').toString().toLowerCase();
     if (!cond || cond === 'no' || cond === 'false' || cond === '0') return true;
-    const parentLabel = (q.rendering_question || '').toString().trim();
-    const expectedValue = (q.rendering_value || '').toString().trim();
-    const parent = allQuestions.find(x => x.question?.trim() === parentLabel || x.id.toString() === parentLabel);
-    if (!parent || !answers[parent.id]) return false;
-    const ans = String(answers[parent.id]).trim();
-    return expectedValue.split(/[|,]/).some(v => ans === v.trim() || ans.includes(v.trim()));
+
+    // Use lowercase and trimmed for matching
+    const parentLabel = (q.rendering_question || '').toString().trim().toLowerCase();
+    const expectedValue = (q.rendering_value || '').toString().trim().toLowerCase();
+
+    if (!parentLabel || !expectedValue) return true;
+
+    // Find parent question by label or ID with flexible match
+    const parent = allQuestions.find(x => {
+      const qText = (x.question || '').trim().toLowerCase();
+      const qId = x.id.toString();
+      return qText === parentLabel || qId === parentLabel || qText.includes(parentLabel) || parentLabel.includes(qText);
+    });
+
+    if (!parent) return true; // If parent not found, show question
+
+    const parentAnswer = answers[parent.id];
+    if (!parentAnswer) return false; // Parent not answered yet
+
+    const ans = String(parentAnswer).trim().toLowerCase();
+
+    // Split expected values by comma or pipe
+    const expectedValues = expectedValue.split(/[|,]/).map(v => v.trim().toLowerCase());
+
+    // Check if answer matches any expected value (case-insensitive)
+    return expectedValues.some(expected => {
+      // Exact match
+      if (ans === expected) return true;
+      // Contains match (for multi-select or complex values)
+      if (ans.includes(expected)) return true;
+      // Reverse contains (if expected is longer)
+      if (expected.includes(ans)) return true;
+      return false;
+    });
   };
 
   const validateInput = (q: Question, val: string) => {
-    if (!val) {
-      if (q.question_type !== 'upload') return '';
+    if (!val || val.trim() === '') {
+      if (q.question_type !== 'upload') return 'हे क्षेत्र आवश्यक आहे (Required)';
+      return '';
+    }
+
+    const label = q.question?.trim() || '';
+
+    // Mobile number validation
+    if (label.includes('मोबाईल') || label.includes('Mobile')) {
+      if (!/^\d{10}$/.test(val)) return 'मोबाईल नंबर १० अंकी असावा';
+    }
+
+    // Pin code validation
+    if (label.includes('पिन कोड') || label.toLowerCase().includes('pin')) {
+      if (!/^\d{6}$/.test(val)) return 'पिन कोड ६ अंकी असावा';
+    }
+
+    // Email validation
+    if (label.includes('ईमेल') || label.includes('Email') || label.includes('email')) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (val && !emailRegex.test(val)) return 'अवैध ईमेल पत्ता';
     }
 
     if (q.regex) {
@@ -254,16 +348,12 @@ export default function PublicFormPage() {
       if (!/^\d*$/.test(val)) return 'Only numbers allowed';
     }
 
-    if (q.max_length && val.length > q.max_length) {
-      return `Max length is ${q.max_length} characters`;
-    }
-
     return '';
   };
 
   const handleAnswerChange = (qid: any, val: any) => {
     setAnswers(prev => {
-      const next = { ...prev, [qid]: val };
+      const next: Record<number | string, any> = { ...prev, [qid]: val };
       const q = allQuestions.find(x => x.id === qid);
 
       // Clear error on change if valid
@@ -272,7 +362,24 @@ export default function PublicFormPage() {
         setAllQuestions(questions => questions.map(qu => qu.id === qid ? { ...qu, error: validationError } : qu));
       }
 
-      if (q?.question === 'ता.' || q?.question?.includes('तालुका')) loadDependentData(val);
+      // Auto-calculate age from DOB
+      if (q?.question?.includes('जन्म तारीख') || q?.question?.includes('DOB')) {
+        const ageQuestion = allQuestions.find(x => x.question?.includes('वय') || x.question?.toLowerCase().includes('age'));
+        if (ageQuestion && val) {
+          const birthDate = new Date(val);
+          const today = new Date();
+          let age = today.getFullYear() - birthDate.getFullYear();
+          const monthDiff = today.getMonth() - birthDate.getMonth();
+          if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+          }
+          next[ageQuestion.id] = age.toString();
+        }
+      }
+
+      const label = q?.question?.trim() || '';
+      const isTaluka = label === 'ता.' || label.includes('ता.') || label.includes('तालुका') || label.toLowerCase().includes('taluka');
+      if (isTaluka) loadDependentData(val);
       return next;
     });
   };
@@ -289,17 +396,23 @@ export default function PublicFormPage() {
   const renderQuestion = (q: Question) => {
     const ans = answers[q.id];
     const label = q.question?.trim() || '';
-    const isTaluka = label === 'ता.' || label.includes('तालुका');
-    const isVillage = label === 'गाव' || label.includes('गाव / शहर');
-    const isGram = label.includes('ग्रामपंचायत');
+    const isTaluka = label === 'ता.' || label.includes('तालुका') || label.toLowerCase().includes('taluka');
+    const isVillage = label.includes('गाव') || label.toLowerCase().includes('village');
+    const isGram = label.includes('ग्रामपंचायत') || label.toLowerCase().includes('gram');
+    const isTalathi = label.includes('तलाठी') || label.toLowerCase().includes('talathi');
+    const isPhc = label.includes('आरोग्य केंद्र') || label.includes('PHC') || label.toLowerCase().includes('phc');
     const isType = label.includes('दिव्यांगता प्रकार');
 
     let options: string[] = [];
     if (isTaluka) options = talukas;
     else if (isVillage) options = villages;
     else if (isGram) options = grams;
+    else if (isTalathi) options = talathi;
+    else if (isPhc) options = phc;
     else if (isType) options = disabilityTypes;
     else if (q.options && q.options !== 'NULL') options = q.options.split(',').map(o => o.trim());
+
+    const isDynamicMCQ = isTaluka || isVillage || isGram || isTalathi || isPhc || isType;
 
     const hasError = !!q.error;
     const baseInputClasses = "w-full bg-white/50 backdrop-blur-sm border rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none transition-all duration-300 shadow-sm";
@@ -312,7 +425,7 @@ export default function PublicFormPage() {
           {hasError && <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider animate-in fade-in slide-in-from-right-2">{q.error}</span>}
         </div>
 
-        {q.question_type.toLowerCase() === 'mcq' ? (
+        {q.question_type.toLowerCase() === 'mcq' || isDynamicMCQ ? (
           <select className={inputClasses} value={ans || ''} onChange={(e) => handleAnswerChange(q.id, e.target.value)}>
             <option value="">-- निवडा --</option>
             {options.map((o, i) => <option key={i} value={o}>{o}</option>)}
@@ -337,12 +450,28 @@ export default function PublicFormPage() {
           <input type="date" className={inputClasses} value={ans || ''} onChange={(e) => handleAnswerChange(q.id, e.target.value)} />
         ) : (
           <input
-            type="text"
+            type={q.valid_input === 'numeric' || label.includes('मोबाईल') || label.includes('Mobile') ? 'tel' : label.includes('ईमेल') || label.includes('Email') || label.includes('email') ? 'email' : 'text'}
             className={inputClasses}
             placeholder="..."
             value={ans || ''}
-            maxLength={q.max_length}
-            onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+            inputMode={q.valid_input === 'numeric' || label.includes('मोबाईल') || label.includes('Mobile') ? 'numeric' : undefined}
+            pattern={label.includes('मोबाईल') || label.includes('Mobile') ? '[0-9]{10}' : undefined}
+            onChange={(e) => {
+              let value = e.target.value;
+              // Mobile number: only digits, max 10
+              if (label.includes('मोबाईल') || label.includes('Mobile')) {
+                value = value.replace(/\D/g, '').slice(0, 10);
+              }
+              // Pin code: only digits, max 6
+              if (label.includes('पिन कोड') || label.toLowerCase().includes('pin')) {
+                value = value.replace(/\D/g, '').slice(0, 6);
+              }
+              // Numeric fields: only digits
+              if (q.valid_input === 'numeric' || label.includes('पिन कोड') || label.toLowerCase().includes('pin')) {
+                value = value.replace(/\D/g, '');
+              }
+              handleAnswerChange(q.id, value);
+            }}
           />
         )}
       </div>
@@ -369,28 +498,28 @@ export default function PublicFormPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] py-12 md:py-24 px-6 selection:bg-blue-500 selection:text-white relative">
+    <div className="min-h-screen bg-gradient-to-br from-[#003f86] to-[#009cc5] py-12 md:py-24 px-6 selection:bg-white selection:text-blue-600 relative">
       {/* Background Decor */}
       <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[-5%] w-[40%] h-[40%] bg-blue-100/30 rounded-full blur-[120px]"></div>
-        <div className="absolute bottom-[-10%] right-[-5%] w-[40%] h-[40%] bg-blue-100/30 rounded-full blur-[100px]"></div>
+        <div className="absolute top-[-10%] left-[-5%] w-[40%] h-[40%] bg-white/10 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-[-10%] right-[-5%] w-[40%] h-[40%] bg-white/10 rounded-full blur-[100px]"></div>
       </div>
 
       <div className="max-w-4xl mx-auto relative z-10">
         <header className="mb-16 flex flex-col items-center text-center">
-          <Link href="/public" className="group flex items-center gap-3 mb-10 px-6 py-2 rounded-full bg-white border border-slate-100 shadow-sm opacity-60 hover:opacity-100 transition-all hover:border-blue-200">
-            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-900 flex items-center gap-2">
+          <Link href="/public" className="group flex items-center gap-3 mb-10 px-6 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 shadow-sm hover:bg-white/20 transition-all">
+            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white flex items-center gap-2">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}><path d="M15 19l-7-7 7-7" /></svg>
               Home
             </span>
           </Link>
 
           <div className="flex items-center gap-4 group">
-            <div className="bg-white p-2 rounded-2xl shadow-xl transition-transform group-hover:rotate-3 group-hover:scale-110">
-              <img src={LOGO_URL} alt="Logo" className="w-8 h-8 object-contain" />
+            <div className="bg-white/10 backdrop-blur-md p-2 rounded-2xl shadow-xl transition-transform group-hover:rotate-3 group-hover:scale-110 border border-white/20">
+              <img src={LOGO_URL} alt="Logo" className="w-8 h-8 object-contain brightness-0 invert" />
             </div>
-            <h1 className="text-4xl font-black text-slate-950 tracking-tightest uppercase italic">
-              DDRC <span className="text-blue-600 not-italic">Ahilyanagar</span>
+            <h1 className="text-4xl font-black text-white tracking-tightest uppercase italic drop-shadow-lg">
+              DDRC <span className="text-blue-200 not-italic">Ahilyanagar</span>
             </h1>
           </div>
         </header>
@@ -476,6 +605,7 @@ export default function PublicFormPage() {
                     <label className="block text-[11px] font-black text-slate-400 uppercase tracking-[0.3em] mb-4 group-focus-within:text-blue-600 transition-colors">पूर्ण नाव (आधार प्रमाणे)</label>
                     <input
                       type="text"
+                      id="survey_full_name"
                       placeholder="Enter Full Name"
                       className="w-full bg-white border border-slate-200 rounded-[28px] px-8 py-5 font-black text-lg outline-none focus:ring-[12px] focus:ring-blue-500/5 focus:border-blue-500 transition-all duration-300 shadow-sm"
                       value={divyangName}
@@ -487,6 +617,7 @@ export default function PublicFormPage() {
                     <div className="relative">
                       <input
                         type="text"
+                        id="survey_aadhar_no"
                         placeholder="0000-0000-0000"
                         className="w-full bg-white border border-slate-200 rounded-[28px] px-8 py-5 font-black text-2xl tracking-[0.25em] outline-none focus:ring-[12px] focus:ring-blue-500/5 focus:border-blue-500 transition-all duration-300 shadow-sm"
                         value={aadharNo}
@@ -520,7 +651,39 @@ export default function PublicFormPage() {
             {currentStep === 'personal-info' && (
               <div className="space-y-16 animate-in fade-in slide-in-from-bottom-8 duration-500">
                 {questionSections.map((s, i) => {
-                  const visible = s.questions.filter(q => shouldShowQuestion(q));
+                  const visible = s.questions.filter(q => {
+                    const label = q.question || '';
+                    const title = q.title || '';
+                    const isAadhaarPhoto = label.includes('आधार कार्ड') && (label.includes('पुढील') || label.includes('मागील'));
+                    const isAadhaarNumber = label.includes('आधार') && (label.includes('नंबर') || label.includes('क्रमांक'));
+                    const isIdSection = title.includes('ओळखपत्र');
+                    return shouldShowQuestion(q) && !isAadhaarPhoto && !isAadhaarNumber && !isIdSection;
+                  });
+
+                  // Advanced sorting: place dependent questions immediately after their parents
+                  const sorted: Question[] = [];
+                  const added = new Set<string | number>();
+                  const baseOrdered = [...visible].sort((a, b) => getQuestionIdNumber(a.id) - getQuestionIdNumber(b.id));
+
+                  const addWithChildren = (q: Question) => {
+                    if (added.has(q.id)) return;
+                    sorted.push(q);
+                    added.add(q.id);
+                    baseOrdered.filter(child =>
+                      child.rendering_question === q.question ||
+                      child.rendering_question === q.id.toString()
+                    ).forEach(addWithChildren);
+                  };
+
+                  baseOrdered.forEach(q => {
+                    const hasParentInList = q.rendering_question && baseOrdered.some(p =>
+                      p.question?.trim() === q.rendering_question?.trim() ||
+                      p.id.toString() === q.rendering_question?.toString()
+                    );
+                    if (!hasParentInList) addWithChildren(q);
+                  });
+                  // Safety: add any missed questions
+                  baseOrdered.forEach(q => { if (!added.has(q.id)) sorted.push(q); });
                   if (visible.length === 0) return null;
                   return (
                     <div key={i} className="space-y-10">
@@ -528,7 +691,7 @@ export default function PublicFormPage() {
                         <h4 className="text-[11px] font-black text-blue-600 uppercase tracking-[0.5em] whitespace-nowrap">{s.title}</h4>
                         <div className="h-[1px] bg-gradient-to-r from-blue-100 to-transparent flex-1"></div>
                       </div>
-                      <div className="grid gap-8">{visible.map(q => renderQuestion(q))}</div>
+                      <div className="grid gap-8">{sorted.map(q => renderQuestion(q))}</div>
                     </div>
                   );
                 })}
@@ -550,6 +713,7 @@ export default function PublicFormPage() {
               <button
                 onClick={currentStep === 'personal-info' ? submitForm : (currentStep === 'aadhar-info' ? createAadharRecord : () => setCurrentStep(prev => stepsOrder[stepsOrder.indexOf(prev) + 1] as Step))}
                 disabled={submitting || loading}
+                id="survey_next_btn"
                 className="flex-1 px-12 py-6 bg-slate-950 text-white rounded-[32px] font-black uppercase tracking-[0.3em] hover:bg-blue-900 transition-all duration-500 hover:shadow-[0_25px_60px_rgba(37,99,235,0.15)] active:scale-95 flex items-center justify-center gap-6 group disabled:opacity-50"
               >
                 {submitting || loading ? (

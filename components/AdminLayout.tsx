@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import Image from 'next/image';
+import Link from 'next/link';
 
 // Use relative path for static assets to avoid hydration mismatch
 const LOGO_URL = '/ddrc app icon (192 x 192 px) (1024 x 1024 px)(1).png';
@@ -326,9 +326,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             >
               <i className="bi bi-list" style={{ fontSize: '1.5rem' }}></i>
             </button>
-            <div className="d-flex align-items-center animate__animated animate__fadeInLeft">
-              <span className="text-white fw-bold">DDRC Survey Portal</span>
-            </div>
+            <Link href="/" className="text-decoration-none animate__animated animate__fadeInLeft">
+              <span className="text-white fw-bold tracking-tight">DDRC <span className="text-blue-400">ADMIN</span></span>
+            </Link>
           </div>
 
           <div className="d-flex align-items-center animate__animated animate__fadeInRight">
@@ -565,12 +565,16 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           className={`admin-sidebar ${sidebarOpen ? 'open animate__animated animate__fadeInLeft' : 'closed animate__animated animate__fadeOutLeft'}`}
         >
           <nav className="sidebar-nav">
-            <div className="sidebar-logo-container mb-3 d-flex justify-content-center align-items-center animate__animated animate__fadeInDown" style={{ padding: '1rem' }}>
-              <img
-                src={LOGO_URL}
-                alt="DDRC Logo"
-                style={{ maxWidth: '100%', height: 'auto', maxHeight: '80px' }}
-              />
+            <div className="sidebar-logo-container mb-4 d-flex justify-content-center align-items-center animate__animated animate__fadeInDown" style={{ padding: '1.5rem' }}>
+              <Link href="/" className="d-flex justify-content-center">
+                <div className="p-3 bg-white/10 rounded-3xl backdrop-blur-sm border border-white/10 shadow-xl transform rotate-3 hover:rotate-0 transition-transform duration-500">
+                  <img
+                    src={LOGO_URL}
+                    alt="DDRC Logo"
+                    style={{ maxWidth: '100%', height: 'auto', maxHeight: '70px', filter: 'brightness(1.1)' }}
+                  />
+                </div>
+              </Link>
             </div>
             <ul className="nav flex-column">
               {menuItems && menuItems.length > 0 ? (
@@ -603,6 +607,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 </li>
               )}
             </ul>
+            <div className="mt-auto px-4 pb-4">
+              <Link href="/" className="nav-link text-white/70 hover:text-white transition-colors no-underline d-flex align-items-center gap-2 py-3 border-top border-white/10">
+                <i className="bi bi-house-door"></i>
+                <span className="nav-label">Back to Home</span>
+              </Link>
+            </div>
           </nav>
         </aside>
 

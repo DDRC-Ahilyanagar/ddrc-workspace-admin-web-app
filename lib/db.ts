@@ -12,7 +12,7 @@ let pool: mysql.Pool | null = null;
 
 export function resetDbPool(): void {
   if (pool) {
-    pool.end().catch(() => {});
+    pool.end().catch(() => { });
     pool = null;
   }
 }
@@ -30,15 +30,18 @@ export function getDbPool(): mysql.Pool {
         enableKeepAlive: true,
         keepAliveInitialDelay: 0,
       } as mysql.PoolOptions);
-      
-      // Test connection on pool creation
-      pool.getConnection()
-        .then((conn) => {
-          conn.release();
-        })
-        .catch((err) => {
-          console.error('Database pool connection test failed:', err.message);
-        });
+
+      // Test connection on pool creation, but skip during build to prevent hangs
+      const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
+      if (!isBuildPhase) {
+        pool.getConnection()
+          .then((conn) => {
+            conn.release();
+          })
+          .catch((err) => {
+            console.error('Database pool connection test failed:', err.message);
+          });
+      }
     } catch (error: any) {
       console.error('Failed to create database pool:', error.message);
       throw error;
