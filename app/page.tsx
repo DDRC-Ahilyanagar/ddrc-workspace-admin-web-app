@@ -329,26 +329,46 @@ export default function DetailedLandingPage() {
         </div>
 
         {/* --- Main Navigation Bar --- */}
-        <nav className={`w-full transition-all duration-300 ${scrolled ? 'bg-white shadow-lg py-2' : 'bg-transparent py-4'}`}>
-          <div className="max-w-7xl mx-auto px-4 md:px-6 flex justify-between items-center h-auto min-h-[60px]">
-            {/* Left: DDRC Logo */}
-            <div className="flex-shrink-0">
-              <img src={LOGO_URL} alt="DDRC Logo" className="w-16 h-16 md:w-24 md:h-24 object-contain" />
+        <nav className={`w-full transition-all duration-300 ${scrolled ? 'bg-white shadow-lg py-1' : 'bg-transparent py-2'}`}>
+          <div className="max-w-7xl mx-auto px-4 md:px-6">
+
+            {/* Mobile Layout (< md) */}
+            <div className="flex md:hidden flex-col items-center">
+              <div className="flex items-center gap-6 mb-1">
+                <img src={LOGO_URL} alt="DDRC Logo" className="w-10 h-10 object-contain" />
+                <img src={ZP_LOGO} alt="ZP Logo" className="w-10 h-10 object-contain rounded-full bg-white p-0.5 shadow-sm" />
+              </div>
+              <div className="text-center">
+                <h1 className={`font-extrabold text-[10px] leading-tight uppercase tracking-tight ${scrolled ? 'text-[#003f86]' : 'text-white drop-shadow-md'}`}>
+                  District Disability Rehabilitation Center, Ahilyanagar
+                </h1>
+                <h2 className={`font-bold text-[9px] leading-tight mt-0.5 ${scrolled ? 'text-[#009cc5]' : 'text-white drop-shadow-md'}`}>
+                  जिल्हा दिव्यांग पुनर्वसन केंद्र, अहिल्यानगर
+                </h2>
+              </div>
             </div>
 
-            {/* Center: Full Form Text */}
-            <div className="flex flex-col text-center px-4 flex-grow justify-center">
-              <h1 className={`font-extrabold text-[10px] sm:text-xs md:text-sm tracking-tight uppercase leading-snug whitespace-normal ${scrolled ? 'text-[#003f86]' : 'text-white drop-shadow-md'}`}>
-                District Disability Rehabilitation Center, Ahilyanagar
-              </h1>
-              <h2 className={`font-bold text-[9px] sm:text-[11px] md:text-xs leading-snug mt-1 whitespace-normal break-words ${scrolled ? 'text-[#009cc5]' : 'text-white drop-shadow-md'}`}>
-                जिल्हा दिव्यांग पुनर्वसन केंद्र, अहिल्यानगर
-              </h2>
-            </div>
+            {/* Desktop Layout (>= md) */}
+            <div className="hidden md:flex justify-between items-center h-auto min-h-[60px]">
+              {/* Left: DDRC Logo */}
+              <div className="flex-shrink-0">
+                <img src={LOGO_URL} alt="DDRC Logo" className="w-24 h-24 object-contain" />
+              </div>
 
-            {/* Right: ZP Logo */}
-            <div className="flex-shrink-0">
-              <img src={ZP_LOGO} alt="ZP Logo" className="w-14 h-14 md:w-24 md:h-24 object-contain rounded-full bg-white p-0.5 shadow-sm" />
+              {/* Center: Full Form Text */}
+              <div className="flex flex-col text-center px-4 flex-grow justify-center">
+                <h1 className={`font-extrabold text-sm tracking-tight uppercase leading-snug whitespace-normal ${scrolled ? 'text-[#003f86]' : 'text-white drop-shadow-md'}`}>
+                  District Disability Rehabilitation Center, Ahilyanagar
+                </h1>
+                <h2 className={`font-bold text-xs leading-snug mt-1 whitespace-normal break-words ${scrolled ? 'text-[#009cc5]' : 'text-white drop-shadow-md'}`}>
+                  जिल्हा दिव्यांग पुनर्वसन केंद्र, अहिल्यानगर
+                </h2>
+              </div>
+
+              {/* Right: ZP Logo */}
+              <div className="flex-shrink-0">
+                <img src={ZP_LOGO} alt="ZP Logo" className="w-24 h-24 object-contain rounded-full bg-white p-0.5 shadow-sm" />
+              </div>
             </div>
           </div>
         </nav>
@@ -357,7 +377,7 @@ export default function DetailedLandingPage() {
       {/* --- Main Page Content --- */}
       <main className="relative">
         {/* --- Hero Section --- */}
-        <header className="relative min-h-[90vh] flex items-center justify-center pt-40 md:pt-48 pb-20 overflow-hidden bg-gradient-to-br from-[#003f86] via-[#003f86] to-[#009cc5]">
+        <header className="relative min-h-[90vh] flex items-center justify-center pt-32 md:pt-48 pb-20 overflow-hidden bg-gradient-to-br from-[#003f86] via-[#003f86] to-[#009cc5]">
           <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:30px_30px]"></div>
 
           <div className="relative z-10 max-w-5xl mx-auto px-6 text-center">
