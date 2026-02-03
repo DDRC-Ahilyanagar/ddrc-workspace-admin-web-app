@@ -335,10 +335,10 @@ export default function PublicDetailedLandingPage() {
                 <img src={ZP_LOGO} alt="ZP Logo" className="w-10 h-10 object-contain rounded-full bg-white p-0.5 shadow-sm" />
               </div>
               <div className="text-center">
-                <h1 className={`font-extrabold text-[10px] leading-tight uppercase tracking-tight ${scrolled ? 'text-[#003f86]' : 'text-white drop-shadow-md'}`}>
+                <h1 className={`font-extrabold !text-[1.5rem] leading-none uppercase tracking-tight mb-1 ${scrolled ? 'text-[#003f86]' : 'text-white drop-shadow-md'}`}>
                   District Disability Rehabilitation Center, Ahilyanagar
                 </h1>
-                <h2 className={`font-bold text-[9px] leading-tight mt-0.5 ${scrolled ? 'text-[#009cc5]' : 'text-white drop-shadow-md'}`}>
+                <h2 className={`font-bold !text-[1rem] leading-tight mt-0.5 ${scrolled ? 'text-[#009cc5]' : 'text-white drop-shadow-md'}`}>
                   जिल्हा दिव्यांग पुनर्वसन केंद्र, अहिल्यानगर
                 </h2>
               </div>

@@ -104,7 +104,12 @@ export default function PublicFormPage() {
         }
 
         // Prefill aadhaar
-        const aadhaarQuestion = allQuestions.find(q => q.question?.includes('आधार'));
+        const aadhaarQuestion = allQuestions.find(q => {
+          const t = (q.question || '').toLowerCase();
+          return t.includes('आधार') &&
+            (t.includes('क्रमांक') || t.includes('नंबर') || t.includes('no') || t.includes('number')) &&
+            !t.includes('फोटो') && !t.includes('photo') && !t.includes('image');
+        });
         if (aadhaarQuestion && aadharNo && !updates[aadhaarQuestion.id]) {
           updates[aadhaarQuestion.id] = aadharNo;
         }
@@ -234,7 +239,21 @@ export default function PublicFormPage() {
     let hasValidationError = false;
 
     const updatedQuestions = allQuestions.map(q => {
-      if (shouldShowQuestion(q)) {
+      const label = (q.question || '').trim();
+      const lowerLabel = label.toLowerCase();
+      const title = (q.title || '').toLowerCase();
+
+      // Robust detection of hidden fields
+      const isAadhaarPhoto = lowerLabel.includes('आधार') && (lowerLabel.includes('फोटो') || lowerLabel.includes('photo') || lowerLabel.includes('image') || lowerLabel.includes('पुढील') || lowerLabel.includes('मागील'));
+      const isAadhaarNumber = lowerLabel.includes('आधार') && (lowerLabel.includes('नंबर') || lowerLabel.includes('क्रमांक') || lowerLabel.includes('no') || lowerLabel.includes('number'));
+      const isIdSection = title.includes('ओळखपत्र') || title.includes('documents') || title.includes('identity');
+
+      // Also check specific exact matches just in case
+      const isExactAadhaar = label === 'आधार कार्ड नंबर' || label === 'आधार क्रमांक';
+
+      const isHidden = isAadhaarPhoto || isAadhaarNumber || isExactAadhaar || isIdSection;
+
+      if (shouldShowQuestion(q) && !isHidden) {
         visible.push(q);
         const val = answers[q.id] || '';
         const validationError = validateInput(q, String(val));
@@ -248,7 +267,8 @@ export default function PublicFormPage() {
 
     if (hasValidationError) {
       setAllQuestions(updatedQuestions);
-      setError("कृपया लाल रंगातील त्रुटी तपासा (Please fix the validation errors)");
+      const errorFields = updatedQuestions.filter(q => q.error).map(q => q.question).join(', ');
+      setError(`कृपया लाल रंगातील त्रुटी तपासा (Please fix errors in): ${errorFields}`);
       setSubmitting(false);
 
       // Give React a moment to render the error states before scrolling
@@ -257,7 +277,7 @@ export default function PublicFormPage() {
         if (firstError) {
           firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
-      }, 100);
+      }, 200);
       return;
     }
 
@@ -275,6 +295,49 @@ export default function PublicFormPage() {
   };
 
   const shouldShowQuestion = (q: Question): boolean => {
+    // Specific fix for "Willing to marry" showing when "Married"
+    // This must be checked BEFORE standard conditional logic to override defaults
+    const qText = (q.question || '').trim();
+    if (qText.includes('विवाह') && qText.includes('मानस')) {
+      // Search ALL questions for marital status to handle duplicates/ordering issues
+      const maritalQuestions = allQuestions.filter(x => {
+        const xText = (x.question || '').trim();
+        return xText.includes('वैवाहिक') || xText.toLowerCase().includes('marital');
+      });
+
+      // Get actual selected answers (filtering out empty/default/placeholder values)
+      const maritalAnswers = maritalQuestions
+        .map(mq => String(answers[mq.id] || '').trim())
+        .filter(a => {
+          // Must have value
+          if (!a) return false;
+          // Must not be a placeholder
+          const lower = a.toLowerCase();
+          if (lower.includes('select')) return false;
+          if (lower.includes('निवडा')) return false;
+          if (a === '--') return false;
+          return true;
+        });
+
+      console.log('Marital Fix Debug:', {
+        qId: q.id,
+        foundMaritalQs: maritalQuestions.length,
+        validAnswers: maritalAnswers
+      });
+
+      // 1. If NO valid answer selected yet -> HIDE (Wait for user input)
+      if (maritalAnswers.length === 0) return false;
+
+      // 2. If Answer is "Married" -> HIDE
+      const isMarried = maritalAnswers.some(ans =>
+        ans.startsWith('विवाहित') || ans.toLowerCase() === 'married'
+      );
+      if (isMarried) return false;
+
+      // 3. Otherwise (Unmarried, Widow, etc.) -> SHOW
+      return true;
+    }
+
     const cond = (q.rendering_condition || '').toString().toLowerCase();
     if (!cond || cond === 'no' || cond === 'false' || cond === '0') return true;
 
@@ -351,6 +414,12 @@ export default function PublicFormPage() {
     return '';
   };
 
+  const getDisplayUrl = (url: string) => {
+    if (!url) return '';
+    if (url.startsWith('blob:') || url.startsWith('data:')) return url;
+    return getAbsoluteImageUrl(url);
+  };
+
   const handleAnswerChange = (qid: any, val: any) => {
     setAnswers(prev => {
       const next: Record<number | string, any> = { ...prev, [qid]: val };
@@ -416,16 +485,16 @@ export default function PublicFormPage() {
 
     const hasError = !!q.error;
     const baseInputClasses = "w-full bg-white/50 backdrop-blur-sm border rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none transition-all duration-300 shadow-sm";
-    const inputClasses = `${baseInputClasses} ${hasError ? 'border-red-500 focus:ring-4 focus:ring-red-500/10' : 'border-slate-200 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white'}`;
+    const inputClasses = `${baseInputClasses} ${hasError ? 'border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/50' : 'border-slate-200 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white'}`;
 
     return (
-      <div key={q.id} className={`group bg-white/40 p-6 md:p-8 rounded-[32px] border ${hasError ? 'border-red-200' : 'border-white/60'} shadow-sm hover:shadow-md transition-all duration-500 hover:bg-white/60`}>
+      <div key={q.id} id={`q-${q.id}`} className={`group bg-white/40 p-6 md:p-8 rounded-[32px] border-2 ${hasError ? 'border-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.1)]' : 'border-white/60'} shadow-sm hover:shadow-md transition-all duration-500 hover:bg-white/60`}>
         <div className="flex justify-between items-start mb-4">
-          <label className="block text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] group-hover:text-blue-600 transition-colors">{q.question}</label>
-          {hasError && <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider animate-in fade-in slide-in-from-right-2">{q.error}</span>}
+          <label className={`block text-[11px] font-black uppercase tracking-[0.2em] transition-colors ${hasError ? 'text-red-600' : 'text-slate-400 group-hover:text-blue-600'}`}>{q.question}</label>
+          {hasError && <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider animate-in fade-in slide-in-from-right-2 bg-red-100 px-2 py-1 rounded">{q.error}</span>}
         </div>
 
-        {q.question_type.toLowerCase() === 'mcq' || isDynamicMCQ ? (
+        {isDynamicMCQ || q.question_type.toLowerCase() === 'mcq' ? (
           <select className={inputClasses} value={ans || ''} onChange={(e) => handleAnswerChange(q.id, e.target.value)}>
             <option value="">-- निवडा --</option>
             {options.map((o, i) => <option key={i} value={o}>{o}</option>)}
@@ -434,9 +503,9 @@ export default function PublicFormPage() {
           <div className="space-y-4">
             <div className="relative group/up">
               <input type="file" className="hidden" id={`up-${q.id}`} accept="image/*" onChange={(e) => e.target.files?.[0] && handleFileUpload(q.id, e.target.files[0])} />
-              <label htmlFor={`up-${q.id}`} className={`w-full bg-slate-100/50 border-2 border-dashed ${hasError ? 'border-red-300' : 'border-slate-300'} rounded-2xl h-24 flex items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-white transition-all`}>
+              <label htmlFor={`up-${q.id}`} className={`w-full bg-slate-100/50 border-2 border-dashed ${hasError ? 'border-red-300 bg-red-50/30' : 'border-slate-300'} rounded-2xl h-24 flex items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-white transition-all`}>
                 {ans ? (
-                  <img src={ans.startsWith('http') ? getAbsoluteImageUrl(ans) : ans} className="h-full w-full object-contain p-2" alt="Upload" />
+                  <img src={getDisplayUrl(ans)} className="h-full w-full object-contain p-2" alt="Upload" />
                 ) : (
                   <div className="flex flex-col items-center gap-1 opacity-40 group-hover/up:opacity-100 transition-opacity">
                     <span className="text-2xl">📸</span>
@@ -498,7 +567,7 @@ export default function PublicFormPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#003f86] to-[#009cc5] py-12 md:py-24 px-6 selection:bg-white selection:text-blue-600 relative">
+    <div className="min-h-screen bg-[#003f86] bg-gradient-to-br from-[#003f86] to-[#009cc5] py-12 md:py-24 px-6 selection:bg-white selection:text-blue-600 relative">
       {/* Background Decor */}
       <div className="fixed inset-0 pointer-events-none z-0">
         <div className="absolute top-[-10%] left-[-5%] w-[40%] h-[40%] bg-white/10 rounded-full blur-[120px]"></div>
@@ -507,7 +576,7 @@ export default function PublicFormPage() {
 
       <div className="max-w-4xl mx-auto relative z-10">
         <header className="mb-16 flex flex-col items-center text-center">
-          <Link href="/public" className="group flex items-center gap-3 mb-10 px-6 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 shadow-sm hover:bg-white/20 transition-all">
+          <Link href="/public" className="group flex items-center gap-3 mb-10 px-6 py-2 rounded-full bg-slate-900/20 backdrop-blur-md border border-white/30 shadow-sm hover:bg-slate-900/30 transition-all no-underline">
             <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white flex items-center gap-2">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}><path d="M15 19l-7-7 7-7" /></svg>
               Home
@@ -518,8 +587,8 @@ export default function PublicFormPage() {
             <div className="bg-white/10 backdrop-blur-md p-2 rounded-2xl shadow-xl transition-transform group-hover:rotate-3 group-hover:scale-110 border border-white/20">
               <img src={LOGO_URL} alt="Logo" className="w-8 h-8 object-contain brightness-0 invert" />
             </div>
-            <h1 className="text-4xl font-black text-white tracking-tightest uppercase italic drop-shadow-lg">
-              DDRC <span className="text-blue-200 not-italic">Ahilyanagar</span>
+            <h1 className="text-4xl font-black text-white tracking-tightest uppercase italic drop-shadow-md">
+              DDRC <span className="text-blue-100 not-italic">Ahilyanagar</span>
             </h1>
           </div>
         </header>

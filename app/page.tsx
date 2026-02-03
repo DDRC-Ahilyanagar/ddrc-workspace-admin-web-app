@@ -339,10 +339,10 @@ export default function DetailedLandingPage() {
                 <img src={ZP_LOGO} alt="ZP Logo" className="w-10 h-10 object-contain rounded-full bg-white p-0.5 shadow-sm" />
               </div>
               <div className="text-center">
-                <h1 className={`font-extrabold text-[10px] leading-tight uppercase tracking-tight ${scrolled ? 'text-[#003f86]' : 'text-white drop-shadow-md'}`}>
+                <h1 className={`font-extrabold !text-[1.5rem] leading-none uppercase tracking-tight mb-1 ${scrolled ? 'text-[#003f86]' : 'text-white drop-shadow-md'}`}>
                   District Disability Rehabilitation Center, Ahilyanagar
                 </h1>
-                <h2 className={`font-bold text-[9px] leading-tight mt-0.5 ${scrolled ? 'text-[#009cc5]' : 'text-white drop-shadow-md'}`}>
+                <h2 className={`font-bold !text-[1rem] leading-tight mt-0.5 ${scrolled ? 'text-[#009cc5]' : 'text-white drop-shadow-md'}`}>
                   जिल्हा दिव्यांग पुनर्वसन केंद्र, अहिल्यानगर
                 </h2>
               </div>
@@ -494,7 +494,7 @@ export default function DetailedLandingPage() {
         {/* --- Benefits & Detailed Features --- */}
         <section className="py-24 px-6 bg-white">
           <div className="max-w-7xl mx-auto">
-            <div className="flex flex-col md:flex-row justify-between items-end gap-6 mb-16">
+            <div className="flex flex-col md:flex-row justify-between items-center md:items-end gap-6 mb-16 text-center md:text-left">
               <ScrollReveal className="max-w-xl">
                 <span className="text-[#009cc5] font-black uppercase tracking-widest text-xs block mb-2">Advantages</span>
                 <h2 className="text-3xl md:text-5xl font-extrabold text-slate-900">{t.benefits.title}</h2>
