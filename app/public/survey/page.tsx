@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { apiCall, getQuestions, submitAnswers, uploadImage } from '@/lib/api-client';
 import { getAbsoluteImageUrl } from '@/lib/config';
 
@@ -73,6 +74,10 @@ export default function PublicFormPage() {
   const [phc, setPhc] = useState<string[]>([]);
   const [disabilityTypes, setDisabilityTypes] = useState<string[]>([]);
   const [loadingDisabilityTypes, setLoadingDisabilityTypes] = useState(false);
+
+  // Import Next.js Image component
+
+
 
 
   const stepsOrder: Step[] = ['upload-front', 'upload-back', 'aadhar-info', 'personal-info'];
@@ -394,10 +399,10 @@ export default function PublicFormPage() {
       if (!/^\d{6}$/.test(val)) return 'पिन कोड ६ अंकी असावा';
     }
 
-    // Email validation
-    if (label.includes('ईमेल') || label.includes('Email') || label.includes('email')) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (val && !emailRegex.test(val)) return 'अवैध ईमेल पत्ता';
+    // Ration card / Aadhaar validation (strictly 12 digits)
+    if (label.includes('ration') || label.includes('राशन') || label.includes('रेशन') || label.includes('रेशान') ||
+      (label.includes('आधार') && (label.includes('क्रमांक') || label.includes('नंबर') || label.includes('no') || label.includes('number')))) {
+      if (!/^\d{12}$/.test(val)) return '१२ अंक आवश्यक आहेत (12 digits required)';
     }
 
     if (q.regex) {
@@ -505,7 +510,15 @@ export default function PublicFormPage() {
               <input type="file" className="hidden" id={`up-${q.id}`} accept="image/*" onChange={(e) => e.target.files?.[0] && handleFileUpload(q.id, e.target.files[0])} />
               <label htmlFor={`up-${q.id}`} className={`w-full bg-slate-100/50 border-2 border-dashed ${hasError ? 'border-red-300 bg-red-50/30' : 'border-slate-300'} rounded-2xl h-24 flex items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-white transition-all`}>
                 {ans ? (
-                  <img src={getDisplayUrl(ans)} className="h-full w-full object-contain p-2" alt="Upload" />
+                  <div className="relative w-full h-full p-2">
+                    <Image
+                      src={getDisplayUrl(ans)}
+                      alt="Upload"
+                      fill
+                      className="object-contain"
+                      unoptimized={true}
+                    />
+                  </div>
                 ) : (
                   <div className="flex flex-col items-center gap-1 opacity-40 group-hover/up:opacity-100 transition-opacity">
                     <span className="text-2xl">📸</span>
@@ -531,12 +544,18 @@ export default function PublicFormPage() {
               if (label.includes('मोबाईल') || label.includes('Mobile')) {
                 value = value.replace(/\D/g, '').slice(0, 10);
               }
+              // Ration card / Aadhaar: only digits, max 12
+              const isRationOrAadhar = (label.includes('ration') || label.includes('राशन') || label.includes('रेशन') || label.includes('रेशान') ||
+                (label.includes('आधार') && (label.includes('क्रमांक') || label.includes('नंबर') || label.includes('no') || label.includes('number'))));
+              if (isRationOrAadhar) {
+                value = value.replace(/\D/g, '').slice(0, 12);
+              }
               // Pin code: only digits, max 6
               if (label.includes('पिन कोड') || label.toLowerCase().includes('pin')) {
                 value = value.replace(/\D/g, '').slice(0, 6);
               }
               // Numeric fields: only digits
-              if (q.valid_input === 'numeric' || label.includes('पिन कोड') || label.toLowerCase().includes('pin')) {
+              if (q.valid_input === 'numeric' || label.includes('पिन कोड') || label.toLowerCase().includes('pin') || isRationOrAadhar) {
                 value = value.replace(/\D/g, '');
               }
               handleAnswerChange(q.id, value);
@@ -549,14 +568,31 @@ export default function PublicFormPage() {
 
   if (currentStep === 'complete') {
     return (
-      <div className="min-h-screen bg-blue-600 flex items-center justify-center p-6 relative overflow-hidden">
+      <div className="min-h-screen bg-[#003f86] bg-gradient-to-br from-[#003f86] to-[#009cc5] flex items-center justify-center p-6 relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.05] mix-blend-overlay"></div>
-        <div className="bg-white rounded-[56px] p-12 md:p-20 text-center max-w-2xl shadow-[0_40px_100px_rgba(0,0,0,0.2)] animate-in zoom-in-95 duration-700 relative z-10 border border-white/20">
-          <div className="w-32 h-32 bg-blue-50 text-blue-600 rounded-[40px] flex items-center justify-center mx-auto mb-12 shadow-inner animate-bounce">
+        {/* Background Decor from main page */}
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute top-[-10%] left-[-5%] w-[40%] h-[40%] bg-white/10 rounded-full blur-[120px]"></div>
+          <div className="absolute bottom-[-10%] right-[-5%] w-[40%] h-[40%] bg-white/10 rounded-full blur-[100px]"></div>
+        </div>
+
+        <div className="bg-white/95 backdrop-blur-xl rounded-[56px] p-12 md:p-20 text-center max-w-2xl shadow-[0_40px_100px_rgba(0,0,0,0.2)] animate-in zoom-in-95 duration-700 relative z-10 border border-white/40">
+          <div className="w-32 h-32 bg-green-50 text-green-600 rounded-[40px] flex items-center justify-center mx-auto mb-12 shadow-inner animate-bounce">
             <svg className="w-16 h-16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
           </div>
-          <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 tracking-tightest filter drop-shadow-sm">अभिनंदन!</h2>
-          <p className="text-xl text-slate-500 font-bold mb-12 leading-relaxed opacity-80">आपला सर्वेक्षण फॉर्म यशस्वीरित्या सबमिट झाला आहे. आपल्याला लवकरच अपडेट मिळेल.</p>
+          <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 tracking-tightest filter drop-shadow-sm">अभिनंदन !!</h2>
+          <div className="space-y-4 mb-12">
+            <p className="text-xl text-slate-600 font-bold leading-relaxed">
+              अहिल्यानगर जिल्हा दिव्यांग सर्वेक्षण अभियानात आपण यशस्वीरित्या सहभाग नोंदवला आहे.
+            </p>
+            <p className="text-lg text-slate-500 font-medium leading-relaxed">
+              यापुढील प्रक्रियेसाठी नजकीच्या आशा ताई, अंगणवाडीसेविका किंवा स्वयंसेवक आपल्याशी संपर्क करतील.
+            </p>
+            <p className="text-sm text-slate-400 font-bold uppercase tracking-wider pt-4 border-t border-slate-100">
+              इतर माहितीसाठी संपर्क: ०२४१ २७७ ७७७२<br />धन्यवाद
+            </p>
+          </div>
+
           <Link href="/public" className="inline-flex items-center gap-4 px-12 py-6 bg-slate-950 text-white rounded-[32px] font-black uppercase tracking-[0.2em] shadow-2xl hover:bg-blue-900 hover:-translate-y-2 transition-all active:scale-95">
             <span className="text-xs">मुख्य पृष्ठ</span>
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
@@ -585,7 +621,7 @@ export default function PublicFormPage() {
 
           <div className="flex items-center gap-4 group">
             <div className="bg-white/10 backdrop-blur-md p-2 rounded-2xl shadow-xl transition-transform group-hover:rotate-3 group-hover:scale-110 border border-white/20">
-              <img src={LOGO_URL} alt="Logo" className="w-8 h-8 object-contain brightness-0 invert" />
+              <Image src={LOGO_URL} alt="Logo" width={32} height={32} className="object-contain brightness-0 invert" />
             </div>
             <h1 className="text-4xl font-black text-white tracking-tightest uppercase italic drop-shadow-md">
               DDRC <span className="text-blue-100 not-italic">Ahilyanagar</span>
@@ -626,7 +662,15 @@ export default function PublicFormPage() {
                     <input type="file" id="f" className="hidden" accept="image/*" onChange={handleFrontImageUpload} />
                     <label htmlFor="f" className="relative block w-full aspect-[16/10] bg-white border-2 border-dashed border-blue-200 rounded-[32px] flex items-center justify-center cursor-pointer hover:bg-white hover:border-blue-500 hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 group overflow-hidden">
                       {frontImageUrl ? (
-                        <img src={frontImageUrl} className="h-full w-full object-contain p-2" />
+                        <div className="relative w-full h-full p-2">
+                          <Image
+                            src={getDisplayUrl(frontImageUrl)}
+                            alt="Front Upload"
+                            fill
+                            className="object-contain"
+                            unoptimized={true}
+                          />
+                        </div>
                       ) : (
                         <div className="flex flex-col items-center gap-4">
                           <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 transition-transform group-hover:rotate-12">
@@ -652,7 +696,15 @@ export default function PublicFormPage() {
                     <input type="file" id="b" className="hidden" accept="image/*" onChange={handleBackImageUpload} />
                     <label htmlFor="b" className="relative block w-full aspect-[16/10] bg-white border-2 border-dashed border-blue-200 rounded-[32px] flex items-center justify-center cursor-pointer hover:bg-white hover:border-blue-500 hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 group overflow-hidden">
                       {backImageUrl ? (
-                        <img src={backImageUrl} className="h-full w-full object-contain p-2" />
+                        <div className="relative w-full h-full p-2">
+                          <Image
+                            src={getDisplayUrl(backImageUrl)}
+                            alt="Back Upload"
+                            fill
+                            className="object-contain"
+                            unoptimized={true}
+                          />
+                        </div>
                       ) : (
                         <div className="flex flex-col items-center gap-4">
                           <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 transition-transform group-hover:rotate-12">
@@ -795,6 +847,28 @@ export default function PublicFormPage() {
                 )}
               </button>
             </footer>
+
+            {/* Temporary SMS Debug Button */}
+            <div className="mt-8 flex justify-center opacity-50 hover:opacity-100 transition-opacity">
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/test-sms', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ mobile: '9561923703' })
+                    });
+                    const data = await res.json();
+                    alert(data.ok ? 'SMS Sent!' : `Failed: ${data.error}`);
+                  } catch (e) {
+                    alert('Error sending SMS');
+                  }
+                }}
+                className="text-[10px] text-slate-400 font-mono border border-slate-200 px-3 py-1 rounded hover:bg-slate-100"
+              >
+                [DEBUG] Test SMS to 9561923703
+              </button>
+            </div>
           </div>
         </main>
       </div>

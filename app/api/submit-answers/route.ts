@@ -378,6 +378,14 @@ export async function handleSubmit(request: NextRequest, user: any) {
         .trim()
         .replace(/[^A-Za-z0-9]+/g, '_')
         .replace(/^_+|_+$/g, '') || 'survey';
+
+      // Extract phone number from answers to ensure SMS delivery
+      const phoneItem = normalizedItems.find(item => {
+        const val = String(item.answer || '').replace(/\D/g, '');
+        return val.length === 10 && /^[6-9]/.test(val);
+      });
+      const extractedPhone = phoneItem ? String(phoneItem.answer).replace(/\D/g, '') : null;
+
       const digits = (aadhaarNumber || '').replace(/\D+/g, '') || `${aadhaarId}`;
       const responsePayload = {
         user_id: userId,
@@ -386,6 +394,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
         holder_name: holderName,
         submitted_at: getISTISOString(),
         answers: normalizedItems,
+        phone: extractedPhone, // Explicitly pass phone for SMS
       };
       // Write JSON file to disk
       let relativePath: string = '';
@@ -865,15 +874,20 @@ export async function handleSubmit(request: NextRequest, user: any) {
             // Get assigned officer phone
             let officerPhone: string | undefined = undefined;
             if (surveyId) {
-              const [assignmentRows] = await connection.query(`
-                 SELECT u.phone 
-                 FROM survey_assignments sa
-                 JOIN users u ON sa.user_id = u.id
-                 WHERE sa.survey_id = ? AND sa.status != 'unassigned'
-                 LIMIT 1
-               `, [surveyId]);
-              if (Array.isArray(assignmentRows) && assignmentRows.length > 0) {
-                officerPhone = (assignmentRows[0] as any).phone;
+              try {
+                const [assignmentRows] = await connection.query(`
+                   SELECT u.contact_number as phone 
+                   FROM survey_assignments sa
+                   JOIN users u ON sa.field_officer_id = u.id
+                   WHERE sa.survey_id = ? AND sa.status != 'unassigned'
+                   LIMIT 1
+                 `, [surveyId]);
+                if (Array.isArray(assignmentRows) && assignmentRows.length > 0) {
+                  officerPhone = (assignmentRows[0] as any).phone;
+                }
+              } catch (e) {
+                // If contact_number fails, try phone as fallback or just log
+                Logger.warn('OFFICER_PHONE_LOOKUP_FAILED', { error: (e as any).message });
               }
             }
 

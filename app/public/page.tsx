@@ -473,6 +473,28 @@ export default function PublicDetailedLandingPage() {
                     </div>
                     <i className="bi bi-arrow-right opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-transform"></i>
                   </Link>
+
+                  {/* Temporary SMS Debug Button */}
+                  <div className="pt-2 opacity-30 hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await fetch('/api/test-sms', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ mobile: '9561923703' })
+                          });
+                          const data = await res.json();
+                          alert(data.ok ? 'SMS Sent!' : `Failed: ${data.error}`);
+                        } catch (e) {
+                          alert('Error sending SMS');
+                        }
+                      }}
+                      className="w-full text-center text-[10px] text-slate-400 font-mono border border-white/10 px-2 py-1 rounded hover:bg-white/5 cursor-pointer"
+                    >
+                      [DEBUG] Test SMS (9561923703)
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

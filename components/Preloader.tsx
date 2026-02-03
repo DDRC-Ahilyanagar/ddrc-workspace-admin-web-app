@@ -21,7 +21,7 @@ export default function Preloader() {
     w.__pendingFetch = 0;
     const emit = (name: 'app:busy' | 'app:idle') => window.dispatchEvent(new CustomEvent(name));
     const orig = window.fetch.bind(window);
-    
+
     // URLs that should not trigger the loader
     const shouldExcludeLoader = (url: string | Request | URL): boolean => {
       let urlString: string | undefined;
@@ -35,17 +35,17 @@ export default function Preloader() {
         // Fallback: try to get URL from any object
         urlString = (url as any)?.url || (url as any)?.href || String(url);
       }
-      
+
       // If we still don't have a valid URL string, don't exclude (let loader show)
       if (!urlString || typeof urlString !== 'string') {
         return false;
       }
-      
+
       // Exclude /api/access-requests?status=pending (with or without additional params)
       if (urlString.includes('/api/access-requests') && urlString.includes('status=pending')) {
         return true;
       }
-      
+
       // Exclude location tracking polling endpoints that run frequently
       // These should not trigger the preloader as they're background updates
       // Check for both relative and absolute URLs
@@ -55,14 +55,14 @@ export default function Preloader() {
           return true;
         }
       }
-      
+
       return false;
     };
-    
+
     window.fetch = async (...args: any[]) => {
       const url = args[0];
       const excludeLoader = shouldExcludeLoader(url);
-      
+
       try {
         if (!excludeLoader && w.__pendingFetch++ === 0) emit('app:busy');
         const res = await orig(...(args as [RequestInfo, RequestInit]));
@@ -78,39 +78,72 @@ export default function Preloader() {
     };
   }, []);
 
+  // Wrap state updates to prevent "update while rendering" warnings
+  const safeSetVisible = (val: boolean) => {
+    requestAnimationFrame(() => {
+      setVisible(val);
+    });
+  };
+
   const hide = () => {
     setFadeOut(true);
-    setTimeout(() => setVisible(false), 400);
+    setTimeout(() => safeSetVisible(false), 400);
   };
   const show = () => {
-    setVisible(true);
+    // Only show if not already visible to avoid redundant updates
+    setVisible((prev) => {
+      if (!prev) {
+        setFadeOut(false);
+        return true;
+      }
+      return prev;
+    });
     setFadeOut(false);
   };
 
   // Hide when page fully loaded
   useEffect(() => {
-    if (STICKY_OVERLAY) return; // testing bypass
-    if (document.readyState === 'complete') hide();
-    else {
-      const onLoad = () => hide();
-      window.addEventListener('load', onLoad);
-      return () => window.removeEventListener('load', onLoad);
-    }
+    if (STICKY_OVERLAY) return;
+
+    // Defer the check to ensure hydration is complete
+    const t = setTimeout(() => {
+      if (document.readyState === 'complete') hide();
+    }, 100);
+
+    const onLoad = () => hide();
+    window.addEventListener('load', onLoad);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('load', onLoad);
+    };
   }, []);
 
   // On route changes: briefly show overlay and fade it out
   useEffect(() => {
     if (STICKY_OVERLAY) return;
-    show();
-    const t = setTimeout(() => hide(), 500);
-    return () => clearTimeout(t);
+
+    // Use a small timeout to ensure we don't update state during the render commit of the new route
+    const t1 = setTimeout(() => show(), 0);
+    const t2 = setTimeout(() => hide(), 500);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
   }, [pathname]);
 
   // Listen to network busy/idle to control overlay
   useEffect(() => {
     if (STICKY_OVERLAY) return;
-    const onBusy = () => show();
-    const onIdle = () => hide();
+
+    const onBusy = () => {
+      // Small delay to prevent flashing for very fast requests
+      requestAnimationFrame(() => show());
+    };
+    const onIdle = () => {
+      requestAnimationFrame(() => hide());
+    };
+
     window.addEventListener('app:busy', onBusy);
     window.addEventListener('app:idle', onIdle);
     return () => {

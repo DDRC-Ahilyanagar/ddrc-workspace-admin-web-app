@@ -29,6 +29,7 @@ interface Survey {
   verified_by?: number | null;
   verified_at?: string | null;
   admin_corrections?: string | null;
+  source?: string | null;
 }
 
 interface Answer {
@@ -74,6 +75,7 @@ function SurveyDetailsContent() {
   const [showClarificationModal, setShowClarificationModal] = useState(false);
   const [selectedQuestions, setSelectedQuestions] = useState<Record<number, string>>({});
   const [sendingClarification, setSendingClarification] = useState(false);
+  const [publicQuestionIds, setPublicQuestionIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     // Get user type from localStorage
@@ -101,9 +103,45 @@ function SurveyDetailsContent() {
         });
         const json = await res.json();
         if (json.ok && json.data) {
-          setSurvey(json.data.survey);
-          setAnswers(json.data.answers || []);
-          setAnswersBySection(json.data.answersBySection || {});
+          const s = json.data.survey;
+          setSurvey(s);
+
+          // If source is Divyang Self, fetch public questions to filter
+          let validQuestionIds: Set<number> | null = null;
+          if (s.source === 'Divyang Self' || s.source === 'Public Form') {
+            try {
+              const qRes = await fetch('/api/get-questions?public=true');
+              const qJson = await qRes.json();
+              if (qJson.ok && Array.isArray(qJson.data)) {
+                validQuestionIds = new Set(qJson.data.map((q: any) => parseInt(String(q.id))));
+                setPublicQuestionIds(validQuestionIds);
+              }
+            } catch (e) {
+              console.error('Failed to load public questions', e);
+            }
+          }
+
+          let sectionData = json.data.answersBySection || {};
+          let allAnswers = json.data.answers || [];
+
+          // Apply filtering if we have the public question IDs
+          if (validQuestionIds) {
+            const filteredSections: Record<string, Answer[]> = {};
+            // Filter answersBySection
+            Object.entries(sectionData).forEach(([sec, ansList]) => {
+              const filtered = (ansList as Answer[]).filter(a => validQuestionIds!.has(a.question_id));
+              if (filtered.length > 0) {
+                filteredSections[sec] = filtered;
+              }
+            });
+            sectionData = filteredSections;
+
+            // Filter allAnswers
+            allAnswers = (allAnswers as Answer[]).filter((a: Answer) => validQuestionIds!.has(a.question_id));
+          }
+
+          setAnswers(allAnswers);
+          setAnswersBySection(sectionData);
         } else {
           setError(json.error || 'Survey not found');
         }
@@ -541,6 +579,11 @@ function SurveyDetailsContent() {
                 <strong>अपडेट केले:</strong>{' '}
                 {new Date(survey.updated_at).toLocaleString('mr-IN')}
               </div>
+              {survey.source && (
+                <div className="col-12">
+                  <strong>स्त्रोत (Source):</strong> <span className="badge bg-info text-dark">{survey.source}</span>
+                </div>
+              )}
             </div>
 
             {/* Aadhaar Images */}

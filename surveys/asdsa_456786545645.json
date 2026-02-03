@@ -1,0 +1,154 @@
+{
+  "user_id": 1,
+  "aadhaar_id": 171,
+  "aadhaar_number": "456786545645",
+  "holder_name": "asdsa",
+  "submitted_at": "2026-02-03T08:02:38.949+05:30",
+  "answers": [
+    {
+      "question_id": 1,
+      "section_id": null,
+      "answer": "asdsa"
+    },
+    {
+      "question_id": 2,
+      "section_id": null,
+      "answer": "1994-05-08"
+    },
+    {
+      "question_id": 3,
+      "section_id": null,
+      "answer": "31"
+    },
+    {
+      "question_id": 4,
+      "section_id": null,
+      "answer": "इतर"
+    },
+    {
+      "question_id": 5,
+      "section_id": null,
+      "answer": "अविवाहित"
+    },
+    {
+      "question_id": 6,
+      "section_id": null,
+      "answer": "9561923703"
+    },
+    {
+      "question_id": 7,
+      "section_id": null,
+      "answer": "asd@asd.com"
+    },
+    {
+      "question_id": 8,
+      "section_id": null,
+      "answer": "asdsadsad"
+    },
+    {
+      "question_id": 9,
+      "section_id": null,
+      "answer": "4564564564"
+    },
+    {
+      "question_id": 10,
+      "section_id": null,
+      "answer": "asdsad"
+    },
+    {
+      "question_id": 11,
+      "section_id": null,
+      "answer": "5"
+    },
+    {
+      "question_id": 12,
+      "section_id": null,
+      "answer": "अनुसूचित जाती (SC)"
+    },
+    {
+      "question_id": 13,
+      "section_id": null,
+      "answer": "A-"
+    },
+    {
+      "question_id": 14,
+      "section_id": null,
+      "answer": "/uploads/Admin_User_7768068585/a8cb832b-59a2-436f-acb0-d467efb1e7d2.jpg"
+    },
+    {
+      "question_id": 15,
+      "section_id": null,
+      "answer": "मांग"
+    },
+    {
+      "question_id": 24,
+      "section_id": null,
+      "answer": "asdasd"
+    },
+    {
+      "question_id": 25,
+      "section_id": null,
+      "answer": "asdasd"
+    },
+    {
+      "question_id": 26,
+      "section_id": null,
+      "answer": "asdsad"
+    },
+    {
+      "question_id": 27,
+      "section_id": null,
+      "answer": "अहिल्यानगर"
+    },
+    {
+      "question_id": 28,
+      "section_id": null,
+      "answer": "Rahuri"
+    },
+    {
+      "question_id": 29,
+      "section_id": null,
+      "answer": "Baragaon Nandur"
+    },
+    {
+      "question_id": 30,
+      "section_id": null,
+      "answer": "Daradgaon Tarf Belapur"
+    },
+    {
+      "question_id": 31,
+      "section_id": null,
+      "answer": "Dhanore"
+    },
+    {
+      "question_id": 32,
+      "section_id": null,
+      "answer": "323213"
+    },
+    {
+      "question_id": 33,
+      "section_id": null,
+      "answer": "Guha"
+    },
+    {
+      "question_id": 34,
+      "section_id": null,
+      "answer": "नाही"
+    },
+    {
+      "question_id": 35,
+      "section_id": null,
+      "answer": "Thalassemia"
+    },
+    {
+      "question_id": 36,
+      "section_id": null,
+      "answer": "40"
+    },
+    {
+      "question_id": 37,
+      "section_id": null,
+      "answer": "होय"
+    }
+  ]
+}

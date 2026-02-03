@@ -203,8 +203,9 @@ export function generateRegistrationNumber(
     ? cleanAadhaar.substring(cleanAadhaar.length - 4)
     : cleanAadhaar.padStart(4, '0');
 
-  // Format: DDRC/mmyy/TAL/VIL/LAST4
-  const registrationNumber = `DDRC/${mmyy}/${talukaShort}/${villageShort}/${aadhaarLast4}`;
+  // Format: DDRC/mmyy/TAL/LAST4
+  // Length: 4 + 1 + 4 + 1 + 3 + 1 + 4 = 18 characters (Safe < 20)
+  const registrationNumber = `DDRC/${mmyy}/${talukaShort}/${aadhaarLast4}`;
 
   console.log('[SMS] Generated registration number:', {
     registrationNumber,
@@ -221,8 +222,8 @@ export function generateRegistrationNumber(
  * Get registration number with label
  */
 export function getPublicFormCompletionTemplate(registrationNumber?: string): string {
-  const regNumVar = registrationNumber || 'DDRC/UNK/UNK/UNK/0000';
-  return `आपली प्राथमिक माहिती यशस्वीरित्या नोंदवली गेली आहे. आपला नोंदणी क्रमांक: ${regNumVar}. पुढील टप्प्यासाठी आमचे क्षेत्रीय सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधून सविस्तर माहिती नोंदवतील. काही शंका असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद. PADMSHRI DR VITHALRAO VIKHE PATIL FOUNDATION`;
+  const regNumVar = registrationNumber || 'DDRC/0000/UNK/0000';
+  return `दिव्यांग नोंदणी सेवेसाठी आपली प्राथमिक माहिती यशस्वीरित्या नोंदवली गेली आहे. आपला नोंदणी क्रमांक: ${regNumVar}. दिव्यांग सेवा लाभ व पुढील पडताळणीसाठी आमचे क्षेत्रीय सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधतील. काही शंका असल्यास संपर्क करा: 0241 277 7772. धन्यवाद – PADMSHRI DR VITHALRAO VIKHE PATIL FOUNDATION`;
 }
 
 /**
@@ -286,6 +287,14 @@ export function extractDivyangPhone(surveyJson: any): string | null {
   try {
     if (!surveyJson || typeof surveyJson !== 'object') {
       return null;
+    }
+
+    // High priority: Check for direct phone property
+    if (surveyJson.phone || surveyJson.mobile) {
+      const explicitPhone = String(surveyJson.phone || surveyJson.mobile).replace(/\D/g, '');
+      if (explicitPhone.length === 10 && /^[6-9]/.test(explicitPhone)) {
+        return explicitPhone;
+      }
     }
 
     // Handle both array format and object format
