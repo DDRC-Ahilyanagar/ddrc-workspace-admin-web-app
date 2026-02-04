@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';
 import { validateAadhar, validateRequest } from '@/lib/validation';
-import { requireAuth } from '@/lib/auth';
+import { requireAuth, verifyAuth } from '@/lib/auth';
 import * as fs from 'fs/promises';
 import path from 'path';
 import { createWriteStream } from 'fs';
@@ -156,6 +156,7 @@ async function handleCreate(request: NextRequest, user?: any) {
         `INSERT INTO survey_aadhar (aadhar_no, user_id, front_image, back_image, holder_name, created_at, updated_at)
          VALUES (?, ?, ?, ?, NULL, NOW(), NOW())
          ON DUPLICATE KEY UPDATE 
+           user_id = VALUES(user_id),
            front_image = COALESCE(?, front_image),
            back_image = COALESCE(?, back_image),
            updated_at = NOW()`,
@@ -433,11 +434,8 @@ export async function POST(request: NextRequest) {
   // Try to extract user from token if available, but don't require auth
   let user = null;
   try {
-    const authHeader = request.headers.get('authorization');
-    if (authHeader) {
-      // If token is provided, try to validate it (optional)
-      // For now, we'll proceed without strict auth requirement
-    }
+    const { user: authUser } = await verifyAuth(request);
+    user = authUser;
   } catch (e) {
     // Auth not required, continue without user
   }

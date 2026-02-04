@@ -650,6 +650,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
               `INSERT INTO surveys (user_id, aadhaar_id, no_of_questions_answered, no_of_questions_unanswered, survey_json, json_path, source, registration_number, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
                ON DUPLICATE KEY UPDATE
+                 user_id = VALUES(user_id),
                  no_of_questions_answered = VALUES(no_of_questions_answered),
                  no_of_questions_unanswered = VALUES(no_of_questions_unanswered),
                  survey_json = VALUES(survey_json),

@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
 export const POST = requireAuth(async (request: NextRequest, user) => {
   // Only verification officer can request clarification
   const userType = user.user_type?.toLowerCase() || '';
-  
+
   // Debug logging
   Logger.info('CLARIFICATION_REQUEST_AUTH_CHECK', {
     user_id: user.id,
@@ -25,11 +25,11 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
     expected: 'verification_officer',
     match: userType === 'verification_officer',
   });
-  
+
   if (userType !== 'verification_officer') {
     return NextResponse.json(
-      { 
-        ok: false, 
+      {
+        ok: false,
         error: 'Only verification officer can request clarification',
         debug: {
           received_user_type: user.user_type,
@@ -84,7 +84,7 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
          LIMIT 1`,
         [surveyIdParam, surveyIdParam]
       );
-      
+
       // If not found, try to find via survey_aadhar
       if (!Array.isArray(surveyRows) || surveyRows.length === 0) {
         const [aadharRows]: any = await conn.query(
@@ -107,7 +107,7 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
 
       const survey = surveyRows[0];
       const actualSurveyId = survey.id; // This is the surveys.id, not survey_aadhar.id
-      
+
       // Allow if assigned to this user OR if not assigned yet (NULL)
       // If assigned to someone else, deny access
       if (survey.assigned_to !== null && survey.assigned_to !== user.id) {
@@ -116,7 +116,7 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
           { status: 403 }
         );
       }
-      
+
       // If survey is not assigned yet, assign it to this verification officer
       if (survey.assigned_to === null) {
         await conn.query(
@@ -137,9 +137,23 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
       // Use survey.user_id, but fallback to survey_aadhar.user_id if survey.user_id is 1 (system user)
       // This handles cases where public submissions set user_id = 1
       let fieldOfficerId = survey.user_id;
-      if (fieldOfficerId === 1 || fieldOfficerId === null) {
+      if (!fieldOfficerId || String(fieldOfficerId) === '1') {
         // Fallback to survey_aadhar.user_id (the user who uploaded the Aadhaar)
-        fieldOfficerId = survey.aadhar_user_id || survey.user_id;
+        fieldOfficerId = survey.aadhar_user_id || fieldOfficerId;
+      }
+
+      // If still 1, but we have an assignment, use the assigned officer
+      if (String(fieldOfficerId) === '1') {
+        // Find if this survey has an assignment in survey_assignments
+        const [assignmentRows]: any = await conn.query(
+          `SELECT field_officer_id FROM survey_assignments 
+           WHERE survey_id = ? 
+           ORDER BY assigned_at DESC LIMIT 1`,
+          [actualSurveyId || surveyIdParam]
+        );
+        if (Array.isArray(assignmentRows) && assignmentRows.length > 0) {
+          fieldOfficerId = assignmentRows[0].field_officer_id;
+        }
       }
 
       Logger.info('CLARIFICATION_FIELD_OFFICER_LOOKUP', {
@@ -157,8 +171,8 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
          WHERE id = ? LIMIT 1`,
         [fieldOfficerId]
       );
-      const fieldOfficer = Array.isArray(fieldOfficerRows) && fieldOfficerRows.length > 0 
-        ? fieldOfficerRows[0] 
+      const fieldOfficer = Array.isArray(fieldOfficerRows) && fieldOfficerRows.length > 0
+        ? fieldOfficerRows[0]
         : null;
 
       Logger.info('CLARIFICATION_FIELD_OFFICER_FOUND', {
@@ -233,7 +247,7 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
       // Insert or update clarification requests
       const results = [];
       const clarificationDetails: Array<{ question_id: number; question_text: string; reason: string }> = [];
-      
+
       for (const q of questions) {
         const questionId = parseInt(String(q.question_id));
         const reason = String(q.reason).trim();
@@ -305,13 +319,13 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
           // Get person's name and Aadhaar number for notification display
           const holderName = survey.holder_name || 'Unknown';
           const aadharNo = survey.aadhar_no || 'N/A';
-          
+
           // Create notification with person's name in title
           const notificationTitle = `${holderName} साठी स्पष्टीकरण आवश्यक`;
           const notificationMessage = `${questions.length} प्रश्नांसाठी स्पष्टीकरण आवश्यक आहे. कृपया सर्वेक्षण अपडेट करा.`;
           const notificationData = JSON.stringify({
             survey_id: actualSurveyId,
-            survey_aadhar_id: surveyIdParam,
+            survey_aadhar_id: survey.aadhaar_id, // Use actual aadhaar_id for pre-filling
             holder_name: holderName,
             aadhar_no: aadharNo,
             question_ids: questionIds,
@@ -355,7 +369,7 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
               {
                 type: 'clarification_request',
                 survey_id: actualSurveyId.toString(),
-                survey_aadhar_id: surveyIdParam.toString(),
+                survey_aadhar_id: survey.aadhaar_id.toString(), // Use actual aadhaar_id for pre-filling
                 holder_name: holderName,
                 aadhar_no: aadharNo,
                 question_ids: JSON.stringify(questionIds),
@@ -417,9 +431,9 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
               });
               notificationSent = true;
             } catch (emailError: any) {
-              Logger.error('CLARIFICATION_EMAIL_ERROR', { 
-                error: emailError?.message, 
-                field_officer_id: fieldOfficerId 
+              Logger.error('CLARIFICATION_EMAIL_ERROR', {
+                error: emailError?.message,
+                field_officer_id: fieldOfficerId
               });
             }
           }
@@ -505,7 +519,7 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
         `SELECT s.id FROM surveys s WHERE s.id = ? OR s.aadhaar_id = ? LIMIT 1`,
         [surveyIdParam, surveyIdParam]
       );
-      
+
       // If not found, try via survey_aadhar
       if (!Array.isArray(surveyRows) || surveyRows.length === 0) {
         const [aadharRows]: any = await conn.query(
@@ -518,13 +532,13 @@ export const GET = requireAuth(async (request: NextRequest, user) => {
           surveyRows = aadharRows;
         }
       }
-      
+
       if (!Array.isArray(surveyRows) || surveyRows.length === 0) {
         return NextResponse.json({ ok: false, error: 'Survey not found' }, { status: 404 });
       }
-      
+
       const actualSurveyId = surveyRows[0].id;
-      
+
       const [rows]: any = await conn.query(
         `SELECT 
           qc.id,

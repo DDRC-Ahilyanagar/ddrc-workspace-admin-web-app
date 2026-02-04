@@ -223,14 +223,15 @@ export function generateRegistrationNumber(
  */
 export function getPublicFormCompletionTemplate(registrationNumber?: string): string {
   const regNumVar = registrationNumber || 'DDRC/0000/UNK/0000';
-  return `दिव्यांग नोंदणी सेवेसाठी आपली प्राथमिक माहिती यशस्वीरित्या नोंदवली गेली आहे. आपला नोंदणी क्रमांक: ${regNumVar}. दिव्यांग सेवा लाभ व पुढील पडताळणीसाठी आमचे क्षेत्रीय सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधतील. काही शंका असल्यास संपर्क करा: 0241 277 7772. धन्यवाद – PADMSHRI DR VITHALRAO VIKHE PATIL FOUNDATION`;
+  const template = `दिव्यांग नोंदणी सेवेसाठी आपली प्राथमिक माहिती यशस्वीरित्या नोंदवली गेली आहे. आपला नोंदणी क्रमांक: {#var#}. दिव्यांग सेवा लाभ व पुढील पडताळणीसाठी आमचे क्षेत्रीय सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधतील. काही शंका असल्यास संपर्क करा: 0241 277 7772. धन्यवाद – PADMSHRI DR VITHALRAO VIKHE PATIL FOUNDATION`;
+  return template.replace('{#var#}', regNumVar);
 }
 
 /**
  * Get the form completion SMS template for field officer form submissions (fully completed)
  */
 function getFieldOfficerCompletionTemplate(): string {
-  const DEFAULT_TEMPLATE = 'आपला सर्वेक्षण फॉर्म पूर्णपणे नोंदवण्यात आला आहे. पुढील प्रक्रिया संबंधित विभागा मार्फत लवकरच राबवली जाईल. काही शंका असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद. PADMSHRI DR VITHALRAO VIKHE PATIL FOUNDATION';
+  const DEFAULT_TEMPLATE = 'आपला सर्वेक्षण फॉर्म पूर्णपणे नोंदवण्यात आला आहे. पुढील प्रक्रिया संबंधित विभागा मार्फत लवकरच राबवली जाईल. काही शंका असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद.– VIKHE PATIL FOUNDATION';
   return process.env.SMS_FIELD_OFFICER_COMPLETION_TEMPLATE || DEFAULT_TEMPLATE;
 }
 

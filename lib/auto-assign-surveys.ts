@@ -565,28 +565,21 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
         // Extract village and taluka from survey
         // Try multiple question IDs: the one from DB (39) and the one from public form (30)
         let surveyVillage = extractVillageFromSurveyJson(surveyJson, villageQuestionId);
-        if (!surveyVillage || surveyVillage.trim().length === 0) {
+        if (!surveyVillage || surveyVillage.trim() === '' || surveyVillage === '--Select--') {
           // Try question ID 30 (from questions_public.json)
           surveyVillage = extractVillageFromSurveyJson(surveyJson, 30);
         }
+
         // Also try by searching for village-related question text in answers
-        if (!surveyVillage || surveyVillage.trim().length === 0) {
+        if (!surveyVillage || surveyVillage.trim() === '' || surveyVillage === '--Select--') {
           if (Array.isArray(surveyJson.answers)) {
-            // Search for answers that might be villages (non-empty, not "--Select--", etc.)
             const villageKeywords = ['गाव', 'village', 'ग्राम', 'gaav', 'gaon'];
             for (const ans of surveyJson.answers) {
               const qid = Number(ans.question_id || ans.questionId || 0);
               const answerText = String(ans.answer || ans.value || '').trim();
-              // If this answer looks like a village name (not a select placeholder, not empty)
               if (answerText && answerText !== '--Select--' && answerText !== '--' && answerText.length > 2) {
-                // Check if question ID is around 30-40 range (address section)
                 if (qid >= 25 && qid <= 45) {
                   surveyVillage = answerText;
-                  Logger.info('AUTO_ASSIGN_VILLAGE_FOUND_BY_SEARCH', {
-                    survey_id: survey.id,
-                    question_id: qid,
-                    village: surveyVillage
-                  });
                   break;
                 }
               }
@@ -594,18 +587,13 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
           }
         }
 
-        const surveyTaluka = talukaQuestionId ? extractVillageFromSurveyJson(surveyJson, talukaQuestionId) : null;
+        // Taluka extraction with fallback to public form ID 28
+        let surveyTaluka = talukaQuestionId ? extractVillageFromSurveyJson(surveyJson, talukaQuestionId) : null;
+        if (!surveyTaluka || surveyTaluka.trim() === '' || surveyTaluka === '--Select--') {
+          surveyTaluka = extractVillageFromSurveyJson(surveyJson, 28);
+        }
 
-        if (!surveyVillage || surveyVillage.trim().length === 0) {
-          // Logger.warn('AUTO_ASSIGN_NO_VILLAGE_IN_SURVEY', {
-          //   survey_id: survey.id,
-          //   aadhaar_id: survey.aadhaar_id,
-          //   has_survey_json: !!survey.survey_json,
-          //   village_question_id: villageQuestionId,
-          //   tried_question_id_30: true,
-          //   survey_json_keys: Object.keys(surveyJson),
-          //   answers_sample: Array.isArray(surveyJson.answers) ? surveyJson.answers.slice(0, 3) : 'not_array'
-          // });
+        if (!surveyVillage || surveyVillage.trim() === '' || surveyVillage === '--Select--') {
           continue;
         }
 
@@ -613,22 +601,35 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
         const surveyVillageNormalized = normalizeVillage(surveyVillage);
         const surveyTalukaLower = surveyTaluka ? normalizeVillage(surveyTaluka) : null;
 
-        // Find matching field officers
-        const matchingOfficers: number[] = [];
+        // Prioritization logic:
+        // 1. Officers whose CURRENT village matches (they are there right now)
+        // 2. Officers whose REGISTERED villages match (permanent assignment)
+        const currentGaavMatches: number[] = [];
+        const registeredGaavMatches: number[] = [];
+
         for (const [officerId, officerData] of officerGavMap.entries()) {
           // Check Taluka Match (if both have taluka info)
           if (surveyTalukaLower && officerData.taluka) {
-            if (surveyTalukaLower !== officerData.taluka && !officerData.taluka.includes(surveyTalukaLower) && !surveyTalukaLower.includes(officerData.taluka)) {
+            // Flexible taluka match (e.g., "Nagar" in "Ahmednagar")
+            if (surveyTalukaLower !== officerData.taluka &&
+              !officerData.taluka.includes(surveyTalukaLower) &&
+              !surveyTalukaLower.includes(officerData.taluka)) {
               continue; // Taluka mismatch
             }
           }
 
-          // Check Village Match - matches if survey village matches ANY of the officer's gaavs:
-          // - current_gaav (where they're currently working)
-          // - primary_gaav (one of their 3 assigned gaavs)
-          // - any of the additional_gaavs (the other 2 of their 3 assigned gaavs)
-          // Total: 1 primary_gaav + 2 additional_gaavs = 3 gaavs they can serve
-          // Use normalized comparison for better matching
+          // Check Current Gaav Match (Priority 1)
+          if (officerData.current_gaav) {
+            const normCurrent = normalizeVillage(officerData.current_gaav);
+            if (surveyVillageNormalized === normCurrent ||
+              surveyVillageNormalized.includes(normCurrent) ||
+              normCurrent.includes(surveyVillageNormalized)) {
+              currentGaavMatches.push(officerId);
+              continue; // If it matches current, skip checking registered for this officer
+            }
+          }
+
+          // Check Registered Gaavs Match (Priority 2)
           const hasVillageMatch = officerData.villages.some((v: string) => {
             const normalizedV = normalizeVillage(v);
             return surveyVillageNormalized === normalizedV ||
@@ -637,22 +638,20 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
           });
 
           if (hasVillageMatch) {
-            matchingOfficers.push(officerId);
-            const matchedGaavs = officerData.villages.filter((v: string) => {
-              const normalizedV = normalizeVillage(v);
-              return surveyVillageNormalized === normalizedV ||
-                surveyVillageNormalized.includes(normalizedV) ||
-                normalizedV.includes(surveyVillageNormalized);
-            });
-            Logger.info('AUTO_ASSIGN_VILLAGE_MATCH_FOUND', {
-              survey_id: survey.id,
-              survey_village: surveyVillage,
-              survey_village_normalized: surveyVillageNormalized,
-              officer_id: officerId,
-              total_officer_gaavs: officerData.villages.length,
-              matched_gaavs: matchedGaavs
-            });
+            registeredGaavMatches.push(officerId);
           }
+        }
+
+        // Select the best matching group
+        let matchingOfficers = currentGaavMatches.length > 0 ? currentGaavMatches : registeredGaavMatches;
+
+        if (matchingOfficers.length > 0) {
+          Logger.info('AUTO_ASSIGN_VILLAGE_MATCH_FOUND', {
+            survey_id: survey.id,
+            village: surveyVillage,
+            matching_officers: matchingOfficers,
+            priority: currentGaavMatches.length > 0 ? 'CURRENT_GAAV' : 'REGISTERED_GAAV'
+          });
         }
 
         // FALLBACK: If no village match, assign to ANY available field officer
@@ -790,13 +789,18 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
               matchedOfficerId,
               notificationTitle,
               notificationMessage,
-              JSON.stringify({ survey_id: survey.id, village: surveyVillage })
+              JSON.stringify({
+                survey_id: survey.id,
+                survey_aadhar_id: survey.aadhaar_id,
+                village: surveyVillage
+              })
             ]);
 
             // Try to send push notification
             try {
               await sendFCMPushNotification(matchedOfficerId, notificationTitle, notificationMessage, {
-                survey_id: survey.id,
+                survey_id: survey.id.toString(),
+                survey_aadhar_id: survey.aadhaar_id.toString(),
                 type: 'survey_assigned'
               });
             } catch (pushError: any) {

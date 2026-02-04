@@ -62,6 +62,7 @@ export async function GET(request: NextRequest) {
                     [rows] = await conn.query(`
                         SELECT 
                           s.id,
+                          s.aadhaar_id,
                           s.survey_json,
                           s.source,
                           s.verification_status as survey_status,
@@ -84,6 +85,7 @@ export async function GET(request: NextRequest) {
                 const [assignedRows]: any = await conn.query(`
                     SELECT 
                       s.id,
+                      s.aadhaar_id,
                       s.survey_json,
                       s.source,
                       s.verification_status as survey_status,
@@ -102,6 +104,7 @@ export async function GET(request: NextRequest) {
                 const [selfCreatedRows]: any = await conn.query(`
                     SELECT 
                       s.id,
+                      s.aadhaar_id,
                       s.survey_json,
                       s.source,
                       s.verification_status as survey_status,
@@ -190,6 +193,7 @@ export async function GET(request: NextRequest) {
 
                 return {
                     id: row.id,
+                    aadhaar_id: row.aadhaar_id,
                     assignment_id: row.assignment_id,
                     survey_data: surveyData,
                     source: row.source,
