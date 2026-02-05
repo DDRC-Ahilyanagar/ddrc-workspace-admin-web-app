@@ -1,7 +1,7 @@
 import { getDbPool } from './db';
 import { Logger } from './logger';
 
-export type SignupStep = 
+export type SignupStep =
   | 'selfie_uploaded'
   | 'personal_info_entered'
   | 'otp_sent'
@@ -26,8 +26,14 @@ export interface SignupLogData {
 export async function logSignupStep(logData: SignupLogData): Promise<void> {
   try {
     const pool = getDbPool();
-    const conn = await pool.getConnection();
-    
+    // Add timeout to connection attempt to avoid hanging the entire request
+    const conn = await Promise.race([
+      pool.getConnection(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Database connection timeout in logger')), 3000)
+      )
+    ]) as any;
+
     try {
       // Ensure table exists
       await conn.execute(`

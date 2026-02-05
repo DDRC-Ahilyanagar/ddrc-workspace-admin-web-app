@@ -14,7 +14,12 @@ export async function POST(request: NextRequest) {
         }
 
         const pool = getDbPool();
-        const connection = await pool.getConnection();
+        const connection = await Promise.race([
+            pool.getConnection(),
+            new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Database connection timeout')), 10000)
+            )
+        ]) as any;
 
         try {
             // Check for duplicates
@@ -59,7 +64,12 @@ export async function POST(request: NextRequest) {
             connection.release();
         }
     } catch (error: any) {
-        Logger.error('SIGNUP_SEND_OTP_ERROR', { error: error.message });
-        return NextResponse.json({ ok: false, error: 'OTP पाठवताना त्रुटी आली' }, { status: 500 });
+        Logger.error('SIGNUP_SEND_OTP_ERROR', { error: error.message, stack: error.stack });
+        return NextResponse.json({
+            ok: false,
+            error: error.message?.includes('timeout')
+                ? 'Server is busy. Please try again after a few moments.'
+                : 'OTP पाठवताना त्रुटी आली. कृपया पुन्हा प्रयत्न करा.'
+        }, { status: 500 });
     }
 }
