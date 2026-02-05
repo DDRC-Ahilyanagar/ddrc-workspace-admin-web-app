@@ -9,10 +9,729 @@ datasource db {
   relationMode = "prisma"
 }
 
-enum UserType {
-  field_officer
-  admin
-  supervisor
+model UserTypeLookup {
+  id         BigInt             @id @default(autoincrement()) @db.UnsignedBigInt
+  userType   String             @unique(map: "unique_user_type") @map("user_type") @db.VarChar(100)
+  createdAt  DateTime?          @default(now()) @map("created_at") @db.Timestamp(0)
+  created_by BigInt?            @db.UnsignedBigInt
+  updatedAt  DateTime?          @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  updated_by BigInt?            @db.UnsignedBigInt
+  status     user_types_status? @default(active)
+  users      User[]             @relation("UserTypeRelation")
+
+  @@index([status], map: "idx_status")
+  @@map("user_types")
+}
+
+model User {
+  id                  BigInt               @id @default(autoincrement()) @db.UnsignedBigInt
+  name                String               @db.VarChar(255)
+  email               String?              @unique(map: "unique_email") @db.VarChar(255)
+  contactNumber       String?              @unique(map: "unique_contact") @map("contact_number") @db.VarChar(20)
+  passkey             Int?                 @unique(map: "unique_passkey") @db.UnsignedSmallInt
+  userType            users_user_type      @default(field_officer) @map("user_type")
+  isActive            Boolean              @default(true) @map("is_active")
+  emailVerifiedAt     DateTime?            @map("email_verified_at") @db.Timestamp(0)
+  otpVerifiedAt       DateTime?            @map("otp_verified_at") @db.Timestamp(0)
+  lastLogin           DateTime?            @map("last_login") @db.Timestamp(0)
+  password            String?              @db.VarChar(255)
+  rememberToken       String?              @map("remember_token") @db.VarChar(100)
+  createdAt           DateTime?            @map("created_at") @db.Timestamp(0)
+  updatedAt           DateTime?            @updatedAt @map("updated_at") @db.Timestamp(0)
+  userTypeId          BigInt?              @map("user_type_id") @db.UnsignedBigInt
+  profilePhoto        String?              @map("profile_photo") @db.Text
+  createdBy           BigInt?              @map("created_by") @db.UnsignedBigInt
+  updatedBy           BigInt?              @map("updated_by") @db.UnsignedBigInt
+  status              UserStatus?          @default(active)
+  typeLookup          UserTypeLookup?      @relation("UserTypeRelation", fields: [userTypeId], references: [id])
+  surveys             Survey[]
+  surveyAadhar        SurveyAadhar[]
+  surveyFiles         SurveyFile[]
+  fieldOfficerProfile FieldOfficerProfile? @relation("FieldOfficerProfile")
+
+  @@index([userTypeId], map: "fk_user_type")
+  @@index([isActive], map: "users_is_active_index")
+  @@index([contactNumber, userType], map: "users_phone_user_type_index")
+  @@map("users")
+}
+
+model OtpVerification {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  phone      String    @db.VarChar(15)
+  otp        String    @db.VarChar(6)
+  expiresAt  DateTime  @default(now()) @map("expires_at") @db.Timestamp(0)
+  status     OtpStatus @default(sent)
+  verifiedAt DateTime? @map("verified_at") @db.Timestamp(0)
+  createdAt  DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt  DateTime? @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  @@index([expiresAt], map: "otp_verifications_expires_at_index")
+  @@index([phone, status], map: "otp_verifications_phone_status_index")
+  @@map("otp_verifications")
+}
+
+model EmailOtpVerification {
+  id         BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
+  email      String     @db.VarChar(255)
+  otp        String     @db.VarChar(10)
+  status     OtpStatus? @default(sent)
+  expiresAt  DateTime?  @map("expires_at") @db.Timestamp(0)
+  verifiedAt DateTime?  @map("verified_at") @db.Timestamp(0)
+  createdAt  DateTime?  @default(now()) @map("created_at") @db.Timestamp(0)
+
+  @@index([email], map: "idx_email")
+  @@index([email, status], map: "idx_email_status")
+  @@map("email_otp_verifications")
+}
+
+model FieldOfficerProfile {
+  id                BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  userId            BigInt    @unique(map: "unique_user_id") @map("user_id") @db.UnsignedBigInt
+  profilePhoto      String?   @map("profile_photo") @db.Text
+  taluka            String?   @db.VarChar(255)
+  primaryGaav       String?   @map("primary_gaav") @db.VarChar(255)
+  additionalGaavs   String?   @map("additional_gaavs") @db.LongText
+  accountHolderName String?   @map("account_holder_name") @db.VarChar(255)
+  accountNumber     String?   @map("account_number") @db.VarChar(50)
+  bankName          String?   @map("bank_name") @db.VarChar(255)
+  ifscCode          String?   @map("ifsc_code") @db.VarChar(20)
+  upiId             String?   @map("upi_id") @db.VarChar(255)
+  qrCode            String?   @map("qr_code") @db.Text
+  profileComplete   Boolean?  @default(false) @map("profile_complete")
+  createdAt         DateTime? @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt         DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  currentGaav       String?   @map("current_gaav") @db.VarChar(255)
+  user              User      @relation("FieldOfficerProfile", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_user_id")
+  @@index([currentGaav], map: "idx_current_gaav")
+  @@map("field_officer_profiles")
+}
+
+model AccessRequest {
+  id        Int                 @id @default(autoincrement()) @db.UnsignedInt
+  name      String              @db.VarChar(150)
+  phone     String              @db.VarChar(20)
+  email     String?             @db.VarChar(255)
+  selfieUrl String              @map("selfie_url") @db.VarChar(255)
+  userType  String              @default("FIELD_OFFICER") @map("user_type") @db.VarChar(50)
+  status    AccessRequestStatus @default(pending)
+  adminNote String?             @map("admin_note") @db.Text
+  createdAt DateTime            @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+
+  @@index([phone], map: "idx_access_requests_phone")
+  @@map("access_requests")
+}
+
+model AppSetting {
+  id           BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  settingKey   String    @unique(map: "uniq_key") @map("setting_key")
+  settingValue String?   @map("setting_value")
+  updatedAt    DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamp(0)
+
+  @@map("app_settings")
+}
+
+model SurveyAadhar {
+  id           BigInt       @id @default(autoincrement()) @db.UnsignedBigInt
+  userId       BigInt       @map("user_id") @db.UnsignedBigInt
+  aadharNo     String       @unique(map: "unique_aadhar") @map("aadhar_no") @db.VarChar(20)
+  createdAt    DateTime?    @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt    DateTime?    @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  front_image  String?      @db.Text
+  back_image   String?      @db.Text
+  holder_name  String?      @db.VarChar(255)
+  address_text String?      @db.Text
+  pincode      String?      @db.VarChar(10)
+  taluka       String?      @db.VarChar(100)
+  district     String?      @db.VarChar(100)
+  gender       String?      @db.VarChar(20)
+  dob          String?      @db.VarChar(20)
+  user         User         @relation(fields: [userId], references: [id])
+  surveys      Survey[]
+  files        SurveyFile[]
+
+  @@index([userId], map: "idx_user_id")
+  @@map("survey_aadhar")
+}
+
+model Survey {
+  id                      BigInt                       @id @default(autoincrement()) @db.UnsignedBigInt
+  userId                  BigInt                       @map("user_id") @db.UnsignedBigInt
+  aadhaarId               BigInt                       @unique(map: "unique_aadhaar_id") @map("aadhaar_id") @db.UnsignedBigInt
+  noOfQuestionsAnswered   Int                          @default(0) @map("no_of_questions_answered")
+  noOfQuestionsUnanswered Int                          @default(0) @map("no_of_questions_unanswered")
+  surveyJson              String?                      @map("survey_json") @db.LongText
+  jsonPath                String?                      @map("json_path") @db.VarChar(255)
+  source                  String?                      @db.VarChar(255)
+  verification_status     surveys_verification_status? @default(pending)
+  createdAt               DateTime?                    @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt               DateTime?                    @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  assigned_to             BigInt?                      @db.UnsignedBigInt
+  verified_by             BigInt?                      @db.UnsignedBigInt
+  verified_at             DateTime?                    @db.Timestamp(0)
+  admin_corrections       String?                      @db.Text
+  registration_number     String?                      @db.VarChar(100)
+  user                    User                         @relation(fields: [userId], references: [id])
+  aadhar                  SurveyAadhar                 @relation(fields: [aadhaarId], references: [id])
+
+  @@index([aadhaarId], map: "idx_aadhaar_id")
+  @@index([assigned_to], map: "idx_assigned_to")
+  @@index([userId], map: "idx_user_id")
+  @@index([verified_by], map: "idx_verified_by")
+  @@map("surveys")
+}
+
+model SurveyFile {
+  id        BigInt         @id @default(autoincrement()) @db.UnsignedBigInt
+  userId    BigInt         @map("user_id") @db.UnsignedBigInt
+  aadhaarId BigInt         @map("aadhaar_id") @db.UnsignedBigInt
+  fileType  SurveyFileType @map("file_type")
+  filePath  String         @map("file_path") @db.VarChar(500)
+  createdAt DateTime?      @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt DateTime?      @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  user      User           @relation(fields: [userId], references: [id])
+  aadhar    SurveyAadhar   @relation(fields: [aadhaarId], references: [id])
+
+  @@index([aadhaarId], map: "idx_aadhaar_id")
+  @@index([fileType], map: "idx_file_type")
+  @@index([userId], map: "idx_user_id")
+  @@map("survey_files")
+}
+
+model MatadarSanghName {
+  id        Int                 @id @default(autoincrement())
+  sanghId   Int?                @map("sangh_id")
+  name      String              @db.VarChar(255)
+  status    MatadarSanghStatus? @default(Active)
+  createdBy Int?                @map("created_by")
+  createdOn DateTime?           @map("created_on") @db.DateTime(0)
+  updatedBy Int?                @map("updated_by")
+  updatedOn DateTime?           @map("updated_on") @db.DateTime(0)
+
+  @@map("tbl_matadar_sangh_names")
+}
+
+model DisabilityDiagnosis {
+  id           Int                   @id @default(autoincrement())
+  disabilityId Int?                  @map("disability_id")
+  diagnosis    String                @db.VarChar(255)
+  status       ActiveInactiveStatus? @default(Active)
+  createdBy    Int?                  @map("created_by")
+  createdOn    DateTime?             @map("created_on") @db.DateTime(0)
+  updatedBy    Int?                  @map("updated_by")
+  updatedOn    DateTime?             @map("updated_on") @db.DateTime(0)
+
+  @@index([disabilityId], map: "idx_disability_diagnoses_disability_id")
+  @@map("tbl_disability_diagnoses")
+}
+
+model EarlyDetectionBaby {
+  id                          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  parentPhone                 String    @map("parent_phone") @db.VarChar(20)
+  userId                      BigInt?   @map("user_id") @db.UnsignedBigInt
+  fatherName                  String?   @map("father_name") @db.VarChar(255)
+  motherName                  String?   @map("mother_name") @db.VarChar(255)
+  babyName                    String?   @map("baby_name") @db.VarChar(255)
+  babyBirthDate               DateTime? @map("baby_birth_date") @db.Date
+  ageMonths                   Int?      @map("age_months") @db.UnsignedSmallInt
+  gender                      String?   @db.VarChar(20)
+  currentWeight               Decimal?  @map("current_weight") @db.Decimal(5, 2)
+  birthWeight                 Decimal?  @map("birth_weight") @db.Decimal(5, 2)
+  lengthHeight                Decimal?  @map("length_height") @db.Decimal(5, 2)
+  headCircumferenceAtBirth    Decimal?  @map("head_circumference_at_birth") @db.Decimal(5, 2)
+  bloodGroup                  String?   @map("blood_group") @db.VarChar(10)
+  noOfSiblings                Int?      @map("no_of_siblings") @db.UnsignedSmallInt
+  address                     String?   @db.Text
+  district                    String?   @db.VarChar(255)
+  taluka                      String?   @db.VarChar(255)
+  village                     String?   @db.VarChar(255)
+  talathi                     String?   @db.VarChar(255)
+  grampanchayat               String?   @db.VarChar(255)
+  phc                         String?   @db.VarChar(255)
+  statusUniversalEyeScreening String?   @map("status_universal_eye_screening") @db.VarChar(255)
+  statusOaeTest               String?   @map("status_oae_test") @db.VarChar(255)
+  typeOfMarriage              String?   @map("type_of_marriage") @db.VarChar(100)
+  typeOfDelivery              String?   @map("type_of_delivery") @db.VarChar(100)
+  prenatalComplications       String?   @map("prenatal_complications") @db.Text
+  perinatalComplications      String?   @map("perinatal_complications") @db.Text
+  postnatalComplications      String?   @map("postnatal_complications") @db.Text
+  previousTreatment           String?   @map("previous_treatment") @db.Text
+  currentTreatment            String?   @map("current_treatment") @db.Text
+  currentMedications          String?   @map("current_medications") @db.Text
+  createdAt                   DateTime? @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt                   DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  createdBy                   BigInt?   @map("created_by") @db.UnsignedBigInt
+  updatedBy                   BigInt?   @map("updated_by") @db.UnsignedBigInt
+
+  @@index([createdAt], map: "idx_created_at")
+  @@index([parentPhone], map: "idx_parent_phone")
+  @@index([userId], map: "idx_user_id")
+  @@map("early_detection_babies")
+}
+
+model TestUserLog {
+  id        BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  phone     String   @db.VarChar(20)
+  action    String   @db.VarChar(255)
+  data      String?  @db.LongText
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+
+  @@index([createdAt], map: "idx_created_at")
+  @@index([phone], map: "idx_phone")
+  @@map("test_user_logs")
+}
+
+model aadhaars {
+  id             BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  aadhaar_number String    @db.Char(12)
+  officer_id     BigInt    @default(1) @db.UnsignedBigInt
+  camp_id        BigInt    @db.UnsignedBigInt
+  created_at     DateTime? @db.Timestamp(0)
+  updated_at     DateTime? @db.Timestamp(0)
+
+  @@unique([camp_id, aadhaar_number], map: "aadhaars_camp_id_aadhaar_number_unique")
+  @@index([aadhaar_number], map: "aadhaars_aadhaar_number_index")
+}
+
+model answers {
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id     BigInt?   @db.UnsignedBigInt
+  aadhar_id   BigInt?   @db.UnsignedBigInt
+  aadhar_no   String?   @db.VarChar(20)
+  section_id  BigInt?   @db.UnsignedBigInt
+  question_id BigInt    @db.UnsignedBigInt
+  answer      String?   @db.Text
+  created_at  DateTime? @default(now()) @db.Timestamp(0)
+  updated_at  DateTime? @default(now()) @db.Timestamp(0)
+
+  @@index([aadhar_id], map: "idx_aadhar_id")
+  @@index([aadhar_no], map: "idx_aadhar_no")
+  @@index([section_id], map: "idx_section")
+}
+
+model cache {
+  key        String @id @db.VarChar(255)
+  value      String @db.MediumText
+  expiration Int
+}
+
+model cache_locks {
+  key        String @id @db.VarChar(255)
+  owner      String @db.VarChar(255)
+  expiration Int
+}
+
+model camps {
+  id         BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
+  name       String      @db.VarChar(255)
+  year_label String      @db.VarChar(255)
+  location   String      @db.VarChar(255)
+  start_date DateTime    @db.Date
+  days_count Int         @db.TinyInt
+  end_date   DateTime    @db.Date
+  phase      camps_phase @default(data_collection)
+  is_active  Boolean     @default(true)
+  created_at DateTime?   @db.Timestamp(0)
+  updated_at DateTime?   @db.Timestamp(0)
+
+  @@index([is_active], map: "camps_is_active_index")
+  @@index([start_date, end_date], map: "camps_start_date_end_date_index")
+}
+
+model crash_reports {
+  id              BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  error_message   String   @db.Text
+  stack_trace     String?  @db.LongText
+  error_type      String?  @db.VarChar(100)
+  device_info     String?  @db.LongText
+  app_version     String?  @db.VarChar(50)
+  user_id         BigInt?  @db.UnsignedBigInt
+  user_phone      String?  @db.VarChar(20)
+  screen_name     String?  @db.VarChar(200)
+  additional_data String?  @db.LongText
+  timestamp       DateTime @db.DateTime(0)
+  created_at      DateTime @default(now()) @db.DateTime(0)
+
+  @@index([error_type], map: "idx_error_type")
+  @@index([timestamp], map: "idx_timestamp")
+  @@index([user_id], map: "idx_user_id")
+  @@index([user_phone], map: "idx_user_phone")
+}
+
+model disability_organs {
+  id            Int       @id @default(autoincrement()) @db.UnsignedInt
+  label_marathi String    @unique(map: "uniq_label") @db.VarChar(255)
+  sort_order    Int       @default(0)
+  is_active     Boolean   @default(true)
+  created_at    DateTime? @default(now()) @db.Timestamp(0)
+  updated_at    DateTime? @default(now()) @db.Timestamp(0)
+
+  @@index([is_active], map: "idx_is_active")
+  @@index([sort_order], map: "idx_sort_order")
+}
+
+model disability_types {
+  id            Int     @id @default(autoincrement()) @db.UnsignedInt
+  label_marathi String  @db.VarChar(255)
+  label_english String  @db.VarChar(255)
+  aliases       String? @db.LongText
+
+  @@unique([label_marathi, label_english], map: "uniq_labels")
+}
+
+model email_logs {
+  id                BigInt                    @id @default(autoincrement()) @db.UnsignedBigInt
+  recipient_type    email_logs_recipient_type
+  recipient_email   String                    @db.VarChar(255)
+  recipient_user_id BigInt?                   @db.UnsignedBigInt
+  email_subject     String                    @db.VarChar(500)
+  email_body        String                    @db.Text
+  status            email_logs_status?        @default(pending)
+  error_message     String?                   @db.Text
+  sent_at           DateTime?                 @db.Timestamp(0)
+  created_at        DateTime?                 @default(now()) @db.Timestamp(0)
+  updated_at        DateTime?                 @default(now()) @db.Timestamp(0)
+
+  @@index([created_at], map: "idx_created_at")
+  @@index([recipient_email], map: "idx_recipient_email")
+  @@index([recipient_type], map: "idx_recipient_type")
+  @@index([recipient_user_id], map: "idx_recipient_user_id")
+  @@index([sent_at], map: "idx_sent_at")
+  @@index([status], map: "idx_status")
+}
+
+model failed_jobs {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid       String   @unique(map: "failed_jobs_uuid_unique") @db.VarChar(255)
+  connection String   @db.Text
+  queue      String   @db.Text
+  payload    String   @db.LongText
+  exception  String   @db.LongText
+  failed_at  DateTime @default(now()) @db.Timestamp(0)
+}
+
+model fcm_tokens {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id     BigInt   @db.UnsignedBigInt
+  fcm_token   String   @db.VarChar(255)
+  device_info String?  @db.Text
+  created_at  DateTime @default(now()) @db.Timestamp(0)
+  updated_at  DateTime @default(now()) @db.Timestamp(0)
+
+  @@unique([user_id, fcm_token], map: "unique_user_token")
+  @@index([fcm_token], map: "idx_fcm_token")
+  @@index([user_id], map: "idx_user_id")
+}
+
+model field_officer_signup_logs {
+  id            BigInt                            @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id       BigInt?                           @db.UnsignedBigInt
+  phone         String                            @db.VarChar(20)
+  step          String                            @db.VarChar(50)
+  step_number   Int
+  status        field_officer_signup_logs_status? @default(started)
+  data          String?                           @db.LongText
+  error_message String?                           @db.Text
+  created_at    DateTime                          @default(now()) @db.Timestamp(0)
+  updated_at    DateTime                          @default(now()) @db.Timestamp(0)
+
+  @@index([created_at], map: "idx_created_at")
+  @@index([phone], map: "idx_phone")
+  @@index([step], map: "idx_step")
+  @@index([user_id], map: "idx_user_id")
+}
+
+model job_batches {
+  id             String  @id @db.VarChar(255)
+  name           String  @db.VarChar(255)
+  total_jobs     Int
+  pending_jobs   Int
+  failed_jobs    Int
+  failed_job_ids String  @db.LongText
+  options        String? @db.MediumText
+  cancelled_at   Int?
+  created_at     Int
+  finished_at    Int?
+}
+
+model jobs {
+  id           BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  queue        String @db.VarChar(255)
+  payload      String @db.LongText
+  attempts     Int    @db.UnsignedTinyInt
+  reserved_at  Int?   @db.UnsignedInt
+  available_at Int    @db.UnsignedInt
+  created_at   Int    @db.UnsignedInt
+
+  @@index([queue], map: "jobs_queue_index")
+}
+
+model location_tracking {
+  id         Int      @id @default(autoincrement()) @db.UnsignedInt
+  user_id    BigInt   @db.UnsignedBigInt
+  latitude   Decimal  @db.Decimal(10, 8)
+  longitude  Decimal  @db.Decimal(11, 8)
+  accuracy   Decimal? @db.Decimal(10, 2)
+  altitude   Decimal? @db.Decimal(10, 2)
+  speed      Decimal? @db.Decimal(10, 2)
+  heading    Decimal? @db.Decimal(5, 2)
+  timestamp  DateTime @db.DateTime(0)
+  created_at DateTime @default(now()) @db.Timestamp(0)
+
+  @@index([timestamp], map: "idx_timestamp")
+  @@index([user_id], map: "idx_user_id")
+  @@index([user_id, timestamp], map: "idx_user_timestamp")
+}
+
+model migrations {
+  id        Int    @id @default(autoincrement()) @db.UnsignedInt
+  migration String @db.VarChar(255)
+  batch     Int
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model notifications {
+  id               BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id          BigInt?   @db.UnsignedBigInt
+  target_user_type String?   @db.VarChar(50)
+  type             String    @db.VarChar(50)
+  title            String    @db.VarChar(255)
+  message          String    @db.Text
+  data             String?   @db.LongText
+  is_read          Boolean   @default(false)
+  read_at          DateTime? @db.Timestamp(0)
+  created_at       DateTime? @default(now()) @db.Timestamp(0)
+  updated_at       DateTime? @default(now()) @db.Timestamp(0)
+
+  @@index([created_at], map: "idx_created_at")
+  @@index([is_read], map: "idx_is_read")
+  @@index([type], map: "idx_type")
+  @@index([user_id], map: "idx_user_id")
+  @@index([user_id, is_read], map: "idx_user_read")
+}
+
+model officers {
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  name        String    @db.VarChar(255)
+  email       String    @unique(map: "officers_email_unique") @db.VarChar(255)
+  phone       String?   @db.VarChar(255)
+  designation String?   @db.VarChar(255)
+  is_active   Boolean   @default(true)
+  created_at  DateTime? @db.Timestamp(0)
+  updated_at  DateTime? @db.Timestamp(0)
+
+  @@index([is_active], map: "officers_is_active_index")
+}
+
+model password_reset_tokens {
+  email      String    @id @db.VarChar(255)
+  token      String    @db.VarChar(255)
+  created_at DateTime? @db.Timestamp(0)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model question_clarifications {
+  id                      BigInt                         @id @default(autoincrement()) @db.UnsignedBigInt
+  survey_id               BigInt                         @db.UnsignedBigInt
+  question_id             BigInt                         @db.UnsignedBigInt
+  verification_officer_id BigInt                         @db.UnsignedBigInt
+  field_officer_id        BigInt                         @db.UnsignedBigInt
+  reason                  String                         @db.Text
+  status                  question_clarifications_status @default(pending)
+  resolved_at             DateTime?                      @db.Timestamp(0)
+  created_at              DateTime?                      @default(now()) @db.Timestamp(0)
+  updated_at              DateTime?                      @default(now()) @db.Timestamp(0)
+
+  @@unique([survey_id, question_id], map: "unique_survey_question")
+  @@index([field_officer_id], map: "idx_field_officer")
+  @@index([question_id], map: "idx_question_id")
+  @@index([status], map: "idx_status")
+  @@index([survey_id], map: "idx_survey_id")
+  @@index([verification_officer_id], map: "idx_verification_officer")
+}
+
+model questions {
+  id                  BigInt    @id @db.UnsignedBigInt
+  section_id          BigInt    @db.UnsignedBigInt
+  question            String    @db.Text
+  question_type       String    @db.VarChar(50)
+  multi_select        Boolean   @default(false)
+  options             String?   @db.Text
+  rendering_condition String?   @db.VarChar(10)
+  rendering_question  String?   @db.VarChar(255)
+  rendering_value     String?   @db.VarChar(255)
+  regex               String?   @db.VarChar(255)
+  valid_input         String?   @db.VarChar(20)
+  max_length          Int?
+  is_required         Boolean   @default(false)
+  status              String?   @default("Active") @db.VarChar(20)
+  created_by          BigInt?   @db.UnsignedBigInt
+  created_on          DateTime? @db.Timestamp(0)
+  updated_by          BigInt?   @db.UnsignedBigInt
+  updated_on          DateTime? @db.Timestamp(0)
+
+  @@index([section_id], map: "idx_section_id")
+}
+
+model sections {
+  id            BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  title_marathi String    @db.VarChar(255)
+  title_english String?   @db.VarChar(255)
+  sort_order    Int
+  is_active     Boolean   @default(true)
+  created_at    DateTime? @db.Timestamp(0)
+  updated_at    DateTime? @db.Timestamp(0)
+  name          String    @db.VarChar(255)
+
+  @@index([is_active], map: "sections_is_active_index")
+  @@index([sort_order], map: "sections_sort_order_index")
+}
+
+model sessions {
+  id            String  @id @db.VarChar(255)
+  user_id       BigInt? @db.UnsignedBigInt
+  ip_address    String? @db.VarChar(45)
+  user_agent    String? @db.Text
+  payload       String  @db.LongText
+  last_activity Int
+
+  @@index([last_activity], map: "sessions_last_activity_index")
+  @@index([user_id], map: "sessions_user_id_index")
+}
+
+model sport_names {
+  id             BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  sports_type_id BigInt    @db.UnsignedBigInt
+  name_marathi   String    @db.VarChar(255)
+  name_english   String?   @db.VarChar(255)
+  sort_order     Int       @default(0)
+  is_active      Boolean   @default(true)
+  created_at     DateTime? @default(now()) @db.Timestamp(0)
+  updated_at     DateTime? @default(now()) @db.Timestamp(0)
+
+  @@index([sports_type_id], map: "idx_sports_type_id")
+}
+
+model sports_types {
+  id           BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  name_marathi String    @db.VarChar(255)
+  name_english String?   @db.VarChar(255)
+  sort_order   Int       @default(0)
+  is_active    Boolean   @default(true)
+  created_at   DateTime? @default(now()) @db.Timestamp(0)
+  updated_at   DateTime? @default(now()) @db.Timestamp(0)
+}
+
+model survey_activity_logs {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id    BigInt   @db.UnsignedBigInt
+  type       String   @db.VarChar(50)
+  taluka     String?  @db.VarChar(100)
+  village    String?  @db.VarChar(100)
+  aadhaar_id BigInt?  @db.UnsignedBigInt
+  details    String?  @db.LongText
+  created_at DateTime @default(now()) @db.Timestamp(0)
+
+  @@index([created_at], map: "idx_created_at")
+  @@index([type], map: "idx_type")
+  @@index([user_id], map: "idx_user_id")
+}
+
+model survey_assignments {
+  id               BigInt                     @id @default(autoincrement()) @db.UnsignedBigInt
+  survey_id        BigInt                     @db.UnsignedBigInt
+  field_officer_id BigInt                     @db.UnsignedBigInt
+  source           String?                    @default("Divyang Self") @db.VarChar(255)
+  status           survey_assignments_status? @default(pending)
+  assigned_at      DateTime                   @default(now()) @db.Timestamp(0)
+  completed_at     DateTime?                  @db.Timestamp(0)
+  rejection_reason String?                    @db.Text
+
+  @@index([field_officer_id, status], map: "idx_officer_status")
+  @@index([survey_id], map: "idx_survey_id")
+}
+
+model tbl_all_grams {
+  id         Int                   @id @default(autoincrement())
+  taluka     String?               @db.VarChar(255)
+  gram       String?               @db.VarChar(255)
+  village    String?               @db.VarChar(255)
+  status     tbl_all_grams_status? @default(Active)
+  created_by Int?
+  created_on DateTime?             @db.DateTime(0)
+  updated_by Int?
+  updated_on DateTime?             @db.DateTime(0)
+}
+
+model tbl_all_phc {
+  id         Int                 @id @default(autoincrement())
+  taluka     String?             @db.VarChar(255)
+  phc        String?             @db.VarChar(255)
+  status     tbl_all_phc_status? @default(Active)
+  created_by Int?
+  created_on DateTime?           @db.DateTime(0)
+  updated_by Int?
+  updated_on DateTime?           @db.DateTime(0)
+}
+
+model tbl_all_talathi {
+  id         Int                     @id @default(autoincrement())
+  taluka     String?                 @db.VarChar(255)
+  talathi    String?                 @db.VarChar(255)
+  village    String?                 @db.VarChar(255)
+  status     tbl_all_talathi_status? @default(Active)
+  created_by Int?
+  created_on DateTime?               @db.DateTime(0)
+  updated_by Int?
+  updated_on DateTime?               @db.DateTime(0)
+}
+
+model tbl_all_villages {
+  id         Int                      @id @default(autoincrement())
+  taluka     String?                  @db.VarChar(255)
+  grams      String?                  @db.VarChar(255)
+  villages   String?                  @db.VarChar(255)
+  status     tbl_all_villages_status?
+  created_by Int?
+  created_on DateTime?                @db.DateTime(0)
+  updated_by Int?
+  updated_on DateTime?                @db.DateTime(0)
+}
+
+model tbl_matadar_sangh {
+  id         Int                       @id @default(autoincrement())
+  type       String                    @db.VarChar(255)
+  status     tbl_matadar_sangh_status? @default(Active)
+  created_by Int?
+  created_on DateTime?                 @db.DateTime(0)
+  updated_by Int?
+  updated_on DateTime?                 @db.DateTime(0)
+}
+
+model tbl_milestone {
+  id            Int                   @id @default(autoincrement())
+  months        String?               @db.VarChar(255)
+  image         String?               @db.VarChar(255)
+  marathi_title String?               @db.VarChar(255)
+  english_title String?               @db.VarChar(255)
+  status        tbl_milestone_status? @default(Active)
+  created_by    Int?
+  created_on    DateTime?             @db.DateTime(0)
+  updated_by    Int?
+  updated_on    DateTime?             @db.DateTime(0)
+}
+
+model tbl_taluka {
+  id         Int                @id @default(autoincrement())
+  taluka     String?            @db.VarChar(255)
+  status     tbl_taluka_status? @default(Active)
+  created_by Int?
+  created_on DateTime?          @db.DateTime(0)
+  updated_by Int?
+  updated_on DateTime?          @db.DateTime(0)
 }
 
 enum UserStatus {
@@ -32,12 +751,6 @@ enum OtpStatus {
   expired
 }
 
-enum SurveyStatus {
-  pending
-  completed
-  in_progress
-}
-
 enum MatadarSanghStatus {
   Active
   Inactive
@@ -48,166 +761,6 @@ enum ActiveInactiveStatus {
   Inactive
 }
 
-model UserTypeLookup {
-  id        BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  userType  String?   @map("user_type") @db.VarChar(191)
-  createdAt DateTime? @default(now()) @map("created_at")
-  updatedAt DateTime? @default(now()) @updatedAt @map("updated_at")
-  users     User[]    @relation("UserTypeRelation")
-
-  @@map("user_types")
-}
-
-model User {
-  id              BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
-  name            String      @db.VarChar(255)
-  email           String?     @db.VarChar(255)
-  contactNumber   String?     @map("contact_number") @db.VarChar(20)
-  passkey         Int?        @db.UnsignedSmallInt
-  userType        UserType    @default(field_officer) @map("user_type")
-  isActive        Boolean     @default(true) @map("is_active")
-  emailVerifiedAt DateTime?   @map("email_verified_at")
-  otpVerifiedAt   DateTime?   @map("otp_verified_at")
-  lastLogin       DateTime?   @map("last_login")
-  password        String?     @db.VarChar(255)
-  rememberToken   String?     @map("remember_token") @db.VarChar(100)
-  createdAt       DateTime?   @default(now()) @map("created_at")
-  updatedAt       DateTime?   @default(now()) @updatedAt @map("updated_at")
-  userTypeId      BigInt?     @map("user_type_id") @db.UnsignedBigInt
-  profilePhoto    String?     @map("profile_photo") @db.Text
-  createdBy       BigInt?     @map("created_by") @db.UnsignedBigInt
-  updatedBy       BigInt?     @map("updated_by") @db.UnsignedBigInt
-  status          UserStatus? @default(active)
-
-  typeLookup   UserTypeLookup? @relation("UserTypeRelation", fields: [userTypeId], references: [id])
-  surveys      Survey[]
-  surveyAadhar SurveyAadhar[]
-  surveyFiles  SurveyFile[]
-  fieldOfficerProfile FieldOfficerProfile? @relation("FieldOfficerProfile")
-
-  @@unique([email])
-  @@unique([contactNumber])
-  @@map("users")
-}
-
-model OtpVerification {
-  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  phone      String    @db.VarChar(20)
-  otp        String    @db.VarChar(10)
-  status     OtpStatus @default(sent)
-  expiresAt  DateTime? @map("expires_at")
-  verifiedAt DateTime? @map("verified_at")
-  createdAt  DateTime? @default(now()) @map("created_at")
-  updatedAt  DateTime? @default(now()) @updatedAt @map("updated_at")
-
-  @@index([phone], map: "idx_phone")
-  @@index([status], map: "idx_status")
-  @@map("otp_verifications")
-}
-
-model EmailOtpVerification {
-  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  email      String    @db.VarChar(255)
-  otp        String    @db.VarChar(10)
-  status     OtpStatus @default(sent)
-  expiresAt  DateTime? @map("expires_at")
-  verifiedAt DateTime? @map("verified_at")
-  createdAt  DateTime? @default(now()) @map("created_at")
-
-  @@index([email], map: "idx_email")
-  @@index([email, status], map: "idx_email_status")
-  @@map("email_otp_verifications")
-}
-
-model FieldOfficerProfile {
-  id                  BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  userId              BigInt    @unique @map("user_id") @db.UnsignedBigInt
-  profilePhoto        String?   @map("profile_photo") @db.Text
-  taluka              String?   @db.VarChar(255)
-  primaryGaav         String?   @map("primary_gaav") @db.VarChar(255)
-  additionalGaavs     Json?     @map("additional_gaavs")
-  currentGaav         String?   @map("current_gaav") @db.VarChar(255)
-  accountHolderName   String?   @map("account_holder_name") @db.VarChar(255)
-  accountNumber       String?   @map("account_number") @db.VarChar(50)
-  bankName            String?   @map("bank_name") @db.VarChar(255)
-  ifscCode            String?   @map("ifsc_code") @db.VarChar(20)
-  upiId               String?   @map("upi_id") @db.VarChar(255)
-  qrCode              String?   @map("qr_code") @db.Text
-  profileComplete     Boolean   @default(false) @map("profile_complete")
-  createdAt           DateTime? @default(now()) @map("created_at")
-  updatedAt           DateTime? @default(now()) @updatedAt @map("updated_at")
-
-  user User @relation("FieldOfficerProfile", fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId], map: "idx_user_id")
-  @@index([currentGaav], map: "idx_current_gaav")
-  @@map("field_officer_profiles")
-}
-
-model AccessRequest {
-  id        Int                 @id @default(autoincrement()) @db.UnsignedInt
-  name      String              @db.VarChar(150)
-  phone     String              @db.VarChar(20)
-  email     String?             @db.VarChar(255)
-  selfieUrl String?             @map("selfie_url") @db.VarChar(255)
-  userType  String              @default("FIELD_OFFICER") @map("user_type") @db.VarChar(50)
-  status    AccessRequestStatus @default(pending)
-  adminNote String?             @map("admin_note") @db.Text
-  createdAt DateTime            @default(now()) @map("created_at")
-  updatedAt DateTime            @default(now()) @updatedAt @map("updated_at")
-
-  @@index([phone], map: "idx_phone")
-  @@index([status], map: "idx_status")
-  @@map("access_requests")
-}
-
-model AppSetting {
-  id           Int       @id @default(autoincrement()) @db.UnsignedInt
-  settingKey   String    @map("setting_key") @db.VarChar(191)
-  settingValue String?   @map("setting_value") @db.Text
-  createdAt    DateTime? @default(now()) @map("created_at")
-  updatedAt    DateTime? @default(now()) @updatedAt @map("updated_at")
-
-  @@unique([settingKey])
-  @@map("app_settings")
-}
-
-model SurveyAadhar {
-  id        BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  userId    BigInt    @map("user_id") @db.UnsignedBigInt
-  aadharNo  String    @map("aadhar_no") @db.VarChar(20)
-  createdAt DateTime? @default(now()) @map("created_at")
-  updatedAt DateTime? @default(now()) @updatedAt @map("updated_at")
-
-  user    User         @relation(fields: [userId], references: [id])
-  surveys Survey[]
-  files   SurveyFile[]
-
-  @@unique([aadharNo])
-  @@index([userId])
-  @@map("survey_aadhar")
-}
-
-model Survey {
-  id                      BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  userId                  BigInt    @map("user_id") @db.UnsignedBigInt
-  aadhaarId               BigInt    @map("aadhaar_id") @db.UnsignedBigInt
-  noOfQuestionsAnswered   Int       @default(0) @map("no_of_questions_answered")
-  noOfQuestionsUnanswered Int       @default(0) @map("no_of_questions_unanswered")
-  surveyJson              String?   @map("survey_json") @db.LongText
-  jsonPath                String?   @map("json_path") @db.VarChar(255)
-  createdAt               DateTime? @default(now()) @map("created_at")
-  updatedAt               DateTime? @default(now()) @updatedAt @map("updated_at")
-
-  user   User         @relation(fields: [userId], references: [id])
-  aadhar SurveyAadhar @relation(fields: [aadhaarId], references: [id])
-
-  @@unique([aadhaarId])
-  @@index([userId])
-  @@index([aadhaarId])
-  @@map("surveys")
-}
-
 enum SurveyFileType {
   aadhaar_front
   aadhaar_back
@@ -216,132 +769,92 @@ enum SurveyFileType {
   other
 }
 
-model SurveyFile {
-  id        BigInt         @id @default(autoincrement()) @db.UnsignedBigInt
-  userId    BigInt         @map("user_id") @db.UnsignedBigInt
-  aadhaarId BigInt         @map("aadhaar_id") @db.UnsignedBigInt
-  fileType  SurveyFileType @map("file_type")
-  filePath  String         @map("file_path") @db.VarChar(500)
-  createdAt DateTime?      @default(now()) @map("created_at")
-  updatedAt DateTime?      @default(now()) @updatedAt @map("updated_at")
-
-  user   User         @relation(fields: [userId], references: [id])
-  aadhar SurveyAadhar @relation(fields: [aadhaarId], references: [id])
-
-  @@index([userId])
-  @@index([aadhaarId])
-  @@index([fileType])
-  @@map("survey_files")
+enum email_logs_recipient_type {
+  admin
+  field_officer
 }
 
-model MatadarSanghName {
-  id        Int                 @id @default(autoincrement())
-  sanghId   Int?                 @map("sangh_id")
-  name      String               @db.VarChar(255)
-  status    MatadarSanghStatus?  @default(Active)
-  createdBy Int?                 @map("created_by")
-  createdOn DateTime?             @map("created_on")
-  updatedBy Int?                 @map("updated_by")
-  updatedOn DateTime?             @map("updated_on")
-
-  @@index([sanghId])
-  @@map("tbl_matadar_sangh_names")
+enum tbl_matadar_sangh_status {
+  Active
+  Inactive
 }
 
-model DisabilityDiagnosis {
-  id           Int                  @id @default(autoincrement())
-  disabilityId Int?                 @map("disability_id")
-  diagnosis    String               @db.VarChar(255)
-  status       ActiveInactiveStatus? @default(Active)
-  createdBy    Int?                 @map("created_by")
-  createdOn    DateTime?            @map("created_on")
-  updatedBy    Int?                 @map("updated_by")
-  updatedOn    DateTime?            @map("updated_on")
-
-  @@index([disabilityId])
-  @@map("tbl_disability_diagnoses")
+enum tbl_taluka_status {
+  Active
+  Inactive
 }
 
-// Early Detection Module - लवकर शोध
-// Parent phone number is unique, can have multiple babies
-model EarlyDetectionBaby {
-  id                      BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  parentPhone             String    @map("parent_phone") @db.VarChar(20)
-  userId                  BigInt?    @map("user_id") @db.UnsignedBigInt
-  
-  // Parents & Personal Information
-  fatherName              String?    @map("father_name") @db.VarChar(255)
-  motherName              String?    @map("mother_name") @db.VarChar(255)
-  babyName                String?    @map("baby_name") @db.VarChar(255)
-  babyBirthDate           DateTime?  @map("baby_birth_date") @db.Date
-  ageMonths               Int?       @map("age_months") @db.UnsignedSmallInt
-  
-  // Health & Siblings Information
-  gender                  String?    @db.VarChar(20)
-  currentWeight           Decimal?   @map("current_weight") @db.Decimal(5, 2)
-  birthWeight             Decimal?   @map("birth_weight") @db.Decimal(5, 2)
-  lengthHeight            Decimal?   @map("length_height") @db.Decimal(5, 2)
-  headCircumferenceAtBirth Decimal?  @map("head_circumference_at_birth") @db.Decimal(5, 2)
-  bloodGroup              String?    @map("blood_group") @db.VarChar(10)
-  noOfSiblings            Int?       @map("no_of_siblings") @db.UnsignedSmallInt
-  
-  // Address & Contact Information
-  address                 String?    @db.Text
-  district                String?    @db.VarChar(255)
-  taluka                  String?    @db.VarChar(255)
-  village                 String?    @db.VarChar(255)
-  talathi                 String?    @db.VarChar(255)
-  grampanchayat           String?    @db.VarChar(255)
-  phc                     String?    @db.VarChar(255)
-  statusUniversalEyeScreening String? @map("status_universal_eye_screening") @db.VarChar(255)
-  statusOaeTest           String?    @map("status_oae_test") @db.VarChar(255)
-  
-  // Delivery & Delivery Complications Information
-  typeOfMarriage          String?    @map("type_of_marriage") @db.VarChar(100)
-  typeOfDelivery          String?    @map("type_of_delivery") @db.VarChar(100)
-  prenatalComplications   String?    @map("prenatal_complications") @db.Text // JSON array
-  perinatalComplications  String?    @map("perinatal_complications") @db.Text // JSON array
-  postnatalComplications  String?    @map("postnatal_complications") @db.Text // JSON array
-  
-  // Ongoing and Past Medications Information
-  previousTreatment       String?    @map("previous_treatment") @db.Text
-  currentTreatment        String?    @map("current_treatment") @db.Text
-  currentMedications      String?    @map("current_medications") @db.Text
-  
-  createdAt               DateTime?  @default(now()) @map("created_at")
-  updatedAt               DateTime?  @default(now()) @updatedAt @map("updated_at")
-  createdBy               BigInt?    @map("created_by") @db.UnsignedBigInt
-  updatedBy               BigInt?    @map("updated_by") @db.UnsignedBigInt
-
-  @@index([parentPhone])
-  @@index([userId])
-  @@index([createdAt])
-  @@map("early_detection_babies")
+enum tbl_all_phc_status {
+  Active
+  Inactive
 }
 
-model TestUserLog {
-  id        BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  phone     String   @db.VarChar(20)
-  action    String   @db.VarChar(255)
-  data      Json?
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@index([phone])
-  @@index([createdAt])
-  @@map("test_user_logs")
+enum survey_assignments_status {
+  pending
+  accepted
+  rejected
+  completed
 }
 
-model AppVersion {
-  id           Int       @id @default(autoincrement()) @db.UnsignedInt
-  platform     String    @db.VarChar(50)
-  latestVersion String   @map("latest_version") @db.VarChar(20)
-  buildNumber  Int       @map("build_number") @db.UnsignedInt
-  forceUpdate  Boolean   @default(false) @map("force_update")
-  title        String?   @db.VarChar(255)
-  message      String?   @db.Text
-  storeUrl     String?   @map("store_url") @db.VarChar(500)
-  createdAt    DateTime? @default(now()) @map("created_at")
-  updatedAt    DateTime? @default(now()) @updatedAt @map("updated_at")
+enum tbl_all_grams_status {
+  Active
+  Inactive
+}
 
-  @@map("app_versions")
+enum tbl_all_talathi_status {
+  Active
+  Inactive
+}
+
+enum tbl_all_villages_status {
+  Active
+  Inactive
+}
+
+enum field_officer_signup_logs_status {
+  started
+  completed
+  failed
+}
+
+enum tbl_milestone_status {
+  Active
+  Inactive
+}
+
+enum users_user_type {
+  field_officer
+  admin
+  supervisor
+  verification_officer
+}
+
+enum email_logs_status {
+  sent
+  failed
+  pending
+}
+
+enum question_clarifications_status {
+  pending
+  resolved
+  cancelled
+}
+
+enum user_types_status {
+  active
+  inactive
+}
+
+enum camps_phase {
+  data_collection
+  examination
+  distribution
+}
+
+enum surveys_verification_status {
+  pending
+  under_review
+  verified
+  rejected
 }
