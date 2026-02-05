@@ -106,38 +106,67 @@ function SurveyDetailsContent() {
           const s = json.data.survey;
           setSurvey(s);
 
-          // If source is Divyang Self, fetch public questions to filter
-          let validQuestionIds: Set<number> | null = null;
+          let sectionData = json.data.answersBySection || {};
+          let allAnswers = json.data.answers || [];
+
+          // If source is public, we want to show ALL questions, including unanswered ones
           if (s.source === 'Divyang Self' || s.source === 'Public Form') {
             try {
               const qRes = await fetch('/api/get-questions?public=true');
               const qJson = await qRes.json();
               if (qJson.ok && Array.isArray(qJson.data)) {
-                validQuestionIds = new Set(qJson.data.map((q: any) => parseInt(String(q.id))));
-                setPublicQuestionIds(validQuestionIds);
+                const publicQuestions = qJson.data;
+                const publicIds = new Set<number>(publicQuestions.map((q: any) => parseInt(String(q.id))));
+                setPublicQuestionIds(publicIds);
+
+                // Rebuild sections based on the full list of public questions
+                const freshSectionData: Record<string, Answer[]> = {};
+                const freshAllAnswers: Answer[] = [];
+                const sectionOrder: string[] = [];
+
+                // Group public questions by their title (which acts as section name)
+                publicQuestions.forEach((q: any) => {
+                  const qId = parseInt(q.id);
+                  const existingAnswer = allAnswers.find((a: any) => a.question_id === qId);
+
+                  const sectionName = q.title || 'इतर माहिती';
+                  if (!freshSectionData[sectionName]) {
+                    freshSectionData[sectionName] = [];
+                    sectionOrder.push(sectionName);
+                  }
+
+                  const answerObj: Answer = existingAnswer ? {
+                    ...existingAnswer,
+                    question_marathi: q.question,
+                    question_type: q.question_type, // Corrected from q.type
+                    options: q.options,
+                    section_name: sectionName
+                  } : {
+                    id: -qId, // Negative ID for UI state
+                    question_id: qId,
+                    section_id: 0,
+                    answer: '--',
+                    created_at: '',
+                    updated_at: '',
+                    question_marathi: q.question,
+                    question_english: null,
+                    question_type: q.question_type, // Corrected from q.type
+                    options: q.options,
+                    section_name: sectionName
+                  };
+
+                  freshSectionData[sectionName].push(answerObj);
+                  freshAllAnswers.push(answerObj);
+                });
+
+                // Store section names in a way that preserves order for the renderer
+                // We'll use the existing answersBySection but we need to ensure keys are visited in order
+                setAnswers(freshAllAnswers);
+                setAnswersBySection(freshSectionData);
               }
             } catch (e) {
-              console.error('Failed to load public questions', e);
+              console.error('Failed to load public questions for full view', e);
             }
-          }
-
-          let sectionData = json.data.answersBySection || {};
-          let allAnswers = json.data.answers || [];
-
-          // Apply filtering if we have the public question IDs
-          if (validQuestionIds) {
-            const filteredSections: Record<string, Answer[]> = {};
-            // Filter answersBySection
-            Object.entries(sectionData).forEach(([sec, ansList]) => {
-              const filtered = (ansList as Answer[]).filter(a => validQuestionIds!.has(a.question_id));
-              if (filtered.length > 0) {
-                filteredSections[sec] = filtered;
-              }
-            });
-            sectionData = filteredSections;
-
-            // Filter allAnswers
-            allAnswers = (allAnswers as Answer[]).filter((a: Answer) => validQuestionIds!.has(a.question_id));
           }
 
           setAnswers(allAnswers);
@@ -548,13 +577,25 @@ function SurveyDetailsContent() {
                 </span>
               </div>
               <div className="col-md-6">
-                <strong>वापरकर्ता:</strong>{' '}
-                {survey.user_name || `ID: ${survey.user_id}`}
-                {survey.user_phone && ` (${survey.user_phone})`}
+                <strong>वापरकर्ता / स्त्रोत:</strong>{' '}
+                {survey.source === 'Divyang Self' || survey.source === 'Public Form' ? (
+                  <span className="badge bg-info text-dark">नागरिकाकडून थेट अर्ज (Citizen)</span>
+                ) : (
+                  <>
+                    {survey.user_name || `ID: ${survey.user_id}`}
+                    {survey.user_phone && ` (${survey.user_phone})`}
+                  </>
+                )}
               </div>
               <div className="col-md-6">
                 <strong>उत्तरांची संख्या:</strong> {survey.answer_count}
               </div>
+              {survey.assigned_to && (
+                <div className="col-md-6">
+                  <strong>नियुक्त पडताळणी अधिकारी:</strong>{' '}
+                  <span className="badge bg-primary">ID: {survey.assigned_to}</span>
+                </div>
+              )}
               {survey.address_text && (
                 <div className="col-12">
                   <strong>पत्ता:</strong> {survey.address_text}
