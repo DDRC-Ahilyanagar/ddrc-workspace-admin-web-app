@@ -34,7 +34,7 @@ SMS_FORM_COMPLETION_TEMPLATE="Your custom message for public forms"
 
 **Default Message (Marathi) - Public Form:**
 ```
-आपला फॉर्म यशस्वीरित्या सादर करण्यात आला आहे. पुढील प्रक्रियेसाठी आमचे सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधतील. काही प्रश्न असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद. - VIKHE PATIL FOUNDATION
+आपला सर्वेक्षण फॉर्म पूर्णपणे नोंदवण्यात आला आहे. पुढील प्रक्रिया संबंधित विभागा मार्फत लवकरच राबवली जाईल. काही शंका असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद.– VIKHE PATIL FOUNDATION
 ```
 
 **English Translation:**
@@ -49,7 +49,7 @@ SMS_FIELD_OFFICER_COMPLETION_TEMPLATE="Your custom message for fully completed f
 
 **Default Message (Marathi) - Field Officer Form:**
 ```
-आपला फॉर्म पूर्णपणे पूर्ण झाला आहे. पुढील प्रक्रियेसाठी आमचे सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधतील. काही प्रश्न असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद. - VIKHE PATIL FOUNDATION
+आपला सर्वेक्षण फॉर्म पूर्णपणे नोंदवण्यात आला आहे. पुढील प्रक्रिया संबंधित विभागा मार्फत लवकरच राबवली जाईल. काही शंका असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद.– VIKHE PATIL FOUNDATION
 ```
 
 **English Translation:**
@@ -63,10 +63,10 @@ Add to your `.env` file:
 
 ```bash
 # SMS Form Completion Message for Public Forms (optional - uses default if not set)
-SMS_FORM_COMPLETION_TEMPLATE="आपला फॉर्म यशस्वीरित्या सादर करण्यात आला आहे. पुढील प्रक्रियेसाठी आमचे सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधतील. काही प्रश्न असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद. - VIKHE PATIL FOUNDATION"
+SMS_FORM_COMPLETION_TEMPLATE="आपला सर्वेक्षण फॉर्म पूर्णपणे नोंदवण्यात आला आहे. पुढील प्रक्रिया संबंधित विभागा मार्फत लवकरच राबवली जाईल. काही शंका असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद.– VIKHE PATIL FOUNDATION"
 
 # SMS Form Completion Message for Field Officer Forms (optional - uses default if not set)
-SMS_FIELD_OFFICER_COMPLETION_TEMPLATE="आपला फॉर्म पूर्णपणे पूर्ण झाला आहे. पुढील प्रक्रियेसाठी आमचे सर्वेक्षण अधिकारी लवकरच आपल्याशी संपर्क साधतील. काही प्रश्न असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद. - VIKHE PATIL FOUNDATION"
+SMS_FIELD_OFFICER_COMPLETION_TEMPLATE="आपला सर्वेक्षण फॉर्म पूर्णपणे नोंदवण्यात आला आहे. पुढील प्रक्रिया संबंधित विभागा मार्फत लवकरच राबवली जाईल. काही शंका असल्यास कृपया संपर्क करा: 0241 277 7772. धन्यवाद.– VIKHE PATIL FOUNDATION"
 ```
 
 ### DLT Template Registration

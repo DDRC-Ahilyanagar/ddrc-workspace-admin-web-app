@@ -275,7 +275,7 @@ export function getFieldOfficerSignupTemplate(): string {
  * Get the field officer approval success SMS template
  */
 export function getFieldOfficerApprovalTemplate(): string {
-  return 'आपले खाते Admin कडून मंजूर झाले आहे. आता आपण लॉगिन करू शकता. PADMSHRI DR VITHALRAO VIKHE PATIL FOUNDATION';
+  return 'आपले खाते Admin कडून मंजूर झाले आहे. आता आपण लॉगिन करू शकता. VIKHE PATIL FOUNDATION';
 }
 
 /**
