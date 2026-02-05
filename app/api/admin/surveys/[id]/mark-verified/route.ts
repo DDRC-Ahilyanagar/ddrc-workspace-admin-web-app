@@ -30,8 +30,13 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
 
     try {
       // Check if survey exists and is assigned to this verification officer
+      // Also fetch details for notification (holder name, field officer id)
       const [surveyRows]: any = await conn.query(
-        `SELECT id, assigned_to, verification_status FROM surveys WHERE id = ? LIMIT 1`,
+        `SELECT s.id, s.user_id, s.assigned_to, s.verification_status, s.aadhaar_id,
+                sa.holder_name, sa.aadhar_no, sa.user_id AS aadhar_user_id
+         FROM surveys s
+         LEFT JOIN survey_aadhar sa ON sa.id = s.aadhaar_id
+         WHERE s.id = ? LIMIT 1`,
         [surveyId]
       );
 
@@ -62,6 +67,71 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
         survey_id: surveyId,
         verification_officer_id: user.id,
       });
+
+      // --- Notification Logic ---
+
+      // Determine Field Officer ID (logic borrowed from request-clarification)
+      let fieldOfficerId = survey.user_id;
+      if (!fieldOfficerId || String(fieldOfficerId) === '1') {
+        fieldOfficerId = survey.aadhar_user_id || fieldOfficerId;
+      }
+
+      // If still 1, check assignments
+      if (String(fieldOfficerId) === '1') {
+        const [assignmentRows]: any = await conn.query(
+          `SELECT field_officer_id FROM survey_assignments 
+           WHERE survey_id = ? 
+           ORDER BY assigned_at DESC LIMIT 1`,
+          [surveyId]
+        );
+        if (Array.isArray(assignmentRows) && assignmentRows.length > 0) {
+          fieldOfficerId = assignmentRows[0].field_officer_id;
+        }
+      }
+
+      // Only notify if we found a valid field officer (not system user 1)
+      if (fieldOfficerId && String(fieldOfficerId) !== '1') {
+        try {
+          const holderName = survey.holder_name || 'Unknown';
+          const notificationTitle = `${holderName} चे सर्वेक्षण मंजूर`;
+          const notificationMessage = `तुमच्या सर्वेक्षणातील दुरुस्ती मंजूर करण्यात आली आहे.`;
+
+          // data payload
+          const notificationData = JSON.stringify({
+            survey_id: surveyId,
+            survey_aadhar_id: survey.aadhaar_id,
+            holder_name: holderName,
+            status: 'verified'
+          });
+
+          // Insert into notifications table
+          await conn.query(
+            `INSERT INTO notifications (user_id, type, title, message, data, is_read)
+             VALUES (?, 'survey_approved', ?, ?, ?, 0)`,
+            [fieldOfficerId, notificationTitle, notificationMessage, notificationData]
+          );
+
+          // Send FCM
+          try {
+            const { sendFCMPushNotification } = await import('@/lib/fcm');
+            await sendFCMPushNotification(
+              fieldOfficerId,
+              notificationTitle,
+              notificationMessage,
+              {
+                type: 'survey_approved',
+                survey_id: surveyId.toString(),
+                holder_name: holderName,
+              }
+            );
+          } catch (fcmError: any) {
+            Logger.error('VERIFICATION_FCM_ERROR', { error: fcmError?.message });
+          }
+
+        } catch (notifyError: any) {
+          Logger.error('VERIFICATION_NOTIFICATION_DB_ERROR', { error: notifyError?.message });
+        }
+      }
 
       return NextResponse.json({ ok: true, message: 'Survey marked as verified' });
     } finally {
