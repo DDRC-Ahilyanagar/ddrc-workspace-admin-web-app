@@ -31,21 +31,8 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const isPublic = searchParams.get('public') === 'true';
 
-  if (isPublic) {
-    try {
-      const publicPath = path.join(process.cwd(), 'prisma', 'questions_public.json');
-      const data = fs.readFileSync(publicPath, 'utf8');
-      const questions = JSON.parse(data);
+  // Removed the isPublic JSON check to pick up questions from MySQL only as requested
 
-      return NextResponse.json(
-        { ok: true, data: questions },
-        { headers: { 'Content-Type': 'application/json; charset=utf-8' } }
-      );
-    } catch (error: any) {
-      Logger.error('get_public_questions_fail', { error: error.message });
-      return NextResponse.json({ ok: false, error: 'Failed to load public questions' }, { status: 500 });
-    }
-  }
 
   try {
     // Join with sections to include section names and titles

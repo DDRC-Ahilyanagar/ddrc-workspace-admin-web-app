@@ -76,6 +76,8 @@ function SurveyDetailsContent() {
   const [selectedQuestions, setSelectedQuestions] = useState<Record<number, string>>({});
   const [sendingClarification, setSendingClarification] = useState(false);
   const [publicQuestionIds, setPublicQuestionIds] = useState<Set<number>>(new Set());
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [showLightbox, setShowLightbox] = useState(false);
 
   useEffect(() => {
     // Get user type from localStorage
@@ -577,17 +579,19 @@ function SurveyDetailsContent() {
                   {survey.status === 'Completed' ? 'पूर्ण' : 'प्रलंबित'}
                 </span>
               </div>
-              <div className="col-md-6">
-                <strong>वापरकर्ता / स्त्रोत:</strong>{' '}
-                {survey.source === 'Divyang Self' || survey.source === 'Public Form' ? (
-                  <span className="badge bg-info text-dark">नागरिकाकडून थेट अर्ज (Citizen)</span>
-                ) : (
-                  <>
-                    {survey.user_name || `ID: ${survey.user_id}`}
-                    {survey.user_phone && ` (${survey.user_phone})`}
-                  </>
-                )}
-              </div>
+              {survey.source !== 'Divyang Self' && (
+                <div className="col-md-6">
+                  <strong>वापरकर्ता / स्त्रोत:</strong>{' '}
+                  {survey.source === 'Public Form' ? (
+                    <span className="badge bg-info text-dark">नागरिकाकडून थेट अर्ज (Citizen)</span>
+                  ) : (
+                    <>
+                      {survey.user_name || `ID: ${survey.user_id}`}
+                      {survey.user_phone && ` (${survey.user_phone})`}
+                    </>
+                  )}
+                </div>
+              )}
               <div className="col-md-6">
                 <strong>उत्तरांची संख्या:</strong> {survey.answer_count}
               </div>
@@ -621,7 +625,7 @@ function SurveyDetailsContent() {
                 <strong>अपडेट केले:</strong>{' '}
                 {new Date(survey.updated_at).toLocaleString('mr-IN')}
               </div>
-              {survey.source && (
+              {survey.source && survey.source !== 'Divyang Self' && (
                 <div className="col-12">
                   <strong>स्त्रोत (Source):</strong> <span className="badge bg-info text-dark">{survey.source}</span>
                 </div>
@@ -639,7 +643,12 @@ function SurveyDetailsContent() {
                         const originalPath = survey.front_image;
                         const absUrl = getAbsoluteImageUrl(originalPath);
                         return absUrl ? (
-                          <a href={absUrl} target="_blank" rel="noopener noreferrer">
+                          <div
+                            onClick={() => {
+                              setSelectedImage(absUrl);
+                              setShowLightbox(true);
+                            }}
+                          >
                             <img
                               src={absUrl}
                               alt="Aadhaar Front"
@@ -653,7 +662,7 @@ function SurveyDetailsContent() {
                                 }
                               }}
                             />
-                          </a>
+                          </div>
                         ) : (
                           <span className="badge bg-secondary">{originalPath || '-'}</span>
                         );
@@ -669,7 +678,12 @@ function SurveyDetailsContent() {
                         const originalPath = survey.back_image;
                         const absUrl = getAbsoluteImageUrl(originalPath);
                         return absUrl ? (
-                          <a href={absUrl} target="_blank" rel="noopener noreferrer">
+                          <div
+                            onClick={() => {
+                              setSelectedImage(absUrl);
+                              setShowLightbox(true);
+                            }}
+                          >
                             <img
                               src={absUrl}
                               alt="Aadhaar Back"
@@ -683,7 +697,7 @@ function SurveyDetailsContent() {
                                 }
                               }}
                             />
-                          </a>
+                          </div>
                         ) : (
                           <span className="badge bg-secondary">{originalPath || '-'}</span>
                         );
@@ -887,7 +901,13 @@ function SurveyDetailsContent() {
                                             if (!item) return null;
                                             const absUrl = getAbsoluteImageUrl(item);
                                             return (
-                                              <a key={i} href={absUrl} target="_blank" rel="noopener noreferrer">
+                                              <div
+                                                key={i}
+                                                onClick={() => {
+                                                  setSelectedImage(absUrl);
+                                                  setShowLightbox(true);
+                                                }}
+                                              >
                                                 <img
                                                   src={absUrl}
                                                   alt={`Answer ${i}`}
@@ -906,7 +926,7 @@ function SurveyDetailsContent() {
                                                     }
                                                   }}
                                                 />
-                                              </a>
+                                              </div>
                                             );
                                           })}
                                         </div>
@@ -1182,6 +1202,62 @@ function SurveyDetailsContent() {
                     )}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Rejection Modal and other modals ... */}
+
+        {/* Lightbox Modal */}
+        {showLightbox && selectedImage && (
+          <div
+            className="modal show d-block animate__animated animate__fadeIn"
+            tabIndex={-1}
+            style={{
+              backgroundColor: 'rgba(0,0,0,0.9)',
+              zIndex: 1060,
+              padding: 0
+            }}
+            onClick={() => setShowLightbox(false)}
+          >
+            <div
+              className="d-flex align-items-center justify-content-center w-100 h-100"
+              style={{ position: 'relative' }}
+            >
+              <button
+                className="btn btn-dark btn-lg"
+                style={{
+                  position: 'absolute',
+                  top: '20px',
+                  right: '20px',
+                  borderRadius: '50%',
+                  width: '50px',
+                  height: '50px',
+                  zIndex: 1061,
+                  border: '2px solid rgba(255,255,255,0.3)'
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowLightbox(false);
+                }}
+              >
+                <i className="bi bi-x-lg text-white"></i>
+              </button>
+              <div
+                className="p-3"
+                style={{ maxWidth: '95vw', maxHeight: '95vh' }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <img
+                  src={selectedImage}
+                  alt="Lightbox Content"
+                  className="img-fluid shadow-lg rounded animate__animated animate__zoomIn animate__faster"
+                  style={{
+                    maxHeight: '90vh',
+                    boxShadow: '0 0 50px rgba(0,0,0,0.5)',
+                    border: '1px solid rgba(255,255,255,0.1)'
+                  }}
+                />
               </div>
             </div>
           </div>
