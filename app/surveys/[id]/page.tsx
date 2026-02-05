@@ -145,7 +145,7 @@ function SurveyDetailsContent() {
                     id: -qId, // Negative ID for UI state
                     question_id: qId,
                     section_id: 0,
-                    answer: '--',
+                    answer: 'Not Answered',
                     created_at: '',
                     updated_at: '',
                     question_marathi: q.question,
@@ -163,6 +163,7 @@ function SurveyDetailsContent() {
                 // We'll use the existing answersBySection but we need to ensure keys are visited in order
                 setAnswers(freshAllAnswers);
                 setAnswersBySection(freshSectionData);
+                return;
               }
             } catch (e) {
               console.error('Failed to load public questions for full view', e);
@@ -910,7 +911,9 @@ function SurveyDetailsContent() {
                                           })}
                                         </div>
                                       ) : (
-                                        <span>{answerText || '-'}</span>
+                                        <span className={answerText === 'Not Answered' ? 'text-danger fw-bold' : ''}>
+                                          {answerText || '-'}
+                                        </span>
                                       )}
                                     </div>
                                     {canEdit && (
