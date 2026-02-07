@@ -31,7 +31,7 @@ export default function LocationTrackingPage() {
   const selectedLocationRef = useRef<Location | null>(null);
   const isInitialLoad = useRef(true);
   const isPolling = useRef(false); // Track if we're currently polling
-  
+
   // Keep ref in sync with state
   useEffect(() => {
     selectedLocationRef.current = selectedLocation;
@@ -54,12 +54,12 @@ export default function LocationTrackingPage() {
     }
 
     loadLocations(true); // Initial load with loading indicator
-    
+
     // Poll for online status every 2 seconds (completely silent, no loading indicators)
     const pollOnlineStatus = async () => {
       // Prevent multiple simultaneous polling requests
       if (isPolling.current) return;
-      
+
       isPolling.current = true;
       try {
         const response = await fetch('/api/location/online-status', {
@@ -79,7 +79,7 @@ export default function LocationTrackingPage() {
               }
               return acc;
             }, []);
-            
+
             // Then update statuses only if changed
             const updated = uniqueLocations.map((loc) => {
               const status = data.statuses.find((s: any) => s.user_id === loc.user_id);
@@ -95,16 +95,16 @@ export default function LocationTrackingPage() {
               }
               return loc;
             });
-            
+
             // Only update state if something actually changed
             const hasChanges = updated.some((loc, idx) => {
               const prev = uniqueLocations[idx];
               return !prev || loc.is_online !== prev.is_online || loc.timestamp !== prev.timestamp;
             });
-            
+
             return hasChanges ? updated : prevLocations;
           });
-          
+
           // Update selected location's online status if it matches (only if changed)
           const currentSelected = selectedLocationRef.current;
           if (currentSelected) {
@@ -124,29 +124,29 @@ export default function LocationTrackingPage() {
         isPolling.current = false;
       }
     };
-    
+
     const onlineStatusInterval = setInterval(pollOnlineStatus, 2000);
-    
+
     // Refresh full location data every 30 seconds (without loading overlay)
     const locationInterval = setInterval(() => loadLocations(false), 30000);
-    
+
     return () => {
       clearInterval(onlineStatusInterval);
       clearInterval(locationInterval);
     };
-  }, [router]);
+  }, []);
 
   const loadLocations = async (showLoading = false) => {
     // Don't show loading if we're polling (unless explicitly requested via refresh button)
     if (isPolling.current && !showLoading) {
       return;
     }
-    
+
     // Only set loading if:
     // 1. It's the initial load, OR
     // 2. Explicitly requested via refresh button
     const shouldShowLoading = isInitialLoad.current || showLoading;
-    
+
     try {
       if (shouldShowLoading) {
         setLoading(true);
@@ -163,7 +163,7 @@ export default function LocationTrackingPage() {
           }
           return acc;
         }, []);
-        
+
         setLocations(uniqueLocations);
         // Auto-select first online officer or first officer if none online
         if (uniqueLocations.length > 0 && !selectedLocation) {
@@ -322,7 +322,7 @@ export default function LocationTrackingPage() {
                   <i className="bi bi-info-circle me-2"></i>
                   <strong>Note:</strong> "Offline" means either the field officer's app is not running right now or they are not logged in.
                 </div>
-                
+
                 <div style={{ maxHeight: '550px', overflowY: 'auto' }}>
                   {locations.length === 0 ? (
                     <p className="text-muted">No location data available</p>
@@ -335,7 +335,7 @@ export default function LocationTrackingPage() {
                       const phone = (location.contact_number || '').toLowerCase();
                       return name.includes(query) || phone.includes(query);
                     });
-                    
+
                     if (filteredLocations.length === 0) {
                       return (
                         <p className="text-muted text-center py-3">
@@ -344,60 +344,59 @@ export default function LocationTrackingPage() {
                         </p>
                       );
                     }
-                    
+
                     return (
                       <div className="list-group">
                         {filteredLocations.map((location) => (
-                      <div
-                        key={location.user_id}
-                        className={`list-group-item list-group-item-action ${
-                          selectedLocation?.user_id === location.user_id ? 'active' : ''
-                        }`}
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => {
-                          if (location.user_id) {
-                            loadHistory(location.user_id);
-                          }
-                          setSelectedLocation(location);
-                        }}
-                      >
-                        <div className="d-flex w-100 justify-content-between align-items-start">
-                          <div className="flex-grow-1">
-                            <div className="d-flex align-items-center gap-2 mb-1">
-                              <h6 className="mb-0">{location.name}</h6>
-                              {location.is_online === 1 ? (
-                                <span className="badge bg-success" style={{ fontSize: '0.65rem' }}>
-                                  <i className="bi bi-circle-fill me-1" style={{ fontSize: '0.5rem' }}></i>
-                                  Online
-                                </span>
-                              ) : (
-                                <span className="badge bg-secondary" style={{ fontSize: '0.65rem' }}>
-                                  <i className="bi bi-circle-fill me-1" style={{ fontSize: '0.5rem' }}></i>
-                                  Offline
-                                </span>
-                              )}
-                            </div>
-                            <p className="mb-1 small text-muted">{location.contact_number}</p>
-                            {location.latitude && location.longitude ? (
-                              <small className="text-muted">
-                                {Number(location.latitude).toFixed(6)}, {Number(location.longitude).toFixed(6)}
-                                {location.timestamp && (
-                                  <span className="ms-2">
-                                    {formatDateTime(location.timestamp)}
-                                  </span>
+                          <div
+                            key={location.user_id}
+                            className={`list-group-item list-group-item-action ${selectedLocation?.user_id === location.user_id ? 'active' : ''
+                              }`}
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => {
+                              if (location.user_id) {
+                                loadHistory(location.user_id);
+                              }
+                              setSelectedLocation(location);
+                            }}
+                          >
+                            <div className="d-flex w-100 justify-content-between align-items-start">
+                              <div className="flex-grow-1">
+                                <div className="d-flex align-items-center gap-2 mb-1">
+                                  <h6 className="mb-0">{location.name}</h6>
+                                  {location.is_online === 1 ? (
+                                    <span className="badge bg-success" style={{ fontSize: '0.65rem' }}>
+                                      <i className="bi bi-circle-fill me-1" style={{ fontSize: '0.5rem' }}></i>
+                                      Online
+                                    </span>
+                                  ) : (
+                                    <span className="badge bg-secondary" style={{ fontSize: '0.65rem' }}>
+                                      <i className="bi bi-circle-fill me-1" style={{ fontSize: '0.5rem' }}></i>
+                                      Offline
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="mb-1 small text-muted">{location.contact_number}</p>
+                                {location.latitude && location.longitude ? (
+                                  <small className="text-muted">
+                                    {Number(location.latitude).toFixed(6)}, {Number(location.longitude).toFixed(6)}
+                                    {location.timestamp && (
+                                      <span className="ms-2">
+                                        {formatDateTime(location.timestamp)}
+                                      </span>
+                                    )}
+                                  </small>
+                                ) : (
+                                  <small className="text-muted">No location data available</small>
                                 )}
-                              </small>
-                            ) : (
-                              <small className="text-muted">No location data available</small>
-                            )}
-                            {location.is_online === 0 && location.last_online && (
-                              <small className="text-muted d-block mt-1" style={{ fontSize: '0.7rem', color: '#dc3545' }}>
-                                Offline for: {formatOfflineDuration(location.last_online)}
-                              </small>
-                            )}
+                                {location.is_online === 0 && location.last_online && (
+                                  <small className="text-muted d-block mt-1" style={{ fontSize: '0.7rem', color: '#dc3545' }}>
+                                    Offline for: {formatOfflineDuration(location.last_online)}
+                                  </small>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
                         ))}
                       </div>
                     );
@@ -446,7 +445,7 @@ export default function LocationTrackingPage() {
                         {selectedLocation ? `${selectedLocation.name} - No Location Data` : 'No Location Selected'}
                       </h5>
                       <p className="text-muted">
-                        {selectedLocation 
+                        {selectedLocation
                           ? 'This field officer has not shared their location yet.'
                           : 'Select a field officer from the list to view their location on the map.'}
                       </p>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import AdminLayout from '@/components/AdminLayout';
@@ -33,6 +33,8 @@ export default function MediaBackupPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'folder' | 'image'; folderName: string; imageName?: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  const isInitialLoad = useRef(true);
+
   // Client-side only state for Portals
   const [isClient, setIsClient] = useState(false);
 
@@ -59,8 +61,8 @@ export default function MediaBackupPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [lightboxOpen, selectedFolderImages.length]);
 
-  const loadFolders = async () => {
-    setLoading(true);
+  const loadFolders = async (silent = false) => {
+    if (!silent) setLoading(true);
     setError('');
     try {
       const response = await fetch('/api/admin/backup-folders', {
@@ -83,7 +85,7 @@ export default function MediaBackupPage() {
     } catch (err: any) {
       setError(err.message || 'Failed to load backup folders');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -253,7 +255,7 @@ export default function MediaBackupPage() {
           <h1 className="title mb-0">Media Backup - Field Officer Images</h1>
           <button
             className="btn btn-primary"
-            onClick={loadFolders}
+            onClick={() => loadFolders(false)}
             disabled={loading}
           >
             <i className="bi bi-arrow-clockwise me-2"></i>

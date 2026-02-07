@@ -37,13 +37,29 @@ export async function GET(request: NextRequest) {
   try {
     // Join with sections to include section names and titles
     // Only fetch active questions
-    const rows = await dbQuery(`
-      SELECT q.*, s.name AS section_name, s.name as title, s.title_marathi 
-      FROM questions q
-      LEFT JOIN sections s ON q.section_id = s.id
-      WHERE q.status = 'Active' OR q.status IS NULL
-      ORDER BY q.id ASC
-    `);
+    let query = '';
+
+    if (isPublic) {
+      // FETCH FROM NEW TABLE FOR PUBLIC FORM
+      query = `
+        SELECT q.*, s.name AS section_name, s.name as title, s.title_marathi 
+        FROM public_form_questions q
+        LEFT JOIN sections s ON q.section_id = s.id
+        WHERE q.status = 'Active' OR q.status IS NULL
+        ORDER BY q.sort_order ASC, q.id ASC
+      `;
+    } else {
+      // STANDARD FETCH FOR OTHER USES
+      query = `
+        SELECT q.*, s.name AS section_name, s.name as title, s.title_marathi 
+        FROM questions q
+        LEFT JOIN sections s ON q.section_id = s.id
+        WHERE q.status = 'Active' OR q.status IS NULL
+        ORDER BY q.id ASC
+      `;
+    }
+
+    const rows = await dbQuery(query);
 
     // Inject dynamic options from database tables
     try {

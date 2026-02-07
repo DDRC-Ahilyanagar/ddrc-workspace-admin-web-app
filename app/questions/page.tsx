@@ -16,7 +16,7 @@ interface Question {
   regex: string | null;
   valid_input: string | null;
   max_length: number | null;
-  is_required: number;
+  is_required: any;
   question_is_active: number;
   question_sort_order: number;
   rendering_condition: string | null;
@@ -77,15 +77,15 @@ export default function QuestionsPage() {
         setLoading(true);
         const res = await fetch('/api/admin/questions_view');
         const data = await res.json();
-        console.log('Questions View API Response:', { 
-          ok: data.ok, 
-          hasData: !!data.data, 
+        console.log('Questions View API Response:', {
+          ok: data.ok,
+          hasData: !!data.data,
           dataKeys: data.data ? Object.keys(data.data) : [],
           questionsCount: data.data?.questions?.length || 0,
           sectionsCount: data.data?.sections?.length || 0,
-          error: data.error 
+          error: data.error
         });
-        
+
         if (data.ok && data.data) {
           const { questions: qList, sections: sList } = data.data;
           console.log('Raw questions from API:', qList?.length || 0, 'questions');
@@ -122,10 +122,18 @@ export default function QuestionsPage() {
     (window as any).handleDeleteQuestion = (id: number) => {
       if (id) openDeleteModal(id);
     };
+    (window as any).handleToggleRequired = (id: number, current: number) => {
+      handleToggleRequired(id, current);
+    };
+    (window as any).handleMarkAllRequired = () => {
+      handleMarkAllRequired();
+    };
 
     return () => {
       delete (window as any).handleEditQuestion;
       delete (window as any).handleDeleteQuestion;
+      delete (window as any).handleToggleRequired;
+      delete (window as any).handleMarkAllRequired;
     };
   }, []);
 
@@ -191,18 +199,61 @@ export default function QuestionsPage() {
     }
   };
 
+  const handleToggleRequired = async (id: number, current: any) => {
+    try {
+      const question = questions.find(q => q.question_id === id);
+      if (!question) return;
+
+      const newStatus = (current === 1 || current === '1') ? 0 : 1;
+      const res = await fetch('/api/admin/questions', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...question, is_required: newStatus, id: id }),
+      });
+
+      const data = await res.json();
+      if (data.ok) {
+        setQuestions(prev => prev.map(q => q.question_id === id ? { ...q, is_required: newStatus } : q));
+      } else {
+        alert('Error: ' + (data.error || 'Failed to update'));
+      }
+    } catch (e) {
+      console.error('Failed to toggle required status:', e);
+    }
+  };
+
+  const handleMarkAllRequired = async () => {
+    if (!confirm('Are you sure you want to mark ALL active questions as required?')) return;
+    try {
+      setLoading(true);
+      const res = await fetch('/api/admin/questions/mark-all-required', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (data.ok) {
+        await loadQuestions();
+      } else {
+        alert('Error: ' + (data.error || 'Failed to update all'));
+      }
+    } catch (e) {
+      console.error('Failed to mark all as required:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSave = async (q: Question) => {
     try {
       const url = '/api/admin/questions';
       const method = q.question_id ? 'PUT' : 'POST';
       const body = { ...q, question_id: q.question_id, id: q.question_id };
-      
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      
+
       const data = await res.json();
       if (data.ok) {
         await loadQuestions();
@@ -291,12 +342,12 @@ export default function QuestionsPage() {
     try {
       setGeneratingPdf(true);
       const res = await fetch('/api/admin/generate-questions-pdf');
-      
+
       if (!res.ok) {
         const error = await res.json();
         throw new Error(error.error || 'Failed to generate PDF');
       }
-      
+
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -317,24 +368,24 @@ export default function QuestionsPage() {
   // Prepare DataTables columns
   const columns = [
     { data: 'question_id', title: 'ID', width: '80px' },
-    { 
-      data: 'question_marathi', 
+    {
+      data: 'question_marathi',
       title: 'Question (Marathi)',
       render: (data: string) => data || '-'
     },
-    { 
-      data: 'question_type', 
+    {
+      data: 'question_type',
       title: 'Type',
       render: (data: string) => `<span class="badge bg-secondary">${data}</span>`
     },
-    { 
-      data: 'section_title_marathi', 
+    {
+      data: 'section_title_marathi',
       title: 'Section',
-      render: (data: string, type: any, row: Question) => 
+      render: (data: string, type: any, row: Question) =>
         `<strong class="text-primary">${data || row.question_title || `Section ${row.section_id}`}</strong>`
     },
-    { 
-      data: 'options', 
+    {
+      data: 'options',
       title: 'Options',
       render: (data: string) => {
         if (!data) return '-';
@@ -342,17 +393,22 @@ export default function QuestionsPage() {
         return `<small class="text-muted">${truncated}</small>`;
       }
     },
-    { 
-      data: 'is_required', 
-      title: 'Required',
-      render: (data: number) => {
-        const badge = data ? 'bg-warning' : 'bg-secondary';
-        const text = data ? 'Yes' : 'No';
-        return `<span class="badge ${badge}">${text}</span>`;
+    {
+      data: 'is_required',
+      title: `Required<br/><button class="btn btn-xs btn-primary p-0 px-1 mt-1" style="font-size: 10px; min-height: 20px;" onclick="window.handleMarkAllRequired()">Mark All</button>`,
+      width: '100px',
+      render: (data: number, type: any, row: Question) => {
+        const isChecked = data ? 'checked' : '';
+        return `
+          <div class="form-check form-switch d-flex justify-content-center">
+            <input class="form-check-input" type="checkbox" ${isChecked} 
+                   onchange="window.handleToggleRequired(${row.question_id}, ${data})">
+          </div>
+        `;
       }
     },
-    { 
-      data: 'question_is_active', 
+    {
+      data: 'question_is_active',
       title: 'Active',
       render: (data: number) => {
         const badge = data ? 'bg-success' : 'bg-secondary';
@@ -361,8 +417,8 @@ export default function QuestionsPage() {
       }
     },
     { data: 'question_sort_order', title: 'Sort Order', width: '100px' },
-    { 
-      data: 'rendering_condition', 
+    {
+      data: 'rendering_condition',
       title: 'Rendering Condition',
       render: (data: string) => {
         if (!data) return '-';
@@ -392,150 +448,150 @@ export default function QuestionsPage() {
       <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css" />
       <AdminLayout>
         <div className="container-fluid p-4">
-        <div className="table-page-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3 gap-md-0">
-          <h2 className="mb-0">सर्वेक्षण प्रश्नावली</h2>
-          <div className="d-flex gap-2 w-100 w-md-auto">
-            <button 
-              className="btn btn-success w-100 w-md-auto" 
-              onClick={handleGeneratePDF}
-              disabled={generatingPdf || loading}
-            >
-              {generatingPdf ? (
-                <>
-                  <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <i className="bi bi-file-pdf me-2"></i>Generate PDF
-                </>
-              )}
-            </button>
-            <button className="btn btn-primary w-100 w-md-auto" onClick={handleNew}>
-              <i className="bi bi-plus-circle me-2"></i>Add Question
-            </button>
-          </div>
-        </div>
-
-        <div className="card shadow-sm">
-          <div className="card-body">
-            <div className="row mb-3">
-              <div className="col-12 col-md-12">
-                <div className="d-flex flex-column flex-md-row align-items-start align-items-md-center gap-2">
-                  <label className="mb-0 fw-semibold">Filter by Section:</label>
-                  <select
-                    className="form-select"
-                    value={sectionFilter}
-                    onChange={(e) => setSectionFilter(e.target.value)}
-                    style={{ maxWidth: '300px', width: '100%' }}
-                  >
-                    <option value="">All Sections</option>
-                    {sections.map((s, idx) => (
-                      <option key={`section-${idx}-${s}`} value={s}>{s}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+          <div className="table-page-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3 gap-md-0">
+            <h2 className="mb-0">सर्वेक्षण प्रश्नावली</h2>
+            <div className="d-flex gap-2 w-100 w-md-auto">
+              <button
+                className="btn btn-success w-100 w-md-auto"
+                onClick={handleGeneratePDF}
+                disabled={generatingPdf || loading}
+              >
+                {generatingPdf ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <i className="bi bi-file-pdf me-2"></i>Generate PDF
+                  </>
+                )}
+              </button>
+              <button className="btn btn-primary w-100 w-md-auto" onClick={handleNew}>
+                <i className="bi bi-plus-circle me-2"></i>Add Question
+              </button>
             </div>
-
-            {loading ? (
-              <div className="text-center p-5">
-                <div className="spinner-border" role="status">
-                  <span className="visually-hidden">Loading...</span>
-                </div>
-                <p className="mt-2 text-muted">Loading questions...</p>
-              </div>
-            ) : !dtReady ? (
-              <div className="text-center p-5">
-                <div className="spinner-border text-warning" role="status">
-                  <span className="visually-hidden">Initializing DataTables...</span>
-                </div>
-                <p className="mt-2 text-muted">Initializing DataTables library...</p>
-                <p className="text-muted small">Questions loaded: {questions.length}</p>
-              </div>
-            ) : questions.length === 0 ? (
-              <div className="text-center py-5">
-                <i className="bi bi-question-circle" style={{ fontSize: '3rem', color: '#ccc' }}></i>
-                <p className="mt-3 text-muted">No questions found</p>
-                <p className="text-muted small">Please check:</p>
-                <ul className="text-muted small text-start" style={{ maxWidth: '400px', margin: '0 auto' }}>
-                  <li>Database view <code>view_sections_with_questions</code> exists</li>
-                  <li>Questions exist in the database</li>
-                  <li>Questions have <code>question_is_active = 1</code></li>
-                  <li>Check browser console for API errors</li>
-                </ul>
-              </div>
-            ) : (
-              <div className="table-responsive">
-                <DataTable
-                  ref={tableRef}
-                  data={questions}
-                  columns={columns}
-                  options={{
-                    pageLength: 25,
-                    lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
-                    order: [[7, 'asc']], // Sort by question_sort_order
-                    language: {
-                      search: 'Search:',
-                      lengthMenu: 'Show _MENU_ entries',
-                      info: 'Showing _START_ to _END_ of _TOTAL_ entries',
-                      infoEmpty: 'No entries to show',
-                      infoFiltered: '(filtered from _MAX_ total entries)'
-                    },
-                    // Place length (l) 8-cols left and filter (f) 4-cols right, both left-aligned
-                    dom: "<'row g-2 mb-3'<'col-12 col-md-8'l><'col-12 col-md-4'f>>" +
-                         "rt" +
-                         "<'row g-2 mt-3'<'col-12 col-md-5'i><'col-12 col-md-7'p>>",
-                  } as any}
-                  className="table table-striped align-middle"
-                />
-              </div>
-            )}
           </div>
-        </div>
 
-        {showModal && editingQuestion && (
-          <QuestionModal
-            question={editingQuestion}
-            allQuestions={questions}
-            dbSections={dbSections}
-            onSave={handleSave}
-            onClose={() => {
-              setShowModal(false);
-              setEditingQuestion(null);
-            }}
-            onSectionUpdate={loadSections}
-            sectionsList={sections}
-          />
-        )}
-        {showDeleteModal && (
-          <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex={-1}>
-            <div className="modal-dialog modal-md">
-              <div className="modal-content">
-                <div className="modal-header">
-                  <h5 className="modal-title">Delete Question</h5>
-                  <button type="button" className="btn-close" onClick={() => setShowDeleteModal(false)}></button>
+          <div className="card shadow-sm">
+            <div className="card-body">
+              <div className="row mb-3">
+                <div className="col-12 col-md-12">
+                  <div className="d-flex flex-column flex-md-row align-items-start align-items-md-center gap-2">
+                    <label className="mb-0 fw-semibold">Filter by Section:</label>
+                    <select
+                      className="form-select"
+                      value={sectionFilter}
+                      onChange={(e) => setSectionFilter(e.target.value)}
+                      style={{ maxWidth: '300px', width: '100%' }}
+                    >
+                      <option value="">All Sections</option>
+                      {sections.map((s, idx) => (
+                        <option key={`section-${idx}-${s}`} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <div className="modal-body">
-                  <p className="mb-3">Please provide a reason for deleting this question. This will be stored in logs.</p>
-                  <textarea
-                    className="form-control"
-                    rows={4}
-                    value={deleteReason}
-                    onChange={(e) => setDeleteReason(e.target.value)}
-                    placeholder="Enter reason..."
+              </div>
+
+              {loading ? (
+                <div className="text-center p-5">
+                  <div className="spinner-border" role="status">
+                    <span className="visually-hidden">Loading...</span>
+                  </div>
+                  <p className="mt-2 text-muted">Loading questions...</p>
+                </div>
+              ) : !dtReady ? (
+                <div className="text-center p-5">
+                  <div className="spinner-border text-warning" role="status">
+                    <span className="visually-hidden">Initializing DataTables...</span>
+                  </div>
+                  <p className="mt-2 text-muted">Initializing DataTables library...</p>
+                  <p className="text-muted small">Questions loaded: {questions.length}</p>
+                </div>
+              ) : questions.length === 0 ? (
+                <div className="text-center py-5">
+                  <i className="bi bi-question-circle" style={{ fontSize: '3rem', color: '#ccc' }}></i>
+                  <p className="mt-3 text-muted">No questions found</p>
+                  <p className="text-muted small">Please check:</p>
+                  <ul className="text-muted small text-start" style={{ maxWidth: '400px', margin: '0 auto' }}>
+                    <li>Database view <code>view_sections_with_questions</code> exists</li>
+                    <li>Questions exist in the database</li>
+                    <li>Questions have <code>question_is_active = 1</code></li>
+                    <li>Check browser console for API errors</li>
+                  </ul>
+                </div>
+              ) : (
+                <div className="table-responsive">
+                  <DataTable
+                    ref={tableRef}
+                    data={questions}
+                    columns={columns}
+                    options={{
+                      pageLength: 25,
+                      lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+                      order: [[7, 'asc']], // Sort by question_sort_order
+                      language: {
+                        search: 'Search:',
+                        lengthMenu: 'Show _MENU_ entries',
+                        info: 'Showing _START_ to _END_ of _TOTAL_ entries',
+                        infoEmpty: 'No entries to show',
+                        infoFiltered: '(filtered from _MAX_ total entries)'
+                      },
+                      // Place length (l) 8-cols left and filter (f) 4-cols right, both left-aligned
+                      dom: "<'row g-2 mb-3'<'col-12 col-md-8'l><'col-12 col-md-4'f>>" +
+                        "rt" +
+                        "<'row g-2 mt-3'<'col-12 col-md-5'i><'col-12 col-md-7'p>>",
+                    } as any}
+                    className="table table-striped align-middle"
                   />
                 </div>
-                <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>Cancel</button>
-                  <button type="button" className="btn btn-danger" onClick={performDelete} disabled={!deleteReason.trim()}>
-                    Delete
-                  </button>
+              )}
+            </div>
+          </div>
+
+          {showModal && editingQuestion && (
+            <QuestionModal
+              question={editingQuestion}
+              allQuestions={questions}
+              dbSections={dbSections}
+              onSave={handleSave}
+              onClose={() => {
+                setShowModal(false);
+                setEditingQuestion(null);
+              }}
+              onSectionUpdate={loadSections}
+              sectionsList={sections}
+            />
+          )}
+          {showDeleteModal && (
+            <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex={-1}>
+              <div className="modal-dialog modal-md">
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <h5 className="modal-title">Delete Question</h5>
+                    <button type="button" className="btn-close" onClick={() => setShowDeleteModal(false)}></button>
+                  </div>
+                  <div className="modal-body">
+                    <p className="mb-3">Please provide a reason for deleting this question. This will be stored in logs.</p>
+                    <textarea
+                      className="form-control"
+                      rows={4}
+                      value={deleteReason}
+                      onChange={(e) => setDeleteReason(e.target.value)}
+                      placeholder="Enter reason..."
+                    />
+                  </div>
+                  <div className="modal-footer">
+                    <button type="button" className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>Cancel</button>
+                    <button type="button" className="btn btn-danger" onClick={performDelete} disabled={!deleteReason.trim()}>
+                      Delete
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
         </div>
       </AdminLayout>
     </>
@@ -572,21 +628,21 @@ function QuestionModal({ question, allQuestions, dbSections, onSave, onClose, on
   // Generate regex from sample value
   const generateRegexFromSample = (sample: string): string => {
     if (!sample || sample.trim() === '') return '';
-    
+
     const trimmed = sample.trim().toUpperCase(); // Convert to uppercase for consistency
     let regex = '^';
     let i = 0;
-    
+
     while (i < trimmed.length) {
       const char = trimmed[i];
-      
+
       // Handle special characters (dashes, slashes, spaces, etc.)
       if (['-', '/', ' ', '_', '.'].includes(char)) {
         regex += `\\${char}`;
         i++;
         continue;
       }
-      
+
       // Detect pattern: letters or digits
       if (/[A-Z]/.test(char)) {
         // Count consecutive letters
@@ -610,7 +666,7 @@ function QuestionModal({ question, allQuestions, dbSections, onSave, onClose, on
         i++;
       }
     }
-    
+
     regex += '$';
     return regex;
   };
@@ -621,12 +677,12 @@ function QuestionModal({ question, allQuestions, dbSections, onSave, onClose, on
     setGeneratedRegex(regex);
     if (regex) {
       updateField('regex', regex);
-      
+
       // Auto-detect valid_input and max_length
       const cleanedValue = value.replace(/[^A-Za-z0-9]/g, ''); // Remove separators
       const onlyDigits = /^\d+$/.test(cleanedValue);
       const hasLetters = /[A-Za-z]/.test(cleanedValue);
-      
+
       if (onlyDigits) {
         // Pure numeric (with or without separators)
         updateField('valid_input', 'numeric');
@@ -667,20 +723,20 @@ function QuestionModal({ question, allQuestions, dbSections, onSave, onClose, on
 
   const handleSaveSection = async () => {
     if (!sectionInput.trim()) return;
-    
+
     try {
       const url = '/api/admin/sections';
       const method = editingSection ? 'PUT' : 'POST';
-      const body = editingSection 
+      const body = editingSection
         ? { id: editingSection.id, name: sectionInput.trim(), status: editingSection.status }
         : { name: sectionInput.trim(), status: 'Active' };
-      
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      
+
       const data = await res.json();
       if (data.ok) {
         updateField('section_title_marathi', sectionInput.trim());
@@ -760,7 +816,7 @@ function QuestionModal({ question, allQuestions, dbSections, onSave, onClose, on
                   </div>
                 )}
               </div>
-              <div className="col-md-6">
+              <div className="col-md-3">
                 <label className="form-label">Is Active</label>
                 <select
                   className="form-select"
@@ -769,6 +825,17 @@ function QuestionModal({ question, allQuestions, dbSections, onSave, onClose, on
                 >
                   <option value={1}>Active</option>
                   <option value={0}>Inactive</option>
+                </select>
+              </div>
+              <div className="col-md-3">
+                <label className="form-label">Is Required</label>
+                <select
+                  className="form-select"
+                  value={formData.is_required}
+                  onChange={(e) => updateField('is_required', parseInt(e.target.value))}
+                >
+                  <option value={1}>Yes (Required)</option>
+                  <option value={0}>No (Optional)</option>
                 </select>
               </div>
             </div>

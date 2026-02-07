@@ -576,6 +576,29 @@ model questions {
   @@index([section_id], map: "idx_section_id")
 }
 
+model public_form_questions {
+  id                  BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  section_id          BigInt    @db.UnsignedBigInt
+  question            String    @db.Text
+  question_type       String    @db.VarChar(50)
+  multi_select        Boolean   @default(false)
+  options             String?   @db.Text
+  rendering_condition String?   @db.VarChar(10)
+  rendering_question  String?   @db.VarChar(255)
+  rendering_value     String?   @db.VarChar(255)
+  regex               String?   @db.VarChar(255)
+  valid_input         String?   @db.VarChar(20)
+  max_length          Int?
+  is_required         Boolean   @default(false)
+  status              String?   @default("Active") @db.VarChar(20)
+  sort_order          Int       @default(0)
+  created_at          DateTime? @default(now()) @db.Timestamp(0)
+  updated_at          DateTime? @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@index([section_id], map: "idx_public_section_id")
+  @@map("public_form_questions")
+}
+
 model sections {
   id            BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
   title_marathi String    @db.VarChar(255)
@@ -811,9 +834,51 @@ enum tbl_all_villages_status {
   Inactive
 }
 
+enum user_types_status {
+  active
+  inactive
+}
+
 enum field_officer_signup_logs_status {
   started
+  otp_verified
+  details_submitted
   completed
+  failed
+}
+
+enum users_user_type {
+  super_admin
+  admin
+  field_officer
+  verification_officer
+  manager
+  coordinator
+}
+
+enum camps_phase {
+  data_collection
+  verification
+  camp_day
+  completed
+}
+
+enum question_clarifications_status {
+  pending
+  responded
+  resolved
+}
+
+enum surveys_verification_status {
+  pending
+  approved
+  rejected
+  needs_correction
+}
+
+enum email_logs_status {
+  pending
+  sent
   failed
 }
 
@@ -822,39 +887,3 @@ enum tbl_milestone_status {
   Inactive
 }
 
-enum users_user_type {
-  field_officer
-  admin
-  supervisor
-  verification_officer
-}
-
-enum email_logs_status {
-  sent
-  failed
-  pending
-}
-
-enum question_clarifications_status {
-  pending
-  resolved
-  cancelled
-}
-
-enum user_types_status {
-  active
-  inactive
-}
-
-enum camps_phase {
-  data_collection
-  examination
-  distribution
-}
-
-enum surveys_verification_status {
-  pending
-  under_review
-  verified
-  rejected
-}

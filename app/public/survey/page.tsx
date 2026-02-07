@@ -343,6 +343,10 @@ export default function PublicFormPage() {
       return true;
     }
 
+    // REMOVED: Old Address Hiding Logic
+    // We now handle strict filtering in the render loop itself.
+    // shouldShowQuestion is now PURELY for conditional logic (rendering_condition).
+
     const cond = (q.rendering_condition || '').toString().toLowerCase();
     if (!cond || cond === 'no' || cond === 'false' || cond === '0') return true;
 
@@ -745,6 +749,7 @@ export default function PublicFormPage() {
                         onChange={(e) => {
                           let v = e.target.value.replace(/\D/g, '').slice(0, 12);
                           setAadharNo(v.match(/.{1,4}/g)?.join('-') || v);
+                          if (existingSurveyData) setExistingSurveyData(null); // Reset existing check
                           if (v.length === 12) checkExistingSurvey(v);
                         }}
                       />
@@ -773,12 +778,7 @@ export default function PublicFormPage() {
               <div className="space-y-16 animate-in fade-in slide-in-from-bottom-8 duration-500">
                 {questionSections.map((s, i) => {
                   const visible = s.questions.filter(q => {
-                    const label = q.question || '';
-                    const title = q.title || '';
-                    const isAadhaarPhoto = label.includes('आधार कार्ड') && (label.includes('पुढील') || label.includes('मागील'));
-                    const isAadhaarNumber = label.includes('आधार') && (label.includes('नंबर') || label.includes('क्रमांक'));
-                    const isIdSection = title.includes('ओळखपत्र');
-                    return shouldShowQuestion(q) && !isAadhaarPhoto && !isAadhaarNumber && !isIdSection;
+                    return shouldShowQuestion(q);
                   });
 
                   // Advanced sorting: place dependent questions immediately after their parents
