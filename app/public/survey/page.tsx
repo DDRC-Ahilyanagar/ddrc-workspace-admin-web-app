@@ -848,27 +848,7 @@ export default function PublicFormPage() {
               </button>
             </footer>
 
-            {/* Temporary SMS Debug Button */}
-            <div className="mt-8 flex justify-center opacity-50 hover:opacity-100 transition-opacity">
-              <button
-                onClick={async () => {
-                  try {
-                    const res = await fetch('/api/test-sms', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ mobile: '9561923703' })
-                    });
-                    const data = await res.json();
-                    alert(data.ok ? 'SMS Sent!' : `Failed: ${data.error}`);
-                  } catch (e) {
-                    alert('Error sending SMS');
-                  }
-                }}
-                className="text-[10px] text-slate-400 font-mono border border-slate-200 px-3 py-1 rounded hover:bg-slate-100"
-              >
-                [DEBUG] Test SMS to 9561923703
-              </button>
-            </div>
+
           </div>
         </main>
       </div>
