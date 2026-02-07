@@ -1,3 +1,6 @@
+-- DISABLE SAFE UPDATE MODE to allow updates without primary key
+SET SQL_SAFE_UPDATES = 0;
+
 -- 1. Create the public_form_questions table (if not exists) & Truncate
 CREATE TABLE IF NOT EXISTS `public_form_questions` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -57,7 +60,6 @@ SELECT
     `status`
 FROM `questions`
 WHERE `question` IN (
-    -- Personal Info (Basic Only - NO beneficiary status questions)
     'दिव्यांगांचे नाव',
     'जन्म तारीख',
     'वय',
@@ -73,7 +75,6 @@ WHERE `question` IN (
     'रक्त गट',
     'प्रोफाइल फोटो',
 
-    -- Address (Current Address ONLY)
     'सध्याचा ता.',
     'सध्याचा तलाठी कार्यालय',
     'सध्याचा गाव',
@@ -85,10 +86,44 @@ WHERE `question` IN (
     'सध्याचा पोस्ट',
     'सध्याचा जि.',
 
-    -- Disability / Identity (Specific 4 Questions ONLY)
     'दिव्यांग प्रमाणपत्र (SADM)',
     'वैश्विक कार्ड (UDID)',
     'दिव्यांगता प्रकार (Disability Type)',
     'दिव्यांगता टक्केवारी (% of Disability)'
 )
 ORDER BY `section_id` ASC, `id` ASC;
+
+-- 3. UNIFY Address Section IDs
+-- Force all address-related questions to use Section ID 3 (Address Section)
+UPDATE `public_form_questions`
+SET `section_id` = 3
+WHERE `question` IN (
+    'सध्याचा ता.',
+    'सध्याचा तलाठी कार्यालय',
+    'सध्याचा गाव',
+    'सध्याचा ग्रामपंचायत',
+    'सध्याचा पिन कोड',
+    'सध्याचा प्राथमिक आरोग्य केंद्र',
+    'सध्याचा पत्ता',
+    'सध्याचा खूण / रोड',
+    'सध्याचा पोस्ट',
+    'सध्याचा जि.'
+);
+
+-- 4. ORDERING
+UPDATE `public_form_questions` SET `sort_order` = 1 WHERE `question` = 'सध्याचा पत्ता';
+UPDATE `public_form_questions` SET `sort_order` = 2 WHERE `question` = 'सध्याचा खूण / रोड';
+UPDATE `public_form_questions` SET `sort_order` = 3 WHERE `question` = 'सध्याचा पोस्ट';
+UPDATE `public_form_questions` SET `sort_order` = 4 WHERE `question` = 'सध्याचा जि.';
+UPDATE `public_form_questions` SET `sort_order` = 5 WHERE `question` = 'सध्याचा ता.';
+UPDATE `public_form_questions` SET `sort_order` = 6 WHERE `question` = 'सध्याचा गाव';
+UPDATE `public_form_questions` SET `sort_order` = 7 WHERE `question` = 'सध्याचा पिन कोड';
+
+-- 5. ENSURE DISABILITY TYPES ARE POPULATED
+-- We hardcode the full list of 21 disabilities here to guarantee they appear in the dropdown
+UPDATE `public_form_questions`
+SET `options` = 'Blindness,Low Vision,Hearing Impairment,Speech and Language Disability,Locomotor Disability,Mental Illness,Specific Learning Disabilities,Cerebral Palsy,Autism Spectrum Disorder,Multiple Disabilities including Deafblindness,Leprosy Cured Persons,Dwarfism,Intellectual Disability,Muscular Dystrophy,Chronic Neurological Conditions,Multiple Sclerosis,Thalassemia,Hemophilia,Sickle Cell Disease,Acid Attack Victim,Parkinson''s Disease'
+WHERE `question` LIKE '%Disability Type%' OR `question` LIKE '%दिव्यांगता प्रकार%';
+
+-- RE-ENABLE SAFE UPDATE MODE
+SET SQL_SAFE_UPDATES = 1;
