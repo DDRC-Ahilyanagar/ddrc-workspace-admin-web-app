@@ -89,7 +89,8 @@ WHERE `question` IN (
     'दिव्यांग प्रमाणपत्र (SADM)',
     'वैश्विक कार्ड (UDID)',
     'दिव्यांगता प्रकार (Disability Type)',
-    'दिव्यांगता टक्केवारी (% of Disability)'
+    'दिव्यांगता टक्केवारी (% of Disability)',
+    'निरामय योजनेची नोंदणी केली आहे का?'
 )
 ORDER BY `section_id` ASC, `id` ASC;
 
@@ -124,6 +125,14 @@ UPDATE `public_form_questions` SET `sort_order` = 7 WHERE `question` = 'सध�
 UPDATE `public_form_questions`
 SET `options` = 'Blindness,Low Vision,Hearing Impairment,Speech and Language Disability,Locomotor Disability,Mental Illness,Specific Learning Disabilities,Cerebral Palsy,Autism Spectrum Disorder,Multiple Disabilities including Deafblindness,Leprosy Cured Persons,Dwarfism,Intellectual Disability,Muscular Dystrophy,Chronic Neurological Conditions,Multiple Sclerosis,Thalassemia,Hemophilia,Sickle Cell Disease,Acid Attack Victim,Parkinson''s Disease'
 WHERE `question` LIKE '%Disability Type%' OR `question` LIKE '%दिव्यांगता प्रकार%';
+
+-- 6. SET CONDITIONAL RENDERING FOR NIRAMAY QUESTION
+UPDATE `public_form_questions`
+SET 
+    `rendering_condition` = 'Yes',
+    `rendering_question` = 'दिव्यांगता प्रकार (Disability Type)',
+    `rendering_value` = 'Autism Spectrum Disorder,Cerebral Palsy,Intellectual Disability,Multiple Disabilities including Deafblindness'
+WHERE `question` = 'निरामय योजनेची नोंदणी केली आहे का?';
 
 -- RE-ENABLE SAFE UPDATE MODE
 SET SQL_SAFE_UPDATES = 1;

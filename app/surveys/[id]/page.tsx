@@ -111,67 +111,6 @@ function SurveyDetailsContent() {
           let sectionData = json.data.answersBySection || {};
           let allAnswers = json.data.answers || [];
 
-          // If source is public, we want to show ALL questions, including unanswered ones
-          if (s.source === 'Divyang Self' || s.source === 'Public Form') {
-            try {
-              const qRes = await fetch('/api/get-questions?public=true');
-              const qJson = await qRes.json();
-              if (qJson.ok && Array.isArray(qJson.data)) {
-                const publicQuestions = qJson.data;
-                const publicIds = new Set<number>(publicQuestions.map((q: any) => parseInt(String(q.id))));
-                setPublicQuestionIds(publicIds);
-
-                // Rebuild sections based on the full list of public questions
-                const freshSectionData: Record<string, Answer[]> = {};
-                const freshAllAnswers: Answer[] = [];
-                const sectionOrder: string[] = [];
-
-                // Group public questions by their title (which acts as section name)
-                publicQuestions.forEach((q: any) => {
-                  const qId = parseInt(q.id);
-                  const existingAnswer = allAnswers.find((a: any) => a.question_id === qId);
-
-                  const sectionName = q.title || 'इतर माहिती';
-                  if (!freshSectionData[sectionName]) {
-                    freshSectionData[sectionName] = [];
-                    sectionOrder.push(sectionName);
-                  }
-
-                  const answerObj: Answer = existingAnswer ? {
-                    ...existingAnswer,
-                    question_marathi: q.question,
-                    question_type: q.question_type, // Corrected from q.type
-                    options: q.options,
-                    section_name: sectionName
-                  } : {
-                    id: -qId, // Negative ID for UI state
-                    question_id: qId,
-                    section_id: 0,
-                    answer: 'Not Answered',
-                    created_at: '',
-                    updated_at: '',
-                    question_marathi: q.question,
-                    question_english: null,
-                    question_type: q.question_type, // Corrected from q.type
-                    options: q.options,
-                    section_name: sectionName
-                  };
-
-                  freshSectionData[sectionName].push(answerObj);
-                  freshAllAnswers.push(answerObj);
-                });
-
-                // Store section names in a way that preserves order for the renderer
-                // We'll use the existing answersBySection but we need to ensure keys are visited in order
-                setAnswers(freshAllAnswers);
-                setAnswersBySection(freshSectionData);
-                return;
-              }
-            } catch (e) {
-              console.error('Failed to load public questions for full view', e);
-            }
-          }
-
           setAnswers(allAnswers);
           setAnswersBySection(sectionData);
         } else {
