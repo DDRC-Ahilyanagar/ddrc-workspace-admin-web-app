@@ -21,10 +21,19 @@ export async function GET(request: NextRequest) {
 
     if (source === 'api') {
         try {
-            const res = await fetch('https://surveyapi.ddrcnagar.in/api/admin/logs', {
+            // Internal communication is safer via localhost
+            const res = await fetch('http://127.0.0.1:6001/api/admin/logs', {
                 headers: { 'Authorization': '7768068585' },
                 cache: 'no-store'
+            }).catch(async (e) => {
+                // If localhost fails, try public domain
+                Logger.warn('Local API fetch failed, trying public domain', { error: e.message });
+                return await fetch('https://surveyapi.ddrcnagar.in/api/admin/logs', {
+                    headers: { 'Authorization': '7768068585' },
+                    cache: 'no-store'
+                });
             });
+
             const data = await res.json();
             if (!res.ok) {
                 Logger.error('DDRC API Logs Fetch Error', { status: res.status, data });
@@ -32,17 +41,25 @@ export async function GET(request: NextRequest) {
             }
             return NextResponse.json(data);
         } catch (err: any) {
-            Logger.error('DDRC API Logs Connection Error', { error: err.message, stack: err.stack });
-            return NextResponse.json({ ok: false, error: 'Failed to reach DDRC API: ' + err.message });
+            Logger.error('DDRC API Logs Connection Error', { error: err.message });
+            return NextResponse.json({ ok: false, error: 'DDRC API unreachable: ' + err.message });
         }
     }
 
     if (source === 'python') {
         try {
-            const res = await fetch('https://surveymediapython.ddrcnagar.in/admin/logs', {
+            // Internal communication via localhost:8001
+            const res = await fetch('http://127.0.0.1:8001/admin/logs', {
                 headers: { 'Authorization': 'Bearer 7768068585' },
                 cache: 'no-store'
+            }).catch(async (e) => {
+                Logger.warn('Local Python fetch failed, trying public domain', { error: e.message });
+                return await fetch('https://surveymediapython.ddrcnagar.in/admin/logs', {
+                    headers: { 'Authorization': 'Bearer 7768068585' },
+                    cache: 'no-store'
+                });
             });
+
             const data = await res.json();
             if (!res.ok) {
                 Logger.error('Python Logs Fetch Error', { status: res.status, data });
@@ -50,8 +67,8 @@ export async function GET(request: NextRequest) {
             }
             return NextResponse.json(data);
         } catch (err: any) {
-            Logger.error('Python Logs Connection Error', { error: err.message, stack: err.stack });
-            return NextResponse.json({ ok: false, error: 'Failed to reach Python Service: ' + err.message });
+            Logger.error('Python Logs Connection Error', { error: err.message });
+            return NextResponse.json({ ok: false, error: 'Python Service unreachable: ' + err.message });
         }
     }
 

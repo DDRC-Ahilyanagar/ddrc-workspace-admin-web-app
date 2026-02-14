@@ -136,6 +136,8 @@ export default function Preloader() {
   useEffect(() => {
     if (STICKY_OVERLAY) return;
 
+    // Disabled global fetch monitoring as per user request to hide loader during API calls
+    /*
     const onBusy = () => {
       // Small delay to prevent flashing for very fast requests
       requestAnimationFrame(() => show());
@@ -150,6 +152,7 @@ export default function Preloader() {
       window.removeEventListener('app:busy', onBusy);
       window.removeEventListener('app:idle', onIdle);
     };
+    */
   }, []);
 
   if (!visible) return null;
