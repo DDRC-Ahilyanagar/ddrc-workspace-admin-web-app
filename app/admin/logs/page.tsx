@@ -10,6 +10,7 @@ export default function SystemLogsPage() {
     const [userPhone, setUserPhone] = useState<string>('');
     const [autoRefresh, setAutoRefresh] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
+    const [activeSource, setActiveSource] = useState<'admin' | 'api' | 'python'>('admin');
     const logEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -21,18 +22,18 @@ export default function SystemLogsPage() {
             setLoading(false);
             setError('Access restricted to system developer.');
         }
-    }, []);
+    }, [activeSource]);
 
     useEffect(() => {
         if (autoRefresh && userPhone === '7768068585') {
             const interval = setInterval(fetchLogs, 3000);
             return () => clearInterval(interval);
         }
-    }, [autoRefresh, userPhone]);
+    }, [autoRefresh, userPhone, activeSource]);
 
     const fetchLogs = async () => {
         try {
-            const res = await fetch('/api/admin/logs');
+            const res = await fetch(`/api/admin/logs?source=${activeSource}`);
             const json = await res.json();
             if (json.ok) {
                 setLogs(json.logs || []);
@@ -76,38 +77,61 @@ export default function SystemLogsPage() {
                         <p className="text-muted small mb-0">Direct server-side API activity monitoring</p>
                     </div>
 
-                    <div className="d-flex align-items-center gap-3 bg-white p-2 rounded shadow-sm border">
-                        <div className="form-check form-switch mb-0">
-                            <input
-                                className="form-check-input"
-                                type="checkbox"
-                                id="autoRefreshSwitch"
-                                checked={autoRefresh}
-                                onChange={(e) => setAutoRefresh(e.target.checked)}
-                            />
-                            <label className="form-check-label small fw-bold" htmlFor="autoRefreshSwitch">
-                                Auto Refresh
-                            </label>
+                    <div className="d-flex align-items-center gap-3">
+                        <div className="btn-group shadow-sm">
+                            <button
+                                className={`btn btn-sm ${activeSource === 'admin' ? 'btn-primary' : 'btn-outline-primary'}`}
+                                onClick={() => setActiveSource('admin')}
+                            >
+                                Admin Web
+                            </button>
+                            <button
+                                className={`btn btn-sm ${activeSource === 'api' ? 'btn-primary' : 'btn-outline-primary'}`}
+                                onClick={() => setActiveSource('api')}
+                            >
+                                DDRC API
+                            </button>
+                            <button
+                                className={`btn btn-sm ${activeSource === 'python' ? 'btn-primary' : 'btn-outline-primary'}`}
+                                onClick={() => setActiveSource('python')}
+                            >
+                                Python Media
+                            </button>
                         </div>
 
-                        <div className="vr"></div>
+                        <div className="d-flex align-items-center gap-3 bg-white p-2 rounded shadow-sm border">
+                            <div className="form-check form-switch mb-0">
+                                <input
+                                    className="form-check-input"
+                                    type="checkbox"
+                                    id="autoRefreshSwitch"
+                                    checked={autoRefresh}
+                                    onChange={(e) => setAutoRefresh(e.target.checked)}
+                                />
+                                <label className="form-check-label small fw-bold" htmlFor="autoRefreshSwitch">
+                                    Auto Refresh
+                                </label>
+                            </div>
 
-                        <button
-                            className="btn btn-sm btn-light border"
-                            onClick={fetchLogs}
-                            disabled={loading}
-                        >
-                            <i className={`bi bi-arrow-clockwise ${loading ? 'animate-spin' : ''}`}></i>
-                        </button>
+                            <div className="vr"></div>
 
-                        <input
-                            type="text"
-                            className="form-control form-control-sm"
-                            placeholder="Search logs..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            style={{ width: '200px' }}
-                        />
+                            <button
+                                className="btn btn-sm btn-light border"
+                                onClick={fetchLogs}
+                                disabled={loading}
+                            >
+                                <i className={`bi bi-arrow-clockwise ${loading ? 'animate-spin' : ''}`}></i>
+                            </button>
+
+                            <input
+                                type="text"
+                                className="form-control form-control-sm"
+                                placeholder="Search logs..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                style={{ width: '200px' }}
+                            />
+                        </div>
                     </div>
                 </div>
 
@@ -127,7 +151,11 @@ export default function SystemLogsPage() {
                             <div className="rounded-circle bg-warning" style={{ width: '12px', height: '12px' }}></div>
                             <div className="rounded-circle bg-success" style={{ width: '12px', height: '12px' }}></div>
                         </div>
-                        <small className="text-secondary fw-monospace">ddrcnagar.in :: ddrc_api.log</small>
+                        <small className="text-secondary fw-monospace">
+                            {activeSource === 'admin' ? 'sadmin.ddrcnagar.in :: ddrc_api.log' :
+                                activeSource === 'api' ? 'surveyapi.ddrcnagar.in :: logs' :
+                                    'surveymediapython.ddrcnagar.in :: media_service.log'}
+                        </small>
                     </div>
 
                     <div className="card-body p-0" style={{ overflowY: 'auto' }}>
