@@ -6,72 +6,77 @@ import { sendFCMPushNotification } from './fcm';
 /**
  * Extract village/GAV from survey_json
  */
-function extractVillageFromSurveyJson(surveyJson: any, villageQuestionId: number | string): string | null {
+/**
+ * Extract village/GAV from survey_json
+ * Supports multiple potential question IDs
+ */
+function extractVillageFromSurveyJson(surveyJson: any, villageQuestionIds: number | string | (number | string)[]): string | null {
   if (!surveyJson || typeof surveyJson !== 'object') {
     return null;
   }
 
-  try {
-    // Normalize question ID to handle both string and number
-    const targetId = typeof villageQuestionId === 'string' ? parseInt(villageQuestionId, 10) : villageQuestionId;
-    const targetIdStr = String(villageQuestionId);
+  const ids = Array.isArray(villageQuestionIds) ? villageQuestionIds : [villageQuestionIds];
 
-    // Try different structures
-    // Structure 1: surveyJson.answers is an array
-    if (Array.isArray(surveyJson.answers)) {
-      const villageAnswer = surveyJson.answers.find((ans: any) => {
-        // Try matching as number
-        const qidNum = Number(ans.question_id || ans.questionId || 0);
-        // Try matching as string
-        const qidStr = String(ans.question_id || ans.questionId || '');
-        return qidNum === targetId || qidStr === targetIdStr || qidStr === String(targetId);
-      });
-      if (villageAnswer) {
-        const answer = String(villageAnswer.answer || villageAnswer.value || '').trim();
-        // Don't return placeholder values
-        if (answer && answer !== '--Select--' && answer !== '--' && answer !== 'null' && answer !== 'undefined') {
-          return answer;
+  for (const villageQuestionId of ids) {
+    try {
+      // Normalize question ID to handle both string and number
+      const targetId = typeof villageQuestionId === 'string' ? parseInt(villageQuestionId, 10) : villageQuestionId;
+      const targetIdStr = String(villageQuestionId);
+
+      // Try different structures
+      // Structure 1: surveyJson.answers is an array
+      if (Array.isArray(surveyJson.answers)) {
+        const villageAnswer = surveyJson.answers.find((ans: any) => {
+          // Try matching as number
+          const qidNum = Number(ans.question_id || ans.questionId || 0);
+          // Try matching as string
+          const qidStr = String(ans.question_id || ans.questionId || '');
+          return qidNum === targetId || qidStr === targetIdStr || qidStr === String(targetId);
+        });
+        if (villageAnswer) {
+          const answer = String(villageAnswer.answer || villageAnswer.value || '').trim();
+          // Don't return placeholder values
+          if (answer && answer !== '--Select--' && answer !== '--' && answer !== 'null' && answer !== 'undefined') {
+            return answer;
+          }
         }
       }
-    }
 
-    // Structure 2: surveyJson[villageQuestionId] directly (as number or string key)
-    if (surveyJson[targetId]) {
-      const answer = String(surveyJson[targetId]).trim();
-      if (answer && answer !== '--Select--' && answer !== '--') {
-        return answer;
-      }
-    }
-    if (surveyJson[targetIdStr]) {
-      const answer = String(surveyJson[targetIdStr]).trim();
-      if (answer && answer !== '--Select--' && answer !== '--') {
-        return answer;
-      }
-    }
-
-    // Structure 3: surveyJson.answers is an object with question_id as keys
-    if (surveyJson.answers && typeof surveyJson.answers === 'object' && !Array.isArray(surveyJson.answers)) {
-      if (surveyJson.answers[targetId]) {
-        const answer = String(surveyJson.answers[targetId]).trim();
+      // Structure 2: surveyJson[villageQuestionId] directly (as number or string key)
+      if (surveyJson[targetId]) {
+        const answer = String(surveyJson[targetId]).trim();
         if (answer && answer !== '--Select--' && answer !== '--') {
           return answer;
         }
       }
-      if (surveyJson.answers[targetIdStr]) {
-        const answer = String(surveyJson.answers[targetIdStr]).trim();
+      if (surveyJson[targetIdStr]) {
+        const answer = String(surveyJson[targetIdStr]).trim();
         if (answer && answer !== '--Select--' && answer !== '--') {
           return answer;
         }
       }
-    }
 
-    return null;
-  } catch (error) {
-    Logger.error('AUTO_ASSIGN_EXTRACT_VILLAGE_ERROR', {
-      error: (error as any)?.message
-    });
-    return null;
+      // Structure 3: surveyJson.answers is an object with question_id as keys
+      if (surveyJson.answers && typeof surveyJson.answers === 'object' && !Array.isArray(surveyJson.answers)) {
+        if (surveyJson.answers[targetId]) {
+          const answer = String(surveyJson.answers[targetId]).trim();
+          if (answer && answer !== '--Select--' && answer !== '--') {
+            return answer;
+          }
+        }
+        if (surveyJson.answers[targetIdStr]) {
+          const answer = String(surveyJson.answers[targetIdStr]).trim();
+          if (answer && answer !== '--Select--' && answer !== '--') {
+            return answer;
+          }
+        }
+      }
+    } catch (error) {
+      // Continue to next ID
+    }
   }
+
+  return null;
 }
 
 /**
@@ -115,24 +120,24 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
       AND (status = 'Active' OR status IS NULL)
     `);
 
-    let villageQuestionId: number | null = null;
-    let talukaQuestionId: number | null = null;
+    const villageQuestionIds: number[] = [];
+    const talukaQuestionIds: number[] = [];
 
     if (Array.isArray(questionRows)) {
       for (const row of questionRows) {
         const q = row.question.toLowerCase();
-        // Prioritize exact matches or well-known labels if possible, but keywords work
-        if (!villageQuestionId && (q.includes('गाव') || q.includes('village') || q.includes('ग्राम'))) {
-          villageQuestionId = row.id;
+        // Collect ALL matching question IDs
+        if (q.includes('गाव') || q.includes('village') || q.includes('ग्राम')) {
+          villageQuestionIds.push(row.id);
         }
-        if (!talukaQuestionId && (q.includes('taluka') || q.includes('तालुका') || q.includes('ता.'))) {
-          talukaQuestionId = row.id;
+        if (q.includes('taluka') || q.includes('तालुका') || q.includes('ता.')) {
+          talukaQuestionIds.push(row.id);
         }
       }
     }
 
-    if (!villageQuestionId) {
-      Logger.error('AUTO_ASSIGN_NO_VILLAGE_QUESTION', { message: 'Village question not found' });
+    if (villageQuestionIds.length === 0) {
+      Logger.error('AUTO_ASSIGN_NO_VILLAGE_QUESTION', { message: 'Village questions not found' });
       return {
         ok: false,
         assigned: 0,
@@ -157,7 +162,6 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
       FROM surveys s
       LEFT JOIN survey_assignments sa ON sa.survey_id = s.id
       WHERE (s.source = 'Divyang Self' OR s.source = 'Excel Import' OR s.source IS NULL)
-      AND (s.user_id = 1 OR s.user_id IS NULL)
       AND s.survey_json IS NOT NULL
       AND s.survey_json != ''
       AND sa.id IS NULL
@@ -507,7 +511,7 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
                 ? JSON.parse(surveyJsonRaw)
                 : surveyJsonRaw;
 
-              const assignedVillage = extractVillageFromSurveyJson(surveyJson, villageQuestionId);
+              const assignedVillage = extractVillageFromSurveyJson(surveyJson, villageQuestionIds);
               if (assignedVillage) {
                 const assignedVillageNormalized = normalizeVillage(assignedVillage);
                 const gavNormalized = normalizeVillage(gav);
@@ -542,6 +546,16 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
     let assignedCount = 0;
     const assignmentDetails: any[] = [];
 
+    // Add well-known public form IDs if not already in the list
+    if (!villageQuestionIds.includes(30)) villageQuestionIds.push(30);
+    if (!villageQuestionIds.includes(39)) villageQuestionIds.push(39);
+    if (!villageQuestionIds.includes(49)) villageQuestionIds.push(49);
+    if (!villageQuestionIds.includes(50)) villageQuestionIds.push(50); // Important: Current Grampanchayat often holds the village name
+
+    if (!talukaQuestionIds.includes(28)) talukaQuestionIds.push(28);
+    if (!talukaQuestionIds.includes(40)) talukaQuestionIds.push(40);
+    if (!talukaQuestionIds.includes(47)) talukaQuestionIds.push(47);
+
     for (const survey of unassignedSurveys) {
       try {
         const surveyJsonRaw = survey.survey_json;
@@ -555,43 +569,14 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
           has_answers: !!surveyJson.answers,
           answers_type: Array.isArray(surveyJson.answers) ? 'array' : typeof surveyJson.answers,
           answers_count: Array.isArray(surveyJson.answers) ? surveyJson.answers.length : 'N/A',
-          sample_answers: Array.isArray(surveyJson.answers) ? surveyJson.answers.slice(0, 5).map((a: any) => ({
-            question_id: a.question_id,
-            answer: String(a.answer || '').substring(0, 50)
-          })) : 'N/A',
-          village_question_id_from_db: villageQuestionId
+          village_question_ids: villageQuestionIds
         });
 
-        // Extract village and taluka from survey
-        // Try multiple question IDs: the one from DB (39) and the one from public form (30)
-        let surveyVillage = extractVillageFromSurveyJson(surveyJson, villageQuestionId);
-        if (!surveyVillage || surveyVillage.trim() === '' || surveyVillage === '--Select--') {
-          // Try question ID 30 (from questions_public.json)
-          surveyVillage = extractVillageFromSurveyJson(surveyJson, 30);
-        }
+        // Extract village and taluka from survey using ALL possible IDs
+        let surveyVillage = extractVillageFromSurveyJson(surveyJson, villageQuestionIds);
 
-        // Also try by searching for village-related question text in answers
-        if (!surveyVillage || surveyVillage.trim() === '' || surveyVillage === '--Select--') {
-          if (Array.isArray(surveyJson.answers)) {
-            const villageKeywords = ['गाव', 'village', 'ग्राम', 'gaav', 'gaon'];
-            for (const ans of surveyJson.answers) {
-              const qid = Number(ans.question_id || ans.questionId || 0);
-              const answerText = String(ans.answer || ans.value || '').trim();
-              if (answerText && answerText !== '--Select--' && answerText !== '--' && answerText.length > 2) {
-                if (qid >= 25 && qid <= 45) {
-                  surveyVillage = answerText;
-                  break;
-                }
-              }
-            }
-          }
-        }
-
-        // Taluka extraction with fallback to public form ID 28
-        let surveyTaluka = talukaQuestionId ? extractVillageFromSurveyJson(surveyJson, talukaQuestionId) : null;
-        if (!surveyTaluka || surveyTaluka.trim() === '' || surveyTaluka === '--Select--') {
-          surveyTaluka = extractVillageFromSurveyJson(surveyJson, 28);
-        }
+        // Taluka extraction
+        let surveyTaluka = extractVillageFromSurveyJson(surveyJson, talukaQuestionIds);
 
         if (!surveyVillage || surveyVillage.trim() === '' || surveyVillage === '--Select--') {
           continue;
@@ -676,39 +661,50 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
           }
         }
 
-        // Round-robin: Find officer with least assignments for this GAV
+        // --- SEQUENTIAL ROUND-ROBIN (LRU) LOGIC ---
+        // Find the officer who received an assignment the longest time ago (or never)
         let matchedOfficerId: number | null = null;
-        let minCount = Infinity;
 
-        // Get assignment counts for all matching officers (from cache or DB)
-        const officerCounts = new Map<number, number>();
-        for (const officerId of matchingOfficers) {
-          const count = await getAssignmentCount(officerId, surveyVillageNormalized);
-          officerCounts.set(officerId, count);
-          if (count < minCount) {
-            minCount = count;
-            matchedOfficerId = officerId;
+        try {
+          // Query the last assignment time for all candidate officers
+          // Using a prepared query with IN clause
+          const [lastAssignments]: any = await conn.query(`
+            SELECT field_officer_id, MAX(assigned_at) as last_assigned
+            FROM survey_assignments
+            WHERE field_officer_id IN (?)
+            GROUP BY field_officer_id
+          `, [matchingOfficers]);
+
+          const lastAssignedMap = new Map<number, Date>();
+          if (Array.isArray(lastAssignments)) {
+            lastAssignments.forEach((row: any) => {
+              lastAssignedMap.set(Number(row.field_officer_id), new Date(row.last_assigned));
+            });
           }
-        }
 
-        Logger.info('AUTO_ASSIGN_MATCHING_RESULT', {
-          survey_id: survey.id,
-          survey_village: surveyVillage,
-          survey_village_normalized: surveyVillageNormalized,
-          matching_officers_count: matchingOfficers.length,
-          matched_officer_id: matchedOfficerId,
-          officer_counts: Array.from(officerCounts.entries()).map(([id, count]) => ({ officer_id: id, count }))
-        });
+          // Sort matching officers: 
+          // 1. Those who NEVER had an assignment (date = 0)
+          // 2. Those who had the oldest assignment (earliest date)
+          matchingOfficers.sort((a, b) => {
+            const dateA = lastAssignedMap.get(a)?.getTime() || 0;
+            const dateB = lastAssignedMap.get(b)?.getTime() || 0;
+            return dateA - dateB;
+          });
 
-        // If multiple officers have the same minimum count, pick the first one in the list
-        // This ensures consistent round-robin behavior
-        if (!matchedOfficerId && matchingOfficers.length > 0) {
-          // Find all officers with minimum count
-          const officersWithMinCount = matchingOfficers.filter(id =>
-            (officerCounts.get(id) || 0) === minCount
-          );
-          // Pick the first one (ensures round-robin: A, B, C, A, B, C...)
-          matchedOfficerId = officersWithMinCount[0] || matchingOfficers[0];
+          matchedOfficerId = matchingOfficers[0];
+
+          Logger.info('AUTO_ASSIGN_ROUND_ROBIN_MATCH', {
+            survey_id: survey.id,
+            village: surveyVillage,
+            candidates: matchingOfficers,
+            matched: matchedOfficerId,
+            last_assigned: lastAssignedMap.get(matchedOfficerId) || 'NEVER'
+          });
+
+        } catch (rrError) {
+          Logger.error('AUTO_ASSIGN_ROUND_ROBIN_FAILED', { error: (rrError as any).message });
+          // Fallback to first officer if query fails
+          matchedOfficerId = matchingOfficers[0];
         }
 
         if (matchedOfficerId) {
@@ -716,46 +712,21 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
           await conn.query(`
             UPDATE surveys
             SET user_id = ?,
+                assigned_to = ?,
                 source = COALESCE(source, 'Divyang Self'),
                 updated_at = NOW()
             WHERE id = ?
-          `, [matchedOfficerId, survey.id]);
+          `, [matchedOfficerId, matchedOfficerId, survey.id]);
 
           // Create explicit assignment record used for tracking
-          // Check if assignment already exists to avoid duplicates
           try {
-            const [existingAssignments]: any = await conn.query(
-              `SELECT id FROM survey_assignments 
-               WHERE survey_id = ? AND field_officer_id = ? 
-               LIMIT 1`,
-              [survey.id, matchedOfficerId]
-            );
+            const [insertResult]: any = await conn.execute(`
+               INSERT INTO survey_assignments 
+               (survey_id, field_officer_id, source, status, assigned_at)
+               VALUES (?, ?, ?, 'pending', NOW())
+             `, [survey.id, matchedOfficerId, survey.source || 'Divyang Self']);
 
-            if (Array.isArray(existingAssignments) && existingAssignments.length > 0) {
-              Logger.info('AUTO_ASSIGN_ALREADY_EXISTS', {
-                survey_id: survey.id,
-                officer_id: matchedOfficerId,
-                assignment_id: existingAssignments[0].id
-              });
-            } else {
-              // Insert new assignment record
-              const [insertResult]: any = await conn.execute(`
-                 INSERT INTO survey_assignments 
-                 (survey_id, field_officer_id, source, status, assigned_at)
-                 VALUES (?, ?, ?, 'pending', NOW())
-               `, [survey.id, matchedOfficerId, survey.source || 'Divyang Self']);
-
-              const insertId = (insertResult as any)?.insertId || ((insertResult as any[])?.[0]?.insertId);
-
-              Logger.info('AUTO_ASSIGN_INSERTED_SUCCESS', {
-                survey_id: survey.id,
-                officer_id: matchedOfficerId,
-                village: surveyVillage,
-                assignment_id: insertId,
-                source: survey.source || 'Divyang Self',
-                insert_result: insertResult
-              });
-            }
+            const insertId = (insertResult as any)?.insertId || ((insertResult as any[])?.[0]?.insertId);
 
             // LOG ACTIVITY: Survey Assigned
             try {
@@ -770,7 +741,7 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
                   survey.aadhaar_id || null,
                   JSON.stringify({
                     survey_id: survey.id,
-                    action: 'auto_assign'
+                    action: 'auto_assign_sequential'
                   })
                 ]
               );
@@ -779,7 +750,7 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
             }
 
             // Create notification for the field officer
-            const notificationTitle = 'नवीन सर्वेक्षण सोपवले';
+            const notificationTitle = 'नवीन सर्वेक्षण सोपवले (New Survey Assigned)';
             const notificationMessage = `${surveyVillage} गावातील एक नवीन सर्वेक्षण तुम्हाला सोपवण्यात आले आहे.`;
 
             await conn.execute(`
@@ -811,34 +782,15 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
             Logger.error('AUTO_ASSIGN_INSERT_ERROR', {
               survey_id: survey.id,
               officer_id: matchedOfficerId,
-              error: assignError?.message || String(assignError),
-              error_code: assignError?.code,
-              sql_state: assignError?.sqlState,
-              stack: assignError?.stack
+              error: assignError?.message || String(assignError)
             });
-            // Don't fail the entire assignment if INSERT fails - survey is already assigned via UPDATE
           }
 
-          // Update the cache to reflect the new assignment
-          const cacheKey = `${matchedOfficerId}_${surveyVillageNormalized}`;
-          const currentCount = assignmentCountsCache.get(cacheKey) || 0;
-          assignmentCountsCache.set(cacheKey, currentCount + 1);
-
           assignedCount++;
-          const assignmentCount = currentCount + 1;
           assignmentDetails.push({
             survey_id: survey.id,
             officer_id: matchedOfficerId,
-            village: surveyVillage,
-            assignment_number: assignmentCount
-          });
-
-          Logger.info('AUTO_ASSIGN_SURVEY_ASSIGNED', {
-            survey_id: survey.id,
-            officer_id: matchedOfficerId,
-            village: surveyVillage,
-            assignment_count: assignmentCount,
-            total_officers_for_gav: matchingOfficers.length
+            village: surveyVillage
           });
         }
       } catch (error) {
@@ -853,7 +805,7 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
       ok: true,
       assigned: assignedCount,
       checked: unassignedSurveys.length,
-      message: `Processed ${unassignedSurveys.length} surveys, assigned ${assignedCount}`,
+      message: `Processed ${unassignedSurveys.length} surveys, assigned ${assignedCount} using sequential round-robin`,
       details: assignmentDetails
     };
 
@@ -873,4 +825,5 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
     conn.release();
   }
 }
+
 

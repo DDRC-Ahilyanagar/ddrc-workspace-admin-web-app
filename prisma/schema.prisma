@@ -214,19 +214,6 @@ model MatadarSanghName {
   @@map("tbl_matadar_sangh_names")
 }
 
-model DisabilityDiagnosis {
-  id           Int                   @id @default(autoincrement())
-  disabilityId Int?                  @map("disability_id")
-  diagnosis    String                @db.VarChar(255)
-  status       ActiveInactiveStatus? @default(Active)
-  createdBy    Int?                  @map("created_by")
-  createdOn    DateTime?             @map("created_on") @db.DateTime(0)
-  updatedBy    Int?                  @map("updated_by")
-  updatedOn    DateTime?             @map("updated_on") @db.DateTime(0)
-
-  @@index([disabilityId], map: "idx_disability_diagnoses_disability_id")
-  @@map("tbl_disability_diagnoses")
-}
 
 model EarlyDetectionBaby {
   id                          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
@@ -887,3 +874,37 @@ enum tbl_milestone_status {
   Inactive
 }
 
+
+model CasteCategory {
+  id                    Int       @id @default(autoincrement())
+  code                  String    @unique @db.VarChar(50)
+  nameMarathi           String    @map("name_marathi") @db.VarChar(255)
+  nameEnglish           String    @map("name_english") @db.VarChar(255)
+  reservationPercentage Decimal?  @default(0.00) @map("reservation_percentage") @db.Decimal(5, 2)
+  status                Status    @default(Active)
+  createdAt             DateTime? @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt             DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  castes                Caste[]
+
+  @@map("caste_categories")
+}
+
+model Caste {
+  id          Int           @id @default(autoincrement())
+  categoryId  Int           @map("category_id")
+  nameMarathi String        @map("name_marathi") @db.VarChar(255)
+  nameEnglish String        @map("name_english") @db.VarChar(255)
+  status      Status        @default(Active)
+  sortOrder   Int?          @default(0) @map("sort_order")
+  createdAt   DateTime?     @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt   DateTime?     @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  category    CasteCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([categoryId], map: "fk_category")
+  @@map("castes")
+}
+
+enum Status {
+  Active
+  Inactive
+}

@@ -75,6 +75,11 @@ export default function PublicFormPage() {
   const [disabilityTypes, setDisabilityTypes] = useState<string[]>([]);
   const [loadingDisabilityTypes, setLoadingDisabilityTypes] = useState(false);
 
+  // Caste Data States
+  const [casteCategories, setCasteCategories] = useState<any[]>([]);
+  const [availableCastes, setAvailableCastes] = useState<any[]>([]);
+  const [loadingCastes, setLoadingCastes] = useState(false);
+
   // Import Next.js Image component
 
 
@@ -86,11 +91,24 @@ export default function PublicFormPage() {
   useEffect(() => {
     loadQuestions();
     loadTalukas();
+    loadCasteData();
   }, []);
 
   useEffect(() => {
     if (allQuestions.length > 0) loadDisabilityTypes();
   }, [allQuestions.length]);
+
+  const loadCasteData = async () => {
+    try {
+      const resp = await fetch('/api/get-castes');
+      const data = await resp.json();
+      if (Array.isArray(data)) {
+        setCasteCategories(data);
+      }
+    } catch (e) {
+      console.error("Failed to load caste data", e);
+    }
+  };
 
   // Prefill name, aadhaar, and district when entering personal-info step
   useEffect(() => {
@@ -130,16 +148,59 @@ export default function PublicFormPage() {
     }
   }, [currentStep, allQuestions, divyangName, aadharNo]);
 
+
+  // Effect to update available castes when category changes
+  useEffect(() => {
+    // Find the question for Caste Category
+    const categoryQuestion = allQuestions.find(q =>
+      (q.question || '').includes('जातीचा प्रवर्ग') ||
+      (q.question || '').toLowerCase().includes('caste category')
+    );
+
+    if (categoryQuestion) {
+      const selectedCategoryName = answers[categoryQuestion.id];
+      if (selectedCategoryName) {
+        const category = casteCategories.find(c =>
+          c.nameMarathi === selectedCategoryName ||
+          c.nameEnglish === selectedCategoryName ||
+          // Handle cases where answer might be formatted differently e.g. "Open (Example)"
+          (c.nameMarathi && selectedCategoryName.includes(c.nameMarathi))
+        );
+
+        if (category && category.castes) {
+          setAvailableCastes(category.castes);
+        } else {
+          setAvailableCastes([]);
+        }
+      } else {
+        setAvailableCastes([]);
+      }
+    }
+  }, [answers, allQuestions, casteCategories]);
+
   const loadQuestions = async () => {
     setLoading(true);
+    console.log('Starting loadQuestions...');
     try {
-      const resp = await getQuestions(true);
-      if (resp.ok && resp.data) {
-        const questions = resp.data as Question[];
-        const normalized = questions.map(q => ({ ...q, id: typeof q.id === 'string' ? parseInt(q.id, 10) : q.id }));
+      // Direct fetch to debug
+      const res = await fetch('/api/get-questions?public=true');
+      const data = await res.json();
+      console.log('Questions API Response:', data);
+
+      if (data.ok && Array.isArray(data.data)) {
+        const questions = data.data as Question[];
+        console.log('Questions loaded:', questions.length);
+        const normalized = questions.map(q => ({
+          ...q,
+          id: typeof q.id === 'string' ? parseInt(q.id, 10) : q.id
+        }));
         setAllQuestions(normalized);
+      } else {
+        console.error('Invalid questions structure:', data);
+        setError('Failed to load questions: ' + (data.error || 'Invalid Format'));
       }
     } catch (err: any) {
+      console.error('Questions fetch error:', err);
       setError('Questions error: ' + err.message);
     } finally {
       setLoading(false);
@@ -324,22 +385,21 @@ export default function PublicFormPage() {
           return true;
         });
 
-      console.log('Marital Fix Debug:', {
-        qId: q.id,
-        foundMaritalQs: maritalQuestions.length,
-        validAnswers: maritalAnswers
-      });
-
       // 1. If NO valid answer selected yet -> HIDE (Wait for user input)
       if (maritalAnswers.length === 0) return false;
 
-      // 2. If Answer is "Married" -> HIDE
+      // 2. Logic Check:
+      // If Answer is "विवाहित" (Married) -> HIDE "Willing to marry?"
+      // If Answer is anything else (Unmarried, Widow, Widower, Divorced) -> SHOW "Willing to marry?"
+
       const isMarried = maritalAnswers.some(ans =>
-        ans.startsWith('विवाहित') || ans.toLowerCase() === 'married'
+        ans.trim() === 'विवाहित' || ans.toLowerCase() === 'married'
       );
+
+      // If Married, DO NOT show "Willing to marry"
       if (isMarried) return false;
 
-      // 3. Otherwise (Unmarried, Widow, etc.) -> SHOW
+      // If NOT Married (Unmarried, Widow, etc.), SHOW "Willing to marry"
       return true;
     }
 
@@ -407,6 +467,11 @@ export default function PublicFormPage() {
     if (label.includes('ration') || label.includes('राशन') || label.includes('रेशन') || label.includes('रेशान') ||
       (label.includes('आधार') && (label.includes('क्रमांक') || label.includes('नंबर') || label.includes('no') || label.includes('number')))) {
       if (!/^\d{12}$/.test(val)) return '१२ अंक आवश्यक आहेत (12 digits required)';
+    }
+
+    // Total members validation (max 2 digits)
+    if (label.includes('एकूण सदस्य') || label.includes('Total Members')) {
+      if (!/^\d{1,2}$/.test(val) || parseInt(val) < 1) return 'कृपया योग्य संख्या टाका (1-99)';
     }
 
     if (q.regex) {
@@ -480,6 +545,8 @@ export default function PublicFormPage() {
     const isTalathi = label.includes('तलाठी') || label.toLowerCase().includes('talathi');
     const isPhc = label.includes('आरोग्य केंद्र') || label.includes('PHC') || label.toLowerCase().includes('phc');
     const isType = label.includes('दिव्यांगता प्रकार');
+    const isCasteCategory = label.includes('जातीचा प्रवर्ग') || label.toLowerCase().includes('caste category');
+    const isCaste = label.includes('पोट जात') || label.toLowerCase().includes('sub caste') || label.trim() === 'जात';
 
     let options: string[] = [];
     if (isTaluka) options = talukas;
@@ -488,9 +555,11 @@ export default function PublicFormPage() {
     else if (isTalathi) options = talathi;
     else if (isPhc) options = phc;
     else if (isType) options = disabilityTypes;
+    else if (isCasteCategory) options = casteCategories.map(c => `${c.nameMarathi} (${c.code})`);
+    else if (isCaste) options = availableCastes.map(c => c.nameMarathi);
     else if (q.options && q.options !== 'NULL') options = q.options.split(',').map(o => o.trim());
 
-    const isDynamicMCQ = isTaluka || isVillage || isGram || isTalathi || isPhc || isType;
+    const isDynamicMCQ = isTaluka || isVillage || isGram || isTalathi || isPhc || isType || isCasteCategory || isCaste;
 
     const hasError = !!q.error;
     const baseInputClasses = "w-full bg-white/50 backdrop-blur-sm border rounded-2xl px-5 py-4 text-slate-900 font-bold outline-none transition-all duration-300 shadow-sm";
@@ -558,8 +627,12 @@ export default function PublicFormPage() {
               if (label.includes('पिन कोड') || label.toLowerCase().includes('pin')) {
                 value = value.replace(/\D/g, '').slice(0, 6);
               }
+              // Total members: only digits, max 2
+              if (label.includes('एकूण सदस्य') || label.includes('Total Members')) {
+                value = value.replace(/\D/g, '').slice(0, 2);
+              }
               // Numeric fields: only digits
-              if (q.valid_input === 'numeric' || label.includes('पिन कोड') || label.toLowerCase().includes('pin') || isRationOrAadhar) {
+              if (q.valid_input === 'numeric' || label.includes('पिन कोड') || label.toLowerCase().includes('pin') || isRationOrAadhar || label.includes('एकूण सदस्य')) {
                 value = value.replace(/\D/g, '');
               }
               handleAnswerChange(q.id, value);
@@ -776,6 +849,12 @@ export default function PublicFormPage() {
 
             {currentStep === 'personal-info' && (
               <div className="space-y-16 animate-in fade-in slide-in-from-bottom-8 duration-500">
+
+                {allQuestions.length === 0 && (
+                  <div className="p-4 bg-yellow-100 text-yellow-800 rounded mb-6 border border-yellow-200">
+                    ⚠️ Warning: No questions loaded. Please refresh the page.
+                  </div>
+                )}
                 {questionSections.map((s, i) => {
                   const visible = s.questions.filter(q => {
                     return shouldShowQuestion(q);

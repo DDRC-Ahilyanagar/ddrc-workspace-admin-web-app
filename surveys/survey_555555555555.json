@@ -1,0 +1,60 @@
+{
+  "user_id": 27,
+  "aadhaar_id": 222,
+  "aadhaar_number": "5555-5555-5555",
+  "holder_name": null,
+  "submitted_at": "2026-02-14T06:15:16.107+05:30",
+  "answers": [
+    {
+      "question_id": 205,
+      "section_id": 16,
+      "answer": "होय"
+    },
+    {
+      "question_id": 206,
+      "section_id": 16,
+      "answer": "पक्के (Pucca)"
+    },
+    {
+      "question_id": 207,
+      "section_id": 16,
+      "answer": "होय"
+    },
+    {
+      "question_id": 208,
+      "section_id": 16,
+      "answer": "नाही"
+    },
+    {
+      "question_id": 209,
+      "section_id": 16,
+      "answer": "होय"
+    },
+    {
+      "question_id": 210,
+      "section_id": 16,
+      "answer": "होय"
+    },
+    {
+      "question_id": 211,
+      "section_id": 16,
+      "answer": "घरात"
+    },
+    {
+      "question_id": 212,
+      "section_id": 16,
+      "answer": "होय"
+    },
+    {
+      "question_id": 214,
+      "section_id": 16,
+      "answer": "होय"
+    },
+    {
+      "question_id": 215,
+      "section_id": 16,
+      "answer": "होय"
+    }
+  ],
+  "phone": null
+}

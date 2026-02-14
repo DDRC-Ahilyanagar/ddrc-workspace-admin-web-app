@@ -5,7 +5,7 @@ import { promises as fs } from 'fs';
 import { requireAuth } from '@/lib/auth';
 import { Logger } from '@/lib/logger';
 
-const MEDIA_ROOT = path.join(process.cwd(), 'public', 'uploads');
+const MEDIA_ROOT = process.env.MEDIA_BACKUP_DIR || path.join(process.cwd(), 'public', 'uploads');
 
 const sanitizeName = (value: string) =>
   value

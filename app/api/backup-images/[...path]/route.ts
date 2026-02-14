@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
+import { verifyAuth } from '@/lib/auth';
 import { promises as fs } from 'fs';
 
-const MEDIA_ROOT = path.join(process.cwd(), 'public', 'uploads');
+const MEDIA_ROOT = process.env.MEDIA_BACKUP_DIR || path.join(process.cwd(), 'public', 'uploads');
 const API_KEY = process.env.BACKUP_API_KEY || '';
 
 export const runtime = 'nodejs';
@@ -19,8 +20,14 @@ export const GET = async (
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) => {
-  // Optional API key check
-  if (!checkApiKey(request)) {
+  // Check authentication
+  const { user } = await verifyAuth(request);
+  const userType = (user?.user_type || '').toLowerCase().trim();
+  const userPhone = user?.phone || '';
+
+  const isSuperAdmin = userType === 'admin' && userPhone === '7768068585';
+
+  if (!isSuperAdmin && !checkApiKey(request)) {
     return NextResponse.json(
       { ok: false, error: 'Unauthorized' },
       { status: 401 }

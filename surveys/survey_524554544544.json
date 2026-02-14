@@ -1,0 +1,80 @@
+{
+  "user_id": 26,
+  "aadhaar_id": 188,
+  "aadhaar_number": "5245-5454-4544",
+  "holder_name": null,
+  "submitted_at": "2026-02-09T12:02:40.653+05:30",
+  "answers": [
+    {
+      "question_id": 33,
+      "section_id": 3,
+      "answer": "--"
+    },
+    {
+      "question_id": 34,
+      "section_id": 3,
+      "answer": "--"
+    },
+    {
+      "question_id": 35,
+      "section_id": 3,
+      "answer": "--"
+    },
+    {
+      "question_id": 36,
+      "section_id": 3,
+      "answer": "Ahilyanagar"
+    },
+    {
+      "question_id": 37,
+      "section_id": 3,
+      "answer": "Nagar"
+    },
+    {
+      "question_id": 38,
+      "section_id": 3,
+      "answer": "Burudgaon"
+    },
+    {
+      "question_id": 39,
+      "section_id": 3,
+      "answer": "Arangaon"
+    },
+    {
+      "question_id": 41,
+      "section_id": 3,
+      "answer": "464545"
+    },
+    {
+      "question_id": 42,
+      "section_id": 3,
+      "answer": "Mehekari"
+    },
+    {
+      "question_id": 47,
+      "section_id": 3,
+      "answer": "Nagar"
+    },
+    {
+      "question_id": 48,
+      "section_id": 3,
+      "answer": "Chas"
+    },
+    {
+      "question_id": 49,
+      "section_id": 3,
+      "answer": "Arangaon"
+    },
+    {
+      "question_id": 51,
+      "section_id": 3,
+      "answer": "375574"
+    },
+    {
+      "question_id": 52,
+      "section_id": 3,
+      "answer": "Jeur"
+    }
+  ],
+  "phone": null
+}

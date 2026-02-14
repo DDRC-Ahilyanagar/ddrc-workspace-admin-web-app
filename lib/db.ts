@@ -8,7 +8,13 @@ const dbConfig = {
   charset: 'utf8mb4',
 };
 
-let pool: mysql.Pool | null = null;
+// Use globalThis to cache the pool in development to prevent connection leaks
+// during hot reloads.
+const globalWithPool = global as typeof globalThis & {
+  pool?: mysql.Pool;
+};
+
+let pool: mysql.Pool | null = globalWithPool.pool || null;
 
 export function resetDbPool(): void {
   if (pool) {
@@ -41,6 +47,9 @@ export function getDbPool(): mysql.Pool {
           .catch((err) => {
             console.error('Database pool connection test failed:', err.message);
           });
+      }
+      if (process.env.NODE_ENV !== 'production') {
+        globalWithPool.pool = pool;
       }
     } catch (error: any) {
       console.error('Failed to create database pool:', error.message);

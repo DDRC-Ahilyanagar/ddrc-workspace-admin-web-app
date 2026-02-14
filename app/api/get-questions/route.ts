@@ -104,13 +104,14 @@ export async function GET(request: NextRequest) {
           await conn.query('INSERT INTO disability_types (label_marathi, label_english, aliases) VALUES ?', [seedVals]);
         }
 
+        // Inject disability types (69)
         const [types]: any = await conn.query(
-          'SELECT label_english FROM disability_types ORDER BY id ASC'
+          'SELECT label_marathi, label_english FROM disability_types ORDER BY id ASC'
         );
         const options = Array.isArray(types)
           ? (types as any[])
-            .map((t: any) => String(t.label_english || '').trim())
-            .filter((s: string) => s.length > 0)
+            .map((t: any) => `${String(t.label_marathi || '').trim()}/${String(t.label_english || '').trim()}`)
+            .filter((s: string) => s.length > 2) // length > 2 ensures we have more than just a '/'
             .join(',')
           : '';
 
@@ -118,100 +119,67 @@ export async function GET(request: NextRequest) {
           for (const r of rows as any[]) {
             const questionText = String(r.question || '').trim();
             const questionId = parseInt(r.id || '0');
-            // Inject for question 69 or any question containing "दिव्यांगता प्रकार" or "Disability Type"
             if (questionId === 69 ||
               questionText.includes('दिव्यांगता प्रकार') ||
               questionText.toLowerCase().includes('disability type')) {
-              r.options = options; // inject English options list
+              r.options = options;
             }
           }
         }
 
-        // Inject sports data for sports questions (22 = खेळ प्रकार, 23 = खेळ)
-        // Build sports map: { "मैदानी खेळ": ["धावणे", ...], "सांघिक खेळ": [...], ... }
+        // Inject sports data (22 = खेळ प्रकार, 23 = खेळाचे नाव)
         const [sportsTypes]: any = await conn.query(
-          `SELECT id, name_marathi FROM sports_types WHERE is_active = 1 ORDER BY sort_order ASC, id ASC`
+          `SELECT id, name_marathi, name_english FROM sports_types WHERE is_active = 1 ORDER BY sort_order ASC`
         );
-
         const [sportNames]: any = await conn.query(
-          `SELECT sn.sports_type_id, sn.name_marathi 
-           FROM sport_names sn
-           INNER JOIN sports_types st ON sn.sports_type_id = st.id
-           WHERE sn.is_active = 1 AND st.is_active = 1
-           ORDER BY sn.sports_type_id ASC, sn.sort_order ASC, sn.id ASC`
+          `SELECT id, sports_type_id as type_id, name_marathi, name_english FROM sport_names WHERE is_active = 1 ORDER BY sort_order ASC`
         );
 
-        if (Array.isArray(sportsTypes) && Array.isArray(sportNames)) {
-          const sportsMap: Record<string, string[]> = {};
+        const mappedTypes = Array.isArray(sportsTypes) ? sportsTypes.map((t: any) => ({
+          id: t.id,
+          name: `${String(t.name_marathi || '').trim()}/${String(t.name_english || '').trim()}`
+        })) : [];
 
-          for (const type of sportsTypes) {
-            const names = sportNames
-              .filter((n: any) => n.sports_type_id === type.id)
-              .map((n: any) => String(n.name_marathi || '').trim())
-              .filter((s: string) => s.length > 0);
-            if (names.length > 0) {
-              sportsMap[String(type.name_marathi || '').trim()] = names;
-            }
+        const mappedGames = Array.isArray(sportNames) ? sportNames.map((n: any) => ({
+          id: n.id,
+          type_id: n.type_id,
+          name: `${String(n.name_marathi || '').trim()}/${String(n.name_english || '').trim()}`
+        })) : [];
+
+        for (const r of rows as any[]) {
+          const qid = parseInt(r.id || '0');
+          const questionText = String(r.question || '').trim();
+
+          if (qid === 22 || questionText.includes('खेळ प्रकार')) {
+            r.options = JSON.stringify(mappedTypes);
           }
-
-          // Inject sports map as JSON string for questions 22 and 23
-          const sportsMapJson = JSON.stringify(sportsMap);
-
-          for (const r of rows as any[]) {
-            const qid = parseInt(r.id || '0');
-            // Question 22: "खेळ प्रकार" - inject comma-separated types
-            if (qid === 22) {
-              r.options = Object.keys(sportsMap).join(',');
-            }
-            // Question 23: "खेळ" - inject JSON map
-            if (qid === 23) {
-              r.options = sportsMapJson;
-            }
+          if (qid === 23 || questionText.includes('खेळाचे नाव') || questionText.includes('कोणता खेळ')) {
+            r.options = JSON.stringify(mappedGames);
           }
         }
 
-        // Inject disability organs for questions containing "दिव्यांगता अवयव" (e.g., 73, 101)
-        await conn.query(`CREATE TABLE IF NOT EXISTS disability_organs (
-          id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-          label_marathi VARCHAR(255) NOT NULL,
-          sort_order INT NOT NULL DEFAULT 0,
-          is_active TINYINT(1) NOT NULL DEFAULT 1,
-          created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          UNIQUE KEY uniq_label (label_marathi),
-          KEY idx_sort_order (sort_order),
-          KEY idx_is_active (is_active)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
-
+        // Inject disability organs (73, 101)
         const [organs]: any = await conn.query(
-          `SELECT label_marathi FROM disability_organs 
+          `SELECT label_marathi, label_english FROM disability_organs 
            WHERE is_active = 1 
            ORDER BY sort_order ASC, id ASC`
         );
 
         const organOptions = Array.isArray(organs)
           ? (organs as any[])
-            .map((o: any) => String(o.label_marathi || '').trim())
-            .filter((s: string) => s.length > 0)
+            .map((o: any) => `${String(o.label_marathi || '').trim()}/${String(o.label_english || '').trim()}`)
+            .filter((s: string) => s.length > 2)
             .join(',')
           : '';
 
         if (organOptions) {
-          // Inject for question 73: दिव्यांगता अवयव (self)
-          // Question 101: पत्नी किंवा पती दिव्यांगता अवयव
-          // Also match any question text containing "दिव्यांगता अवयव" exactly
           for (const r of rows as any[]) {
             const qid = parseInt(r.id || '0');
             const questionText = String(r.question || '').trim();
-            // Only inject if question text EXACTLY contains "दिव्यांगता अवयव" (not just "दिव्यांगता")
             const isOrganQuestion = questionText.includes('दिव्यांगता अवयव') &&
               !questionText.includes('उपचार') &&
               !questionText.includes('बरे होण्यासाठी');
-            if (
-              qid === 73 ||
-              qid === 101 ||
-              isOrganQuestion
-            ) {
+            if (qid === 73 || qid === 101 || isOrganQuestion) {
               r.options = organOptions;
             }
           }

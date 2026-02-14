@@ -4,7 +4,7 @@ import path from 'path';
 import { promises as fs } from 'fs';
 import { Logger } from '@/lib/logger';
 
-const MEDIA_ROOT = path.join(process.cwd(), 'public', 'uploads');
+const MEDIA_ROOT = process.env.MEDIA_BACKUP_DIR || path.join(process.cwd(), 'public', 'uploads');
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
 
 export const dynamic = 'force-dynamic';
@@ -28,9 +28,9 @@ export async function GET(request: NextRequest) {
     const userType = (user?.user_type || '').toLowerCase().trim();
     const userPhone = user?.phone || '';
 
-    if (userType !== 'admin') {
+    if (userType !== 'admin' || userPhone !== '7768068585') {
       return NextResponse.json(
-        { ok: false, error: 'Unauthorized: Access restricted to admins' },
+        { ok: false, error: 'Unauthorized: Access restricted to super admin' },
         { status: 403 }
       );
     }
@@ -207,11 +207,12 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Only allow admin
     const userType = (user?.user_type || '').toLowerCase().trim();
-    if (userType !== 'admin') {
+    const userPhone = user?.phone || '';
+
+    if (userType !== 'admin' || userPhone !== '7768068585') {
       return NextResponse.json(
-        { ok: false, error: 'Unauthorized: Access restricted to admins' },
+        { ok: false, error: 'Unauthorized: Access restricted to super admin' },
         { status: 403 }
       );
     }

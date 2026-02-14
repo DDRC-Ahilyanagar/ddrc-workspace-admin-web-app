@@ -191,11 +191,10 @@ export function generateRegistrationNumber(
   const mmyy = `${month}${year}`;
 
   // 2. Taluka and Village short codes (3 characters each)
-  const cleanTaluka = taluka.replace(/[^a-zA-Z]/g, '').toUpperCase();
-  const cleanVillage = village.replace(/[^a-zA-Z]/g, '').toUpperCase();
-
-  const talukaShort = cleanTaluka.substring(0, 3).padEnd(3, 'X');
-  const villageShort = cleanVillage.substring(0, 3).padEnd(3, 'X');
+  // Instead of stripping all non-English chars (which breaks for Marathi names),
+  // we take the first 3 characters of whatever name is provided.
+  const talukaShort = (taluka || 'UNK').trim().substring(0, 3).toUpperCase().padEnd(3, 'X');
+  const villageShort = (village || 'UNK').trim().substring(0, 3).toUpperCase().padEnd(3, 'X');
 
   // 3. Last 4 digits of Aadhaar
   const cleanAadhaar = aadhaarNumber.replace(/\D/g, '');
@@ -409,30 +408,14 @@ export async function sendFormCompletionSMS(
       }
     }
 
-    // 2. Send notification SMS to the field officer (per requirements)
+    // 2. Notification for field officer is handled strictly via FCM in autoAssignSurveys
+    // No SMS is sent to field officer as per requirements
     let officerNotified = false;
+    /* 
     if (officerPhone) {
-      // Use registrationNumber from params or extract from surveyJson if possible
-      const regNum = registrationNumber || surveyJson?.registration_number || '';
-      const officerMessage = isFieldOfficerSubmission
-        ? `आपण ${holderName} यांचे सर्वेक्षण यशस्वीपणे पूर्ण केले आहे. (रजिस्ट्रेशन नंबर: ${regNum}). धन्यवाद. PADMSHRI DR VITHALRAO VIKHE PATIL FOUNDATION`
-        : getFieldOfficerSubmissionNotificationTemplate(holderName, regNum);
-
-      const officerResult = await sendSMS(officerPhone, officerMessage);
-      officerNotified = officerResult.ok;
-
-      if (officerNotified) {
-        console.log('[SMS] Notification SMS sent to field officer successfully', {
-          officer_phone: officerPhone.substring(0, 3) + '****' + officerPhone.substring(7),
-          survey_id: surveyId
-        });
-      } else {
-        console.error('[SMS] Failed to send notification SMS to field officer', {
-          officer_phone: officerPhone.substring(0, 3) + '****' + officerPhone.substring(7),
-          error: officerResult.error
-        });
-      }
+      // ... (code removed)
     }
+    */
 
     return {
       ok: success,

@@ -1,0 +1,150 @@
+{
+  "user_id": 1,
+  "aadhaar_id": 207,
+  "aadhaar_number": "892473289473",
+  "holder_name": "Karishma",
+  "submitted_at": "2026-02-12T05:31:25.149+05:30",
+  "answers": [
+    {
+      "question_id": 1,
+      "section_id": 1,
+      "answer": "Karishma"
+    },
+    {
+      "question_id": 2,
+      "section_id": 1,
+      "answer": "1994-08-05"
+    },
+    {
+      "question_id": 3,
+      "section_id": 1,
+      "answer": "31"
+    },
+    {
+      "question_id": 4,
+      "section_id": 1,
+      "answer": "स्त्री"
+    },
+    {
+      "question_id": 5,
+      "section_id": 1,
+      "answer": "विवाहित"
+    },
+    {
+      "question_id": 6,
+      "section_id": 1,
+      "answer": "9561923709"
+    },
+    {
+      "question_id": 7,
+      "section_id": 1,
+      "answer": "asd@asd.com"
+    },
+    {
+      "question_id": 8,
+      "section_id": 1,
+      "answer": "hdkjsahjk"
+    },
+    {
+      "question_id": 9,
+      "section_id": 1,
+      "answer": "4398473894"
+    },
+    {
+      "question_id": 10,
+      "section_id": 1,
+      "answer": "adasd"
+    },
+    {
+      "question_id": 11,
+      "section_id": 1,
+      "answer": "5"
+    },
+    {
+      "question_id": 12,
+      "section_id": 1,
+      "answer": "अनुसूचित जाती (SC)"
+    },
+    {
+      "question_id": 13,
+      "section_id": 1,
+      "answer": "A+"
+    },
+    {
+      "question_id": 48,
+      "section_id": 3,
+      "answer": "Ambalner"
+    },
+    {
+      "question_id": 50,
+      "section_id": 3,
+      "answer": "Amalner"
+    },
+    {
+      "question_id": 52,
+      "section_id": 3,
+      "answer": "Chanda"
+    },
+    {
+      "question_id": 64,
+      "section_id": 5,
+      "answer": "होय"
+    },
+    {
+      "question_id": 66,
+      "section_id": 5,
+      "answer": "होय"
+    },
+    {
+      "question_id": 69,
+      "section_id": 5,
+      "answer": "Blindness"
+    },
+    {
+      "question_id": 70,
+      "section_id": 5,
+      "answer": "45"
+    },
+    {
+      "question_id": 180,
+      "section_id": 1,
+      "answer": "/uploads/Admin_User_7768068585/d5ea23ff-e15c-4e0c-a24f-7c58f1e67be7.jpg"
+    },
+    {
+      "question_id": 43,
+      "section_id": 3,
+      "answer": "asdsad"
+    },
+    {
+      "question_id": 44,
+      "section_id": 3,
+      "answer": "asdasd"
+    },
+    {
+      "question_id": 45,
+      "section_id": 3,
+      "answer": "asddsa"
+    },
+    {
+      "question_id": 46,
+      "section_id": 3,
+      "answer": "अहिल्यानगर"
+    },
+    {
+      "question_id": 47,
+      "section_id": 3,
+      "answer": "Newasa"
+    },
+    {
+      "question_id": 49,
+      "section_id": 3,
+      "answer": "Antarwali"
+    },
+    {
+      "question_id": 51,
+      "section_id": 3,
+      "answer": "456456"
+    }
+  ],
+  "phone": "9561923709"
+}

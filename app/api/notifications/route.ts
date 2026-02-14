@@ -22,6 +22,13 @@ export async function GET(request: NextRequest) {
     const user = authResult.user;
     const userType = (user.user_type || '').toLowerCase();
 
+    Logger.info('GET_NOTIFICATIONS_POLLING', {
+      user_id: user.id,
+      phone: user.phone,
+      unread_only: request.nextUrl.searchParams.get('unread_only') === 'true'
+    });
+
+
     // Only field officers can get notifications
     if (userType !== 'field_officer' && userType !== 'field officer') {
       return NextResponse.json(
@@ -103,11 +110,24 @@ export async function GET(request: NextRequest) {
       );
       const unreadCount = countRows?.[0]?.count || 0;
 
+      // Log the result to debug why client sees 0 unread
+      Logger.info('GET_NOTIFICATIONS_RESPONSE', {
+        user_id: user.id,
+        count: notifications.length,
+        unread_count: unreadCount,
+        sample: notifications.length > 0 ? {
+          id: notifications[0].id,
+          is_read: notifications[0].is_read,
+          created_at: notifications[0].created_at
+        } : null
+      });
+
       return NextResponse.json({
         ok: true,
         notifications: notifications,
         unread_count: unreadCount,
       });
+
     } finally {
       conn.release();
     }

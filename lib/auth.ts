@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbQueryOne } from './db';
+import { Logger } from './logger';
+
 
 export interface AuthUser {
   id: number;
@@ -14,7 +16,7 @@ export async function verifyAuth(request: NextRequest): Promise<{ user: AuthUser
     // Check for Authorization header or session token
     const authHeader = request.headers.get('authorization');
     const sessionToken = request.cookies.get('session_token')?.value;
-    
+
     if (!authHeader && !sessionToken) {
       return { user: null, error: 'Authentication required' };
     }
@@ -22,8 +24,16 @@ export async function verifyAuth(request: NextRequest): Promise<{ user: AuthUser
     // For now, we'll use phone-based authentication
     // In production, you might want to use JWT tokens
     const phone = authHeader?.replace('Bearer ', '') || sessionToken || '';
-    
+
+    Logger.info('VERIFY_AUTH_ATTEMPT', {
+      phone: phone,
+      url: request.url,
+      method: request.method
+    });
+
     if (!phone) {
+
+
       return { user: null, error: 'Invalid authentication token' };
     }
 
@@ -42,7 +52,7 @@ export async function verifyAuth(request: NextRequest): Promise<{ user: AuthUser
        FROM users u
        LEFT JOIN user_types ut ON ut.id = u.user_type_id
        WHERE u.contact_number = ?
-         AND (u.status = 'active' OR u.is_active = 1 OR u.status IS NULL)
+         AND (u.status = 'active' OR u.status = 'inactive' OR u.status = '' OR u.is_active = 1 OR u.status IS NULL)
        LIMIT 1`,
       [phone]
     );
@@ -60,7 +70,7 @@ export async function verifyAuth(request: NextRequest): Promise<{ user: AuthUser
 export function requireAuth(handler: (request: NextRequest, user: AuthUser) => Promise<NextResponse>) {
   return async (request: NextRequest) => {
     const { user, error } = await verifyAuth(request);
-    
+
     if (!user || error) {
       return NextResponse.json(
         { ok: false, error: error || 'Authentication required' },

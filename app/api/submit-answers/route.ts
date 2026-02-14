@@ -138,7 +138,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
     }
     // Accept both spellings from clients; prefer aadhaar_id
     const aadhaarId = parseInt(body.aadhaar_id || body.aadhar_id || '0');
-    const items = Array.isArray(body.items) ? body.items : [];
+    const items = Array.isArray(body.items) ? body.items : (Array.isArray(body.answers) ? body.answers : []);
     const campIdRaw = body.camp_id !== undefined && body.camp_id !== null
       ? parseInt(String(body.camp_id))
       : NaN;
@@ -177,7 +177,7 @@ export async function handleSubmit(request: NextRequest, user: any) {
     for (const item of items) {
       const qid = parseInt(item?.question_id ?? item?.questionId ?? '0');
       if (!Number.isFinite(qid) || qid <= 0) continue;
-      const sid = item?.section_id ? parseInt(item.section_id) : (item?.sectionId ? parseInt(item.sectionId) : null);
+      const sid = item?.section_id ? parseInt(item.section_id) : (item?.sectionId ? parseInt(item.sectionId) : (body.section_id ? parseInt(body.section_id) : (body.sectionId ? parseInt(body.sectionId) : null)));
       let answerValue = '';
       if (Array.isArray(item?.answer)) {
         try {
@@ -828,102 +828,96 @@ export async function handleSubmit(request: NextRequest, user: any) {
         Logger.error('ACTIVITY_LOG_SUBMIT_FAILED', { error: (logError as any).message });
       }
 
-      // Immediately trigger auto-assignment for public form submissions
-      // (source = 'Divyang Self' and user_id = 1)
+      // Immediately trigger auto-assignment for public/Divyang Self submissions
+      // Rely ONLY on source, ignoring user_id to handle various submitters (public, admin, office)
+      const isDivyangSelfSubmission = (source === 'Divyang Self' || source === 'Excel Import' || !source);
+
       Logger.info('AUTO_ASSIGN_TRIGGER_CHECK', {
         source,
         userId,
         surveyId,
-        condition_met: source === 'Divyang Self' && userId === 1 && surveyId ? 'YES' : 'NO',
+        condition_met: isDivyangSelfSubmission && surveyId ? 'YES' : 'NO',
         reason: !surveyId ? 'surveyId is null/undefined' :
-          source !== 'Divyang Self' ? 'source mismatch' :
-            userId !== 1 ? 'userId mismatch' : 'OK'
+          !isDivyangSelfSubmission ? 'Not a Divyang Self submission' : 'OK'
       });
 
       // Determine if this is a field officer submission (fully completed form)
-      const isFieldOfficerSubmission = source !== 'Divyang Self' && userId !== 1 && user &&
+      // Check if user is a field officer AND it's not marked as a self submission
+      const isFieldOfficerSubmission = !isDivyangSelfSubmission && user &&
         ((user.user_type || '').toLowerCase() === 'field_officer' ||
           (user.user_type || '').toLowerCase() === 'field officer');
 
-      if (source === 'Divyang Self' && userId === 1 && surveyId) {
-        // Call auto-assignment asynchronously (fire and forget) so it doesn't delay the response
+      if (isDivyangSelfSubmission && surveyId) {
+        // First, ensure we have the registration number from the DB (it was inserted/updated above)
+        let regNum: string | undefined = undefined;
+        try {
+          const [rows] = await connection.query('SELECT registration_number FROM surveys WHERE id = ?', [surveyId]);
+          if (Array.isArray(rows) && rows.length > 0) {
+            regNum = (rows[0] as any).registration_number;
+          }
+        } catch (e) {
+          Logger.error('REG_NUM_FETCH_FAILED', { survey_id: surveyId, error: (e as any).message });
+        }
+
+        // Call auto-assignment - we await this now to ensure assignment is done before we try to notify the officer via SMS
         Logger.info('AUTO_ASSIGN_TRIGGERING', { survey_id: surveyId });
-        autoAssignSurveys(surveyId).then((result) => {
+        let officerPhone: string | undefined = undefined;
+
+        try {
+          const assignResult = await autoAssignSurveys(surveyId);
           Logger.info('AUTO_ASSIGN_COMPLETED', {
             survey_id: surveyId,
-            result: result
+            assigned: assignResult.assigned,
+            details: assignResult.details
           });
-        }).catch((error) => {
-          Logger.error('IMMEDIATE_AUTO_ASSIGN_FAILED', {
+
+          // After assignment, fetch the assigned officer's phone
+          const [assignmentRows] = await connection.query(`
+             SELECT u.contact_number as phone 
+             FROM survey_assignments sa
+             JOIN users u ON sa.field_officer_id = u.id
+             WHERE sa.survey_id = ? AND sa.status != 'unassigned'
+             ORDER BY sa.id DESC LIMIT 1
+           `, [surveyId]);
+
+          if (Array.isArray(assignmentRows) && assignmentRows.length > 0) {
+            officerPhone = (assignmentRows[0] as any).phone;
+          }
+        } catch (error: any) {
+          Logger.error('AUTO_ASSIGN_OR_OFFICER_FETCH_FAILED', {
             survey_id: surveyId,
-            error: error?.message || String(error),
-            stack: error?.stack
+            error: error?.message || String(error)
           });
-        });
+        }
 
         // Send SMS to divyang after successful public form submission (fire and forget)
         // Also notifies the assigned field officer
-        try {
-          if (responsePayload) {
-            // Get registration number from DB if not available in current context
-            let regNum: string | undefined = undefined;
-            if (surveyId) {
-              const [rows] = await connection.query('SELECT registration_number FROM surveys WHERE id = ?', [surveyId]);
-              if (Array.isArray(rows) && rows.length > 0) regNum = (rows[0] as any).registration_number;
-            }
-
-            // Get assigned officer phone
-            let officerPhone: string | undefined = undefined;
-            if (surveyId) {
-              try {
-                const [assignmentRows] = await connection.query(`
-                   SELECT u.contact_number as phone 
-                   FROM survey_assignments sa
-                   JOIN users u ON sa.field_officer_id = u.id
-                   WHERE sa.survey_id = ? AND sa.status != 'unassigned'
-                   LIMIT 1
-                 `, [surveyId]);
-                if (Array.isArray(assignmentRows) && assignmentRows.length > 0) {
-                  officerPhone = (assignmentRows[0] as any).phone;
-                }
-              } catch (e) {
-                // If contact_number fails, try phone as fallback or just log
-                Logger.warn('OFFICER_PHONE_LOOKUP_FAILED', { error: (e as any).message });
-              }
-            }
-
-            sendFormCompletionSMS(responsePayload, surveyId, false, regNum, officerPhone).then((smsResult) => {
-              if (smsResult.ok) {
-                Logger.info('FORM_COMPLETION_SMS_SENT', {
-                  survey_id: surveyId,
-                  source: 'public',
-                  phone: smsResult.phone ? smsResult.phone.substring(0, 3) + '****' + smsResult.phone.substring(7) : 'unknown'
-                });
-              } else {
-                Logger.warn('FORM_COMPLETION_SMS_FAILED', {
-                  survey_id: surveyId,
-                  source: 'public',
-                  error: smsResult.error,
-                  phone: smsResult.phone ? smsResult.phone.substring(0, 3) + '****' + smsResult.phone.substring(7) : 'unknown'
-                });
-              }
-            }).catch((smsError) => {
-              Logger.error('FORM_COMPLETION_SMS_ERROR', {
+        if (responsePayload) {
+          sendFormCompletionSMS(responsePayload, surveyId, false, regNum, officerPhone).then((smsResult) => {
+            if (smsResult.ok) {
+              Logger.info('FORM_COMPLETION_SMS_SENT', {
                 survey_id: surveyId,
                 source: 'public',
-                error: smsError?.message || String(smsError),
-                stack: smsError?.stack
+                phone: smsResult.phone ? smsResult.phone.substring(0, 3) + '****' + smsResult.phone.substring(7) : 'unknown',
+                officer_notified: smsResult.officer_notified
               });
+            } else {
+              Logger.warn('FORM_COMPLETION_SMS_FAILED', {
+                survey_id: surveyId,
+                source: 'public',
+                error: smsResult.error,
+                phone: smsResult.phone ? smsResult.phone.substring(0, 3) + '****' + smsResult.phone.substring(7) : 'unknown'
+              });
+            }
+          }).catch((smsError) => {
+            Logger.error('FORM_COMPLETION_SMS_ERROR', {
+              survey_id: surveyId,
+              source: 'public',
+              error: smsError?.message || String(smsError)
             });
-          } else {
-            Logger.warn('FORM_COMPLETION_SMS_SKIPPED_NO_DATA', { survey_id: surveyId, source: 'public' });
-          }
-        } catch (smsInitError: any) {
-          Logger.error('FORM_COMPLETION_SMS_INIT_ERROR', {
-            survey_id: surveyId,
-            source: 'public',
-            error: smsInitError?.message || String(smsInitError)
           });
+        } else {
+          Logger.warn('FORM_COMPLETION_SMS_SKIPPED_NO_DATA', { survey_id: surveyId, source: 'public' });
         }
       } else if (isFieldOfficerSubmission && surveyId) {
         // Send SMS to divyang and testifying officer after successful field officer form submission
