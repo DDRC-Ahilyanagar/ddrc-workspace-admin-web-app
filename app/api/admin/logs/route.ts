@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import fs from 'fs';
 import path from 'path';
+import { Logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,9 +26,14 @@ export async function GET(request: NextRequest) {
                 cache: 'no-store'
             });
             const data = await res.json();
+            if (!res.ok) {
+                Logger.error('DDRC API Logs Fetch Error', { status: res.status, data });
+                return NextResponse.json({ ok: false, error: `API Error (${res.status}): ${data.error || 'Unknown'}` });
+            }
             return NextResponse.json(data);
         } catch (err: any) {
-            return NextResponse.json({ ok: false, error: 'Failed to fetch API logs: ' + err.message });
+            Logger.error('DDRC API Logs Connection Error', { error: err.message, stack: err.stack });
+            return NextResponse.json({ ok: false, error: 'Failed to reach DDRC API: ' + err.message });
         }
     }
 
@@ -38,9 +44,14 @@ export async function GET(request: NextRequest) {
                 cache: 'no-store'
             });
             const data = await res.json();
+            if (!res.ok) {
+                Logger.error('Python Logs Fetch Error', { status: res.status, data });
+                return NextResponse.json({ ok: false, error: `Python Error (${res.status}): ${data.error || 'Unknown'}` });
+            }
             return NextResponse.json(data);
         } catch (err: any) {
-            return NextResponse.json({ ok: false, error: 'Failed to fetch Python logs: ' + err.message });
+            Logger.error('Python Logs Connection Error', { error: err.message, stack: err.stack });
+            return NextResponse.json({ ok: false, error: 'Failed to reach Python Service: ' + err.message });
         }
     }
 
