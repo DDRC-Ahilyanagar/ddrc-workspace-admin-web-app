@@ -4,7 +4,8 @@ import path from 'path';
 import { promises as fs } from 'fs';
 import { Logger } from '@/lib/logger';
 
-const MEDIA_ROOT = process.env.MEDIA_BACKUP_DIR || path.join(process.cwd(), 'public', 'uploads');
+// Set the correct absolute path for the surveys folder on VPS
+const MEDIA_ROOT = '/var/www/surveys';
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
 
 export const dynamic = 'force-dynamic';
