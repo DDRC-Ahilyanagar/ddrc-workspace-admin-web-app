@@ -296,13 +296,13 @@ function SectionsContent() {
         const allQuestions = response.data as Question[];
         const sectionQuestions = allQuestions.filter(q => q.section_id === sectionId);
         setQuestions(sectionQuestions);
-        
+
         // Get section name
         const sectionResponse = await apiCall(`get-section-name?section_id=${sectionId}`);
         if (sectionResponse.ok && sectionResponse.name) {
           setSectionName(sectionResponse.name);
         }
-        
+
         // Load saved answers from localStorage
         const savedAnswers = localStorage.getItem(`answers_${aadharId}_${sectionId}`);
         const parsedAnswers = savedAnswers ? JSON.parse(savedAnswers) : {};
@@ -325,11 +325,11 @@ function SectionsContent() {
 
   const handleFileUpload = async (questionId: number, file: File | null) => {
     if (!file) return;
-    
+
     const uploaded = await uploadImage(file);
     if (uploaded) {
       handleAnswerChange(questionId, uploaded);
-      
+
       // Check if this is a UDID or Aadhaar upload and process OCR
       const question = questions.find(q => q.id === questionId);
       if (question) {
@@ -340,12 +340,12 @@ function SectionsContent() {
             const ocrResult = await processOCR(file, 'udid');
             if (ocrResult.ok && ocrResult.udid_info) {
               const udidInfo = ocrResult.udid_info;
-              
+
               // Auto-fill UDID number if found
               if (udidInfo.udid) {
                 // Find and fill UDID field
-                const udidQuestion = questions.find(q => 
-                  q.question.toLowerCase().includes('udid') && 
+                const udidQuestion = questions.find(q =>
+                  q.question.toLowerCase().includes('udid') &&
                   q.id !== questionId &&
                   q.question_type.toLowerCase() !== 'upload'
                 );
@@ -353,49 +353,49 @@ function SectionsContent() {
                   handleAnswerChange(udidQuestion.id, udidInfo.udid);
                 }
               }
-              
+
               // Auto-fill disability type if found
               if (udidInfo.disability_type) {
-                const disabilityQuestion = questions.find(q => 
-                  (q.question.includes('दिव्यांगता प्रकार') || 
-                   q.question.toLowerCase().includes('disability type')) &&
+                const disabilityQuestion = questions.find(q =>
+                  (q.question.includes('दिव्यांगता प्रकार') ||
+                    q.question.toLowerCase().includes('disability type')) &&
                   q.question_type.toLowerCase() === 'mcq'
                 );
                 if (disabilityQuestion) {
                   handleAnswerChange(disabilityQuestion.id, udidInfo.disability_type);
                 }
               }
-              
+
               // Auto-fill disability percentage
               if (udidInfo.disability_percentage) {
-                const percentageQuestion = questions.find(q => 
-                  (q.question.includes('टक्केवारी') || 
-                   q.question.toLowerCase().includes('percentage')) &&
+                const percentageQuestion = questions.find(q =>
+                  (q.question.includes('टक्केवारी') ||
+                    q.question.toLowerCase().includes('percentage')) &&
                   q.question_type.toLowerCase() !== 'mcq'
                 );
                 if (percentageQuestion) {
                   handleAnswerChange(percentageQuestion.id, udidInfo.disability_percentage);
                 }
               }
-              
+
               // Auto-fill validity date
               if (udidInfo.validity_date) {
-                const validityQuestion = questions.find(q => 
-                  (q.question.includes('वैध') || 
-                   q.question.toLowerCase().includes('valid')) &&
+                const validityQuestion = questions.find(q =>
+                  (q.question.includes('वैध') ||
+                    q.question.toLowerCase().includes('valid')) &&
                   q.question_type.toLowerCase() !== 'mcq'
                 );
                 if (validityQuestion) {
                   handleAnswerChange(validityQuestion.id, udidInfo.validity_date);
                 }
               }
-              
+
               // Auto-fill issue date
               if (udidInfo.issue_date) {
-                const issueQuestion = questions.find(q => 
-                  (q.question.includes('मिळाल्याची') || 
-                   q.question.includes('जारी') ||
-                   q.question.toLowerCase().includes('issue date')) &&
+                const issueQuestion = questions.find(q =>
+                  (q.question.includes('मिळाल्याची') ||
+                    q.question.includes('जारी') ||
+                    q.question.toLowerCase().includes('issue date')) &&
                   q.question_type.toLowerCase() !== 'mcq'
                 );
                 if (issueQuestion) {
@@ -428,12 +428,12 @@ function SectionsContent() {
                 dob: aadhaarInfo.dob,
                 address: aadhaarInfo.address,
               });
-              
+
               // Auto-fill Aadhaar number if found
               if (aadhaarInfo.aadhaar) {
-                const aadhaarQuestion = questions.find(q => 
-                  (q.question.includes('आधार') || 
-                   q.question.toLowerCase().includes('aadhaar')) &&
+                const aadhaarQuestion = questions.find(q =>
+                  (q.question.includes('आधार') ||
+                    q.question.toLowerCase().includes('aadhaar')) &&
                   q.id !== questionId &&
                   q.question_type.toLowerCase() !== 'upload'
                 );
@@ -466,7 +466,7 @@ function SectionsContent() {
           if (gen.ok && gen.passkey) {
             passkey = String(gen.passkey);
             // Persist silently so subsequent requests don't need API calls
-            try { localStorage.setItem('user_passkey', passkey); } catch {}
+            try { localStorage.setItem('user_passkey', passkey); } catch { }
           } else {
             alert(gen.error || 'Failed to generate passkey');
             return;
@@ -479,7 +479,7 @@ function SectionsContent() {
 
       setAiBusy(true);
       // Save provided passkey for future use; never display in UI
-      try { localStorage.setItem('user_passkey', passkey); } catch {}
+      try { localStorage.setItem('user_passkey', passkey); } catch { }
       const res = await processOCRDual(aadhaarFrontFile, aadhaarBackFile, 'aadhaar', passkey);
       if (res.ok && res.aadhaar_info) {
         const info = res.aadhaar_info as any;
@@ -511,16 +511,16 @@ function SectionsContent() {
 
   const shouldShowQuestion = (q: Question): boolean => {
     if (!q.rendering_condition || q.rendering_condition === 'No') return true;
-    
-    const renderingQuestion = questions.find(x => 
+
+    const renderingQuestion = questions.find(x =>
       x.id.toString() === q.rendering_question?.toString() ||
       x.question === q.rendering_question
     );
     if (!renderingQuestion) return false;
-    
+
     const renderingAnswer = answers[renderingQuestion.id];
     if (!renderingAnswer) return false;
-    
+
     const renderingValues = q.rendering_value?.split(',').map(v => v.trim()) || [];
     return renderingValues.includes(renderingAnswer.toString());
   };
@@ -535,7 +535,7 @@ function SectionsContent() {
       case 'mcq':
         const options = q.options?.split(',').map(o => o.trim()) || [];
         const isMultiSelect = q.multi_select === 1;
-        
+
         if (isMultiSelect) {
           const selectedValues = Array.isArray(currentAnswer) ? currentAnswer : [];
           return (
@@ -650,7 +650,7 @@ function SectionsContent() {
                     <button type="button" className="btn btn-outline-primary btn-sm" onClick={handleTryWithAI} disabled={aiBusy}>
                       {aiBusy ? 'Processing…' : 'Try with AI'}
                     </button>
-                    <div className="form-text">Uses Gemini; address from back image, others from front. Data not used for training.</div>
+                    <div className="form-text">Uses Server AI; address from back image, others from front. Data not used for training.</div>
                   </div>
                 )}
               </div>
@@ -700,7 +700,7 @@ function SectionsContent() {
         }));
 
       // Get admin name from localStorage or use "Admin" as default
-      const adminName = typeof window !== 'undefined' 
+      const adminName = typeof window !== 'undefined'
         ? (localStorage.getItem('user_name') || 'Admin')
         : 'Admin';
 
@@ -735,13 +735,13 @@ function SectionsContent() {
   // Prepare DataTables columns
   const columns = [
     { data: 'id', title: 'ID', width: '80px' },
-    { 
-      data: 'name', 
+    {
+      data: 'name',
       title: 'नाव',
       render: (data: string) => `<strong>${data || '-'}</strong>`
     },
-    { 
-      data: 'description', 
+    {
+      data: 'description',
       title: 'विवरण',
       render: (data: string) => {
         if (!data) return '-';
@@ -752,8 +752,8 @@ function SectionsContent() {
         return text.length > 50 ? text.substring(0, 50) + '...' : text;
       }
     },
-    { 
-      data: 'status', 
+    {
+      data: 'status',
       title: 'स्थिती',
       render: (data: string) => {
         const badge = data === 'Active' ? 'bg-success' : 'bg-secondary';
@@ -824,8 +824,8 @@ function SectionsContent() {
                             infoFiltered: '(_MAX_ एकूण नोंदींपैकी फिल्टर केलेले)'
                           },
                           dom: "<'row g-2 mb-3'<'col-12 col-md-8'l><'col-12 col-md-4'f>>" +
-                               "rt" +
-                               "<'row g-2 mt-3'<'col-12 col-md-5'i><'col-12 col-md-7'p>>",
+                            "rt" +
+                            "<'row g-2 mt-3'<'col-12 col-md-5'i><'col-12 col-md-7'p>>",
                         } as any}
                         className="table table-striped align-middle"
                       />
@@ -836,102 +836,102 @@ function SectionsContent() {
             </div>
           </div>
 
-        {/* Delete Confirmation Modal */}
-        {showDeleteModal && (
-          <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)' }} tabIndex={-1}>
-            <div className="modal-dialog modal-md">
-              <div className="modal-content">
-                <div className="modal-header">
-                  <h5 className="modal-title">विभाग हटवा</h5>
-                  <button type="button" className="btn-close" onClick={() => setShowDeleteModal(false)}></button>
-                </div>
-                <div className="modal-body">
-                  <p className="mb-3">कृपया या विभाग हटवण्याचे कारण द्या. हे लॉगमध्ये साठवले जाईल.</p>
-                  <textarea
-                    className="form-control"
-                    rows={4}
-                    value={deleteReason}
-                    onChange={(e) => setDeleteReason(e.target.value)}
-                    placeholder="कारण द्या..."
-                  />
-                </div>
-                <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>रद्द करा</button>
-                  <button type="button" className="btn btn-danger" onClick={performDelete} disabled={!deleteReason.trim()}>
-                    हटवा
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Edit Modal */}
-        {showEditModal && editingSection && (
-          <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)' }} tabIndex={-1}>
-            <div className="modal-dialog modal-lg">
-              <div className="modal-content">
-                <div className="modal-header">
-                  <h5 className="modal-title">विभाग संपादन करा</h5>
-                  <button type="button" className="btn-close" onClick={() => { setShowEditModal(false); setEditingSection(null); }}></button>
-                </div>
-                <div className="modal-body">
-                  <div className="mb-3">
-                    <label className="form-label">विभागाचे नाव *</label>
-                    <input
-                      type="text"
+          {/* Delete Confirmation Modal */}
+          {showDeleteModal && (
+            <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)' }} tabIndex={-1}>
+              <div className="modal-dialog modal-md">
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <h5 className="modal-title">विभाग हटवा</h5>
+                    <button type="button" className="btn-close" onClick={() => setShowDeleteModal(false)}></button>
+                  </div>
+                  <div className="modal-body">
+                    <p className="mb-3">कृपया या विभाग हटवण्याचे कारण द्या. हे लॉगमध्ये साठवले जाईल.</p>
+                    <textarea
                       className="form-control"
-                      value={editingSection.name || ''}
-                      onChange={(e) => setEditingSection({ ...editingSection, name: e.target.value })}
-                      required
+                      rows={4}
+                      value={deleteReason}
+                      onChange={(e) => setDeleteReason(e.target.value)}
+                      placeholder="कारण द्या..."
                     />
                   </div>
-                  <div className="mb-3">
-                    <label className="form-label">विवरण</label>
-                    {editorLoaded && EditorComponent && EditorClass ? (
-                      <EditorComponent
-                        editor={EditorClass}
-                        data={editingSection.description || ''}
-                        onChange={(event: any, editor: any) => {
-                          const data = editor.getData();
-                          setEditingSection({ ...editingSection, description: data });
-                        }}
-                        config={{
-                          toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', 'blockQuote', 'insertTable', '|', 'undo', 'redo'],
-                        }}
-                      />
-                    ) : (
-                      <textarea
-                        className="form-control"
-                        rows={3}
-                        value={editingSection.description || ''}
-                        onChange={(e) => setEditingSection({ ...editingSection, description: e.target.value })}
-                        placeholder="लोड होत आहे..."
-                      />
-                    )}
+                  <div className="modal-footer">
+                    <button type="button" className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>रद्द करा</button>
+                    <button type="button" className="btn btn-danger" onClick={performDelete} disabled={!deleteReason.trim()}>
+                      हटवा
+                    </button>
                   </div>
-                  <div className="mb-3">
-                    <label className="form-label">स्थिती</label>
-                    <select
-                      className="form-select"
-                      value={editingSection.status || 'Active'}
-                      onChange={(e) => setEditingSection({ ...editingSection, status: e.target.value })}
-                    >
-                      <option value="Active">Active</option>
-                      <option value="Inactive">Inactive</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={() => { setShowEditModal(false); setEditingSection(null); }}>रद्द करा</button>
-                  <button type="button" className="btn btn-primary" onClick={handleSaveEdit}>
-                    साठवा
-                  </button>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {/* Edit Modal */}
+          {showEditModal && editingSection && (
+            <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)' }} tabIndex={-1}>
+              <div className="modal-dialog modal-lg">
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <h5 className="modal-title">विभाग संपादन करा</h5>
+                    <button type="button" className="btn-close" onClick={() => { setShowEditModal(false); setEditingSection(null); }}></button>
+                  </div>
+                  <div className="modal-body">
+                    <div className="mb-3">
+                      <label className="form-label">विभागाचे नाव *</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={editingSection.name || ''}
+                        onChange={(e) => setEditingSection({ ...editingSection, name: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label">विवरण</label>
+                      {editorLoaded && EditorComponent && EditorClass ? (
+                        <EditorComponent
+                          editor={EditorClass}
+                          data={editingSection.description || ''}
+                          onChange={(event: any, editor: any) => {
+                            const data = editor.getData();
+                            setEditingSection({ ...editingSection, description: data });
+                          }}
+                          config={{
+                            toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', 'blockQuote', 'insertTable', '|', 'undo', 'redo'],
+                          }}
+                        />
+                      ) : (
+                        <textarea
+                          className="form-control"
+                          rows={3}
+                          value={editingSection.description || ''}
+                          onChange={(e) => setEditingSection({ ...editingSection, description: e.target.value })}
+                          placeholder="लोड होत आहे..."
+                        />
+                      )}
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label">स्थिती</label>
+                      <select
+                        className="form-select"
+                        value={editingSection.status || 'Active'}
+                        onChange={(e) => setEditingSection({ ...editingSection, status: e.target.value })}
+                      >
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="modal-footer">
+                    <button type="button" className="btn btn-secondary" onClick={() => { setShowEditModal(false); setEditingSection(null); }}>रद्द करा</button>
+                    <button type="button" className="btn btn-primary" onClick={handleSaveEdit}>
+                      साठवा
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </AdminLayout>
       </>
     );
@@ -945,40 +945,40 @@ function SectionsContent() {
             <h1 className="title mb-4 animate__animated animate__fadeInDown">{sectionName || `विभाग ${sectionId}`}</h1>
             <div className="card animate__animated animate__fadeInUp">
               <div className="card-body">
-              {questions.map(q => renderQuestion(q))}
-              
-              {error && (
-                <div className="alert alert-danger" role="alert">
-                  {error}
-                </div>
-              )}
+                {questions.map(q => renderQuestion(q))}
 
-              <div className="d-flex justify-content-between mt-4">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => {
-                    if (sectionId > 1) {
-                      router.push(`/sections?section_id=${sectionId - 1}&aadhar_id=${aadharId}`);
-                    } else {
-                      router.push('/dashboard');
-                    }
-                  }}
-                >
-                  मागे
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={handleSubmit}
-                  disabled={saving}
-                >
-                  {saving ? (
-                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
-                  ) : null}
-                  पुढे
-                </button>
-              </div>
+                {error && (
+                  <div className="alert alert-danger" role="alert">
+                    {error}
+                  </div>
+                )}
+
+                <div className="d-flex justify-content-between mt-4">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      if (sectionId > 1) {
+                        router.push(`/sections?section_id=${sectionId - 1}&aadhar_id=${aadharId}`);
+                      } else {
+                        router.push('/dashboard');
+                      }
+                    }}
+                  >
+                    मागे
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={handleSubmit}
+                    disabled={saving}
+                  >
+                    {saving ? (
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
+                    ) : null}
+                    पुढे
+                  </button>
+                </div>
               </div>
             </div>
           </div>

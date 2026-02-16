@@ -29,9 +29,9 @@ All API endpoints are located in `app/api/` directory and follow Next.js App Rou
 
 ### Address Processing
 
-- **POST `/api/arrange-address`** - Arrange address using Gemini AI
-  - Uses Google Gemini API to format and validate Indian addresses
-  - Filters OCR errors and fills missing components using pincode lookup
+- **POST `/api/arrange-address`** - Arrange address components
+  - Formats and validates Indian addresses from OCR results
+  - Filters common noise and extracts gender/components
 
 ### Survey Answers
 
@@ -60,13 +60,6 @@ SMS sending is configured via environment variables:
 - `SMS_SENDER_ID` - SMS sender ID
 - `SMS_ROUTE_ID` - SMS route ID
 - `SMS_OTP_TEMPLATE` - OTP message template
-
-## Gemini AI Integration
-
-Address arrangement uses Google Gemini API:
-- `GEMINI_API_KEY` - Gemini API key (configured in `lib/config.ts`)
-- Automatically tries multiple models with fallback
-- Filters OCR errors and validates Indian addresses
 
 ## Logging
 
@@ -113,8 +106,6 @@ SMS_SENDER_ID=ddrcvk
 SMS_ROUTE_ID=1
 
 OTP_EXPIRY_MINUTES=5
-
-GEMINI_API_KEY=your_gemini_api_key
 
 NEXT_PUBLIC_API_URL=/api
 ```

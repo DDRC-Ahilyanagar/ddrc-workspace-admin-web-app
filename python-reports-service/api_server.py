@@ -76,6 +76,7 @@ def check_permissions():
     return jsonify({'ok': True, 'allowed': True})
 
 
+@app.route('/upload', methods=['POST'])
 @app.route('/backup-media', methods=['POST'])
 def backup_media():
     """Handle bulk media uploads for backup"""
@@ -84,8 +85,16 @@ def backup_media():
         user_name = request.form.get('user_name', 'Unknown')
         user_phone = request.form.get('user_phone', 'Unknown')
         
+        # If folder_name missing (from UploadClient), generate it like the mobile app does
         if not folder_name:
-            return jsonify({'ok': False, 'error': 'folder_name is required'}), 400
+            if user_name != 'Unknown' and user_phone != 'Unknown':
+                # Simplified cleanup matching mobile app logic
+                import re
+                clean_name = re.sub(r'[^\w\s-]', '', user_name)
+                clean_name = re.sub(r'\s+', '_', clean_name).strip()
+                folder_name = f"{clean_name}_{user_phone}"
+            else:
+                return jsonify({'ok': False, 'error': 'folder_name is required or provide user_name/phone'}), 400
             
         files = request.files.getlist('files')
         if not files:

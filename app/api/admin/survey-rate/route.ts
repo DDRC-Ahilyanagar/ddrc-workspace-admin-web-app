@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
         // Fetch rate from settings table or return a default
         // Assuming a 'system_settings' table
         const row = await dbQueryOne<{ setting_value: string }>(
-            "SELECT setting_value FROM system_settings WHERE setting_key = 'survey_rate_per_completion' LIMIT 1"
+            "SELECT setting_value FROM app_settings WHERE setting_key = 'survey_rate_per_completion' LIMIT 1"
         );
 
         let rate = 50.0; // Default fallback

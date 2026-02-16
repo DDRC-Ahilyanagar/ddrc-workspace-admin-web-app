@@ -123,6 +123,12 @@ export async function POST(request: NextRequest) {
       // ============================================================================
       // Determine if this is a web request early
       const isWebRequest = source === 'web';
+      if (!isWebRequest) {
+        return NextResponse.json(
+          { ok: false, error: 'invalid_source', message: 'मोबाइल अॅपसाठी कृपया नवीन API वापरा.' },
+          { status: 403 }
+        );
+      }
 
       let existConn;
       try {
@@ -146,10 +152,6 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        // Get name and email from request body if available (from onboarding step 2)
-        const name = (body.name || '').toString().trim() || 'Field Officer';
-        const email = (body.email || '').toString().trim() || null;
-
         // Fetch user by phone number
         const [userCheck] = await existConn.execute(
           `SELECT 
@@ -157,7 +159,6 @@ export async function POST(request: NextRequest) {
              u.user_type, 
              u.status, 
              u.is_active, 
-             u.email,
              ut.user_type AS related_type
            FROM users u
            LEFT JOIN user_types ut ON ut.id = u.user_type_id
@@ -167,329 +168,42 @@ export async function POST(request: NextRequest) {
         );
 
         const userExists = Array.isArray(userCheck) && (userCheck as any[]).length > 0;
-        const existingUser = userExists ? (userCheck as any[])[0] : null;
-        const existingStatus = existingUser ? (existingUser.status || '').toLowerCase().trim() : '';
-        const existingIsActive = existingUser ? Number(existingUser.is_active) : 0;
-
-        // Determine if this is a sign-up attempt (mobile onboarding) vs login attempt
-        const isMobileOnboarding = !isWebRequest && role === 'field_officer';
-        // Test user can always trigger onboarding/signup even if active
-        const needsOnboardingSetup = !userExists || (existingStatus === '' || existingStatus === 'inactive') || (isTestFieldOfficer && isMobileOnboarding);
-
-        // Only block active users if they're trying to SIGN UP (not login)
-        // For login attempts, active users should be allowed to send OTP
-        if (isMobileOnboarding && needsOnboardingSetup) {
-          // This is a sign-up attempt - check for duplicate active users
-          if (userExists && existingStatus === 'active' && existingIsActive === 1 && !isTestFieldOfficer) {
-            existConn.release();
-            Logger.info('send_otp_rejected_active_user_exists_signup', { phone, user_id: existingUser.id });
-            return NextResponse.json(
-              {
-                ok: false,
-                error: 'user_already_exists',
-                message: 'या मोबाईल क्रमांकासह आधीच खाते नोंदणीकृत आहे. कृपया लॉगिन करा.',
-              },
-              { status: 409 }
-            );
-          }
-
-          // Check if email is provided and if an active user exists with this email (only during sign-up)
-          if (email && email.includes('@') && !isTestFieldOfficer) {
-            const [emailCheck] = await existConn.execute(
-              `SELECT id, status, is_active, contact_number 
-               FROM users 
-               WHERE email = ? AND email IS NOT NULL AND email != ''
-               LIMIT 1`,
-              [email.toLowerCase()]
-            );
-
-            const emailUserExists = Array.isArray(emailCheck) && (emailCheck as any[]).length > 0;
-            if (emailUserExists) {
-              const emailUser = (emailCheck as any[])[0];
-              const emailUserStatus = (emailUser.status || '').toLowerCase().trim();
-              const emailUserIsActive = Number(emailUser.is_active) === 1;
-
-              // If active user exists with this email, reject signup
-              if (emailUserStatus === 'active' && emailUserIsActive) {
-                existConn.release();
-                Logger.info('send_otp_rejected_email_exists', { email, user_id: emailUser.id });
-                return NextResponse.json(
-                  {
-                    ok: false,
-                    error: 'email_already_exists',
-                    message: 'या ईमेल आयडीसह आधीच खाते नोंदणीकृत आहे. कृपया लॉगिन करा.',
-                  },
-                  { status: 409 }
-                );
-              }
-
-              // If email exists but phone is different, also reject (email should be unique per user)
-              if (emailUser.contact_number && emailUser.contact_number !== phone) {
-                existConn.release();
-                Logger.info('send_otp_rejected_email_different_phone', { email, existing_phone: emailUser.contact_number, new_phone: phone });
-                return NextResponse.json(
-                  {
-                    ok: false,
-                    error: 'email_already_exists',
-                    message: 'या ईमेल आयडीसह आधीच खाते नोंदणीकृत आहे. कृपया लॉगिन करा.',
-                  },
-                  { status: 409 }
-                );
-              }
-            }
-          }
-        }
-
-        if (isMobileOnboarding && needsOnboardingSetup) {
-          if (!userExists) {
-            // Create new user
-            Logger.info('send_otp_creating_user_for_onboarding', { phone, email, role });
-
-            // Get field officer user type ID
-            const [foType]: any = await existConn.execute(
-              `SELECT id FROM user_types WHERE LOWER(user_type) IN ('field officer', 'field_officer') LIMIT 1`
-            );
-            const fieldOfficerTypeId = Array.isArray(foType) && foType.length > 0 ? foType[0]?.id ?? null : null;
-
-            // Create user with inactive status (will be activated after profile completion)
-            const DEFAULT_MOBILE_ROLE = 'field_officer';
-            try {
-              await existConn.execute(
-                `INSERT INTO users (name, contact_number, email, user_type, user_type_id, status, is_active, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, 'inactive', 0, NOW(), NOW())`,
-                [name, phone, email || null, DEFAULT_MOBILE_ROLE, fieldOfficerTypeId]
-              );
-            } catch (insertError: any) {
-              // Check if it's a duplicate key error
-              if (insertError.code === 'ER_DUP_ENTRY') {
-                existConn.release();
-                const duplicateField = insertError.message.includes('contact_number') ? 'phone' : 'email';
-                Logger.info('send_otp_rejected_duplicate_key', { phone, email, duplicateField });
-                return NextResponse.json(
-                  {
-                    ok: false,
-                    error: duplicateField === 'phone' ? 'user_already_exists' : 'email_already_exists',
-                    message: duplicateField === 'phone'
-                      ? 'या मोबाईल क्रमांकासह आधीच खाते नोंदणीकृत आहे. कृपया लॉगिन करा.'
-                      : 'या ईमेल आयडीसह आधीच खाते नोंदणीकृत आहे. कृपया लॉगिन करा.',
-                  },
-                  { status: 409 }
-                );
-              }
-
-              Logger.error('send_otp_user_insert_failed', {
-                phone,
-                name,
-                email,
-                fieldOfficerTypeId,
-                error: insertError.message,
-                code: insertError.code,
-                errno: insertError.errno,
-                sqlState: insertError.sqlState,
-                stack: insertError.stack
-              });
-              existConn.release();
-              return NextResponse.json(
-                {
-                  ok: false,
-                  error: 'user_creation_failed',
-                  message: 'वापरकर्ता तयार करण्यात अडचण. कृपया पुन्हा प्रयत्न करा.',
-                },
-                { status: 500 }
-              );
-            }
-
-            Logger.info('send_otp_user_created_for_onboarding', { phone, name, email });
-
-            // Fetch the newly created user
-            const [newUserCheck] = await existConn.execute(
-              `SELECT 
-                 u.id, 
-                 u.user_type, 
-                 u.status, 
-                 u.is_active, 
-                 ut.user_type AS related_type
-               FROM users u
-               LEFT JOIN user_types ut ON ut.id = u.user_type_id
-               WHERE u.contact_number = ?
-               LIMIT 1`,
-              [phone]
-            );
-
-            if (Array.isArray(newUserCheck) && newUserCheck.length > 0) {
-              userData = newUserCheck[0];
-              // Allow OTP for newly created inactive users during onboarding
-              Logger.info('send_otp_allowing_otp_for_new_user', { phone, user_id: userData.id });
-            } else {
-              Logger.error('send_otp_user_creation_failed', { phone });
-              existConn.release();
-              return NextResponse.json(
-                {
-                  ok: false,
-                  error: 'user_creation_failed',
-                  message: 'वापरकर्ता तयार करण्यात अडचण. कृपया पुन्हा प्रयत्न करा.',
-                },
-                { status: 500 }
-              );
-            }
-          } else if (isTestFieldOfficer) {
-            // Update existing test user for re-signup
-            Logger.info('send_otp_updating_test_user_for_onboarding', { phone, name, email });
-            try {
-              await existConn.execute(
-                `UPDATE users SET name = ?, email = ?, updated_at = NOW() WHERE contact_number = ?`,
-                [name, email || null, phone]
-              );
-
-              // Refresh userData
-              const [updatedCheck] = await existConn.execute(
-                `SELECT 
-                   u.id, 
-                   u.user_type, 
-                   u.status, 
-                   u.is_active, 
-                   ut.user_type AS related_type
-                 FROM users u
-                 LEFT JOIN user_types ut ON ut.id = u.user_type_id
-                 WHERE u.contact_number = ?
-                 LIMIT 1`,
-                [phone]
-              );
-              userData = (updatedCheck as any[])[0];
-            } catch (updateError: any) {
-              Logger.error('send_otp_test_user_update_failed', { phone, error: updateError.message });
-              // Continue with existing user data if update fails
-              userData = existingUser;
-            }
-          } else {
-            // User exists but has empty/inactive status - use existing user for onboarding
-            Logger.info('send_otp_using_existing_user_for_onboarding', { phone, existingStatus });
-            userData = existingUser;
-          }
-        } else if (!userExists) {
-          // For web or other sources, return error as before
+        if (!userExists) {
           Logger.info('send_otp_rejected_user_not_found', { phone });
-          existConn.release();
           return NextResponse.json(
-            {
-              ok: false,
-              error: 'user_not_found',
-              message: 'वापरकर्ता नोंदणीकृत नाही. कृपया प्रवेश विनंती पाठवा.',
-            },
+            { ok: false, error: 'user_not_found', message: 'वापरकर्ता नोंदणीकृत नाही.' },
             { status: 404 }
           );
-        } else {
-          userData = existingUser;
         }
-      } finally {
-        if (existConn) {
-          existConn.release();
-        }
-      }
 
-      // Ensure userData exists before accessing its properties
-      if (!userData) {
-        Logger.error('send_otp_user_data_null', { phone });
-        return NextResponse.json(
-          {
-            ok: false,
-            error: 'user_not_found',
-            message: 'वापरकर्ता नोंदणीकृत नाही. कृपया प्रवेश विनंती पाठवा.',
-          },
-          { status: 404 }
-        );
-      }
+        userData = (userCheck as any[])[0];
 
-      const status = (userData.status || '').toLowerCase().trim();
-      const statusAllowsOtp = status === 'active' || status === 'approved';
-      const isPending = status === 'inactive' || status === ''; // Allow empty/inactive status for newly created users
-      const hasActiveFlag = Number(userData.is_active) === 1;
+        const userType = normalizeRole(userData.user_type);
+        const relatedType = normalizeRole(userData.related_type);
+        effectiveRole = userType || relatedType;
 
-      // Allow OTP for inactive/empty status users during mobile onboarding (they're in the process of completing profile)
-      // Also allow OTP for active/approved users (for login)
-      const allowOtpForOnboarding = isPending && !isWebRequest && role === 'field_officer';
-      const allowOtpForActiveUser = statusAllowsOtp && hasActiveFlag;
+        const isAdmin = effectiveRole === 'admin';
+        const isSupervisor = effectiveRole === 'supervisor';
+        const isVerificationOfficer = effectiveRole === 'verification_officer';
 
-      // Block OTP only if user is NOT in onboarding AND user is NOT active
-      if (!allowOtpForOnboarding && !allowOtpForActiveUser) {
-        Logger.info('send_otp_rejected_user_not_approved', {
-          phone,
-          status: userData.status,
-          is_active: userData.is_active,
-          allowOtpForOnboarding,
-          allowOtpForActiveUser,
-          statusAllowsOtp,
-          hasActiveFlag
-        });
-        return NextResponse.json(
-          {
-            ok: false,
-            error: 'user_not_active',
-            message: 'आपले खाते अजून मंजूर झालेले नाही. कृपया प्रशासकाशी संपर्क साधा किंवा थोड्या वेळाने पुन्हा प्रयत्न करा.',
-          },
-          { status: 403 }
-        );
-      }
-
-      // ============================================================================
-      // Only proceed to OTP generation if user is approved and active
-      // At this point, userData is guaranteed to have status='active' AND is_active=1
-      // ============================================================================
-
-      // Determine allowed user types based on source
-      // isWebRequest is already defined earlier in the function
-      const userType = normalizeRole(userData.user_type);
-      const relatedType = normalizeRole(userData.related_type);
-      effectiveRole = userType || relatedType;
-
-      // For web requests, allow admin/supervisor/verification_officer users
-      if (isWebRequest) {
-        const isAdmin = userType === 'admin' || relatedType === 'admin';
-        const isSupervisor = userType === 'supervisor' || relatedType === 'supervisor';
-        const isVerificationOfficer = userType === 'verification_officer' || relatedType === 'verification_officer';
         if (!isAdmin && !isSupervisor && !isVerificationOfficer) {
           return NextResponse.json(
-            {
-              ok: false,
-              error: 'forbidden_role',
-              message: 'या भूमिकेला वेब प्रवेश नाही.',
-            },
+            { ok: false, error: 'forbidden_role', message: 'या भूमिकेला वेब प्रवेश नाही.' },
             { status: 403 }
           );
         }
 
-      }
+        const status = (userData.status || '').toLowerCase().trim();
+        const hasActiveFlag = Number(userData.is_active) === 1;
 
-      // For mobile requests, allow field_officer/supervisor/admin/therapy_specialist users
-      if (!isWebRequest) {
-        const isFieldOfficer = effectiveRole === 'field_officer';
-        const isSupervisor = effectiveRole === 'supervisor';
-        const isAdmin = effectiveRole === 'admin';
-        const isTherapySpecialist = effectiveRole === 'therapy_specialist' || effectiveRole === 'practitioner';
-
-        // Only check role if provided and user doesn't match any allowed role
-        if (role && !isFieldOfficer && !isSupervisor && !isAdmin && !isTherapySpecialist) {
+        if (status !== 'active' && status !== 'approved' || !hasActiveFlag) {
           return NextResponse.json(
-            {
-              ok: false,
-              error: 'forbidden_role',
-              message: 'या भूमिकेला मोबाइल प्रवेश नाही.',
-            },
+            { ok: false, error: 'user_not_active', message: 'आपले खाते सक्रिय नाही.' },
             { status: 403 }
           );
         }
-
-        // Enforce requested role to match actual role when provided
-        if (role && effectiveRole && role !== effectiveRole) {
-          return NextResponse.json(
-            {
-              ok: false,
-              error: 'forbidden_role',
-              message: 'निवडलेली भूमिका आणि वापरकर्त्याची वास्तविक भूमिका जुळत नाही.',
-            },
-            { status: 403 }
-          );
-        }
+      } finally {
+        if (existConn) existConn.release();
       }
     } else {
       // Survey verification: Just validate phone number, no user approval needed
@@ -541,7 +255,7 @@ export async function POST(request: NextRequest) {
         ]) as any;
 
         await connection.beginTransaction();
-        
+
         // Mark old OTPs as expired
         await connection.execute(
           `UPDATE otp_verifications 
@@ -549,7 +263,7 @@ export async function POST(request: NextRequest) {
            WHERE phone = ? AND status = 'sent'`,
           [phone]
         );
-        
+
         const [result] = await connection.execute(
           `INSERT INTO otp_verifications (phone, otp, expires_at, status, created_at, updated_at) 
            VALUES (?, ?, ?, 'sent', NOW(), NOW())`,

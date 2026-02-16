@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, Suspense } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter, useParams } from 'next/navigation';
 import AdminLayout from '@/components/AdminLayout';
 import { getAbsoluteImageUrl } from '@/lib/config';
@@ -78,6 +79,7 @@ function SurveyDetailsContent() {
   const [publicQuestionIds, setPublicQuestionIds] = useState<Set<number>>(new Set());
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [showLightbox, setShowLightbox] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     // Get user type from localStorage
@@ -930,15 +932,18 @@ function SurveyDetailsContent() {
         )}
 
         {/* Clarification Request Modal */}
-        {showClarificationModal && (
-          <div className="modal show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-            <div className="modal-dialog modal-dialog-centered modal-lg">
-              <div className="modal-content">
-                <div className="modal-header">
-                  <h5 className="modal-title">स्पष्टीकरण विनंती करा</h5>
+        {showClarificationModal && typeof document !== 'undefined' && createPortal(
+          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(5px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: '100%', maxWidth: '900px' }}>
+              <div className="card shadow-lg border-0 rounded-4 overflow-hidden animate__animated animate__zoomIn animate__faster">
+                <div className="card-header bg-dark text-white d-flex justify-content-between align-items-center py-3 px-4">
+                  <h5 className="mb-0 fw-bold d-flex align-items-center gap-2">
+                    <i className="bi bi-question-circle-fill text-warning"></i>
+                    स्पष्टीकरण विनंती (Clarification Request)
+                  </h5>
                   <button
                     type="button"
-                    className="btn-close"
+                    className="btn-close btn-close-white"
                     onClick={() => {
                       setShowClarificationModal(false);
                       setSelectedQuestions({});
@@ -946,27 +951,53 @@ function SurveyDetailsContent() {
                     disabled={sendingClarification}
                   ></button>
                 </div>
-                <div className="modal-body">
-                  <p className="text-muted mb-3">
+                <div className="card-body p-4">
+                  <p className="text-muted mb-4">
                     कृपया स्पष्टीकरण आवश्यक असलेले प्रश्न निवडा आणि प्रत्येक प्रश्नासाठी कारण प्रविष्ट करा.
                   </p>
+
+                  <div className="input-group mb-4 shadow-sm">
+                    <span className="input-group-text bg-white border-end-0">
+                      <i className="bi bi-search text-muted"></i>
+                    </span>
+                    <input
+                      type="text"
+                      className="form-control border-start-0 ps-0"
+                      placeholder="प्रश्न शोधा (Search Questions)..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+
                   {Object.keys(selectedQuestions).length > 0 && (
-                    <div className="alert alert-info mb-3">
-                      <i className="bi bi-info-circle me-2"></i>
-                      <strong>{Object.keys(selectedQuestions).length}</strong> प्रश्न निवडले आहेत. कृपया खाली सबमिट बटणावर क्लिक करा.
+                    <div className="alert alert-info d-flex align-items-center mb-4 rounded-3 shadow-sm border-info-subtle">
+                      <i className="bi bi-info-circle-fill text-info me-3 fs-5"></i>
+                      <div>
+                        <strong>{Object.keys(selectedQuestions).length}</strong> प्रश्न निवडले आहेत.
+                      </div>
                     </div>
                   )}
-                  <div className="table-responsive" style={{ maxHeight: '350px', overflowY: 'auto' }}>
-                    <table className="table table-sm">
-                      <thead>
+                  <div className="table-responsive border rounded-3 shadow-sm" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                    <table className="table table-hover mb-0">
+                      <thead className="table-light sticky-top">
                         <tr>
-                          <th style={{ width: '5%' }}>ID</th>
-                          <th style={{ width: '40%' }}>प्रश्न</th>
-                          <th style={{ width: '55%' }}>कारण</th>
+                          <th className="py-3 ps-3" style={{ width: '5%' }}>ID</th>
+                          <th className="py-3" style={{ width: '30%' }}>प्रश्न (Question)</th>
+                          <th className="py-3" style={{ width: '25%' }}>सध्याचे उत्तर (Current Answer)</th>
+                          <th className="py-3 pe-3" style={{ width: '40%' }}>कारण (Reason)</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {answers.map((ans, ansIdx) => {
+                        {answers.filter(ans => {
+                          if (!searchTerm) return true;
+                          const term = searchTerm.toLowerCase();
+                          return (
+                            (ans.question_marathi && ans.question_marathi.toLowerCase().includes(term)) ||
+                            (ans.question_english && ans.question_english.toLowerCase().includes(term)) ||
+                            ans.question_id.toString().includes(term) ||
+                            (ans.answer && ans.answer.toLowerCase().includes(term))
+                          );
+                        }).map((ans, ansIdx) => {
                           const questionKey = ans.question_id;
                           const isSelected = selectedQuestions.hasOwnProperty(questionKey);
 
@@ -974,35 +1005,48 @@ function SurveyDetailsContent() {
                           const uniqueKey = `clarification_${ans.section_id || 0}_${ans.question_id}_${ansIdx}`;
 
                           return (
-                            <tr key={uniqueKey}>
-                              <td>
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setSelectedQuestions({
-                                        ...selectedQuestions,
-                                        [questionKey]: clarifications[questionKey]?.reason || '',
-                                      });
-                                    } else {
-                                      const newSelected = { ...selectedQuestions };
-                                      delete newSelected[questionKey];
-                                      setSelectedQuestions(newSelected);
-                                    }
-                                  }}
-                                  disabled={sendingClarification}
-                                />
+                            <tr key={uniqueKey} className={isSelected ? 'table-warning' : ''}>
+                              <td className="ps-3 align-middle">
+                                <div className="form-check">
+                                  <input
+                                    className="form-check-input"
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedQuestions({
+                                          ...selectedQuestions,
+                                          [questionKey]: clarifications[questionKey]?.reason || '',
+                                        });
+                                      } else {
+                                        const newSelected = { ...selectedQuestions };
+                                        delete newSelected[questionKey];
+                                        setSelectedQuestions(newSelected);
+                                      }
+                                    }}
+                                    disabled={sendingClarification}
+                                    style={{ cursor: 'pointer' }}
+                                  />
+                                </div>
                               </td>
-                              <td>
-                                <small>
+                              <td className="align-middle">
+                                <span className="fw-medium text-dark">
                                   {ans.question_marathi || ans.question_english || `Question ${ans.question_id}`}
-                                </small>
+                                </span>
                               </td>
-                              <td>
+                              <td className="align-middle">
+                                <div className="text-secondary small text-break" style={{ maxHeight: '80px', overflowY: 'auto' }}>
+                                  {ans.answer ? (
+                                    ans.answer
+                                  ) : (
+                                    <span className="fst-italic text-muted">-</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="pe-3 py-2">
                                 {isSelected ? (
                                   <textarea
-                                    className="form-control form-control-sm"
+                                    className="form-control form-control-sm shadow-none border-warning"
                                     rows={2}
                                     value={selectedQuestions[questionKey] || ''}
                                     onChange={(e) => {
@@ -1013,9 +1057,10 @@ function SurveyDetailsContent() {
                                     }}
                                     placeholder="स्पष्टीकरण आवश्यक असल्याचे कारण प्रविष्ट करा..."
                                     disabled={sendingClarification}
+                                    autoFocus
                                   />
                                 ) : (
-                                  <span className="text-muted">-</span>
+                                  <span className="text-muted small fst-italic">-</span>
                                 )}
                               </td>
                             </tr>
@@ -1025,47 +1070,48 @@ function SurveyDetailsContent() {
                     </table>
                   </div>
                 </div>
-                <div className="modal-footer" style={{ borderTop: '2px solid #dee2e6', padding: '15px', backgroundColor: '#f8f9fa' }}>
+                <div className="card-footer bg-light p-3 border-top">
                   <div className="d-flex justify-content-between align-items-center w-100">
                     <div>
                       {Object.keys(selectedQuestions).length > 0 ? (
-                        <span className="text-success">
-                          <i className="bi bi-check-circle me-1"></i>
-                          <strong>{Object.keys(selectedQuestions).length}</strong> प्रश्न निवडले
+                        <span className="text-success fw-bold animate__animated animate__fadeIn">
+                          <i className="bi bi-check-circle-fill me-2"></i>
+                          {Object.keys(selectedQuestions).length} प्रश्न निवडले
                         </span>
                       ) : (
-                        <span className="text-muted">कृपया किमान एक प्रश्न निवडा</span>
+                        <span className="text-muted small">
+                          <i className="bi bi-exclamation-circle me-1"></i>
+                          कृपया किमान एक प्रश्न निवडा
+                        </span>
                       )}
                     </div>
                     <div className="d-flex gap-2">
                       <button
                         type="button"
-                        className="btn btn-secondary"
+                        className="btn btn-outline-secondary px-4 fw-medium"
                         onClick={() => {
                           setShowClarificationModal(false);
                           setSelectedQuestions({});
                         }}
                         disabled={sendingClarification}
                       >
-                        <i className="bi bi-x-circle me-1"></i>
                         रद्द करा
                       </button>
                       <button
                         type="button"
-                        className="btn btn-warning btn-lg"
+                        className="btn btn-warning px-4 fw-bold shadow-sm d-flex align-items-center gap-2"
                         onClick={handleRequestClarification}
                         disabled={sendingClarification || Object.keys(selectedQuestions).length === 0}
-                        style={{ minWidth: '200px' }}
                       >
                         {sendingClarification ? (
                           <>
-                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
-                            पाठवत आहे...
+                            <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+                            <span>पाठवत आहे...</span>
                           </>
                         ) : (
                           <>
-                            <i className="bi bi-send-fill me-2"></i>
-                            <strong>स्पष्टीकरण विनंती पाठवा</strong>
+                            <i className="bi bi-send-fill"></i>
+                            <span>विनंती पाठवा</span>
                           </>
                         )}
                       </button>
@@ -1074,19 +1120,23 @@ function SurveyDetailsContent() {
                 </div>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
         {/* Reject Modal */}
-        {showRejectModal && (
-          <div className="modal show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-            <div className="modal-dialog modal-dialog-centered">
-              <div className="modal-content">
-                <div className="modal-header">
-                  <h5 className="modal-title">सर्वेक्षण नाकारा</h5>
+        {showRejectModal && typeof document !== 'undefined' && createPortal(
+          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(5px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: '100%', maxWidth: '500px' }}>
+              <div className="card shadow-lg border-0 rounded-4 overflow-hidden animate__animated animate__zoomIn animate__faster">
+                <div className="card-header bg-danger text-white d-flex justify-content-between align-items-center py-3 px-4">
+                  <h5 className="mb-0 fw-bold d-flex align-items-center gap-2">
+                    <i className="bi bi-x-circle-fill text-white-50"></i>
+                    सर्वेक्षण नाकारा (Reject Survey)
+                  </h5>
                   <button
                     type="button"
-                    className="btn-close"
+                    className="btn-close btn-close-white"
                     onClick={() => {
                       setShowRejectModal(false);
                       setRejectionReason('');
@@ -1094,26 +1144,31 @@ function SurveyDetailsContent() {
                     disabled={markingRejected}
                   ></button>
                 </div>
-                <div className="modal-body">
-                  <div className="mb-3">
-                    <label htmlFor="rejectionReason" className="form-label">
-                      <strong>नाकारण्याचे कारण:</strong>
+                <div className="card-body p-4">
+                  <div className="mb-0">
+                    <label htmlFor="rejectionReason" className="form-label fw-bold text-dark mb-2">
+                      नाकारण्याचे कारण (Reason for Rejection):
                     </label>
                     <textarea
                       id="rejectionReason"
-                      className="form-control"
+                      className="form-control form-control-lg shadow-sm border-secondary-subtle"
                       rows={4}
                       value={rejectionReason}
                       onChange={(e) => setRejectionReason(e.target.value)}
-                      placeholder="कृपया सर्वेक्षण नाकारण्याचे कारण प्रविष्ट करा..."
+                      placeholder="कृपया सर्वेक्षण नाकारण्याचे कारण सविस्तर लिहा..."
                       disabled={markingRejected}
+                      autoFocus
                     />
+                    <div className="form-text text-muted mt-2">
+                      <i className="bi bi-info-circle me-1"></i>
+                      हे कारण फील्ड ऑफिसरला दुरुस्तीसाठी पाठवले जाईल.
+                    </div>
                   </div>
                 </div>
-                <div className="modal-footer">
+                <div className="card-footer bg-light p-3 border-top d-flex justify-content-end gap-2">
                   <button
                     type="button"
-                    className="btn btn-secondary"
+                    className="btn btn-outline-secondary px-4 fw-medium"
                     onClick={() => {
                       setShowRejectModal(false);
                       setRejectionReason('');
@@ -1124,26 +1179,27 @@ function SurveyDetailsContent() {
                   </button>
                   <button
                     type="button"
-                    className="btn btn-danger"
+                    className="btn btn-danger px-4 fw-bold shadow-sm d-flex align-items-center gap-2"
                     onClick={handleMarkRejected}
                     disabled={markingRejected || !rejectionReason.trim()}
                   >
                     {markingRejected ? (
                       <>
-                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
-                        नाकारत आहे...
+                        <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+                        <span>नाकारत आहे...</span>
                       </>
                     ) : (
                       <>
-                        <i className="bi bi-x-circle me-2"></i>
-                        नाकारा
+                        <i className="bi bi-x-circle-fill"></i>
+                        <span>नाकारा (Reject)</span>
                       </>
                     )}
                   </button>
                 </div>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
         {/* Rejection Modal and other modals ... */}
 

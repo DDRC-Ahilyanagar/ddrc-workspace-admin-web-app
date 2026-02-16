@@ -60,7 +60,8 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
     const contentType = isUnicode ? 'unicode' : SMS_CONFIG.contentType;
 
     params.append('smsContentType', contentType);
-    // params.append('smsContentType', SMS_CONFIG.contentType);
+    params.append('peid', process.env.SMS_PEID || '1201159134371424108');
+    params.append('templateid', process.env.SMS_TEMPLATE_ID || '1207161546059282362');
 
     const url = `${SMS_CONFIG.url}?${params.toString()}`;
 
@@ -77,6 +78,7 @@ export async function sendSMS(mobile: string, message: string): Promise<{ ok: bo
       method: 'GET',
       headers: {
         'Accept': 'application/json',
+        'Cache-Control': 'no-cache',
       },
     });
 

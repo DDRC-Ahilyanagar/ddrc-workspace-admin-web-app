@@ -31,7 +31,7 @@ DB_PASS=your_mysql_password
 DB_NAME=ddrc_surveys
 ```
 
-3. Update other configuration as needed (SMS, Gemini API, etc.)
+3. Update other configuration as needed (SMS, processing keys, etc.)
 
 ## Step 3: Find Your Laptop's IP Address
 

@@ -324,13 +324,13 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
           const notificationTitle = `${holderName} साठी स्पष्टीकरण आवश्यक`;
           const notificationMessage = `${questions.length} प्रश्नांसाठी स्पष्टीकरण आवश्यक आहे. कृपया सर्वेक्षण अपडेट करा.`;
           const notificationData = JSON.stringify({
-            survey_id: actualSurveyId,
-            survey_aadhar_id: survey.aadhaar_id, // Use actual aadhaar_id for pre-filling
+            survey_id: String(actualSurveyId),
+            survey_aadhar_id: String(survey.aadhaar_id), // Use actual aadhaar_id for pre-filling
             holder_name: holderName,
             aadhar_no: aadharNo,
             question_ids: questionIds,
             questions: clarificationDetails.map(c => ({
-              question_id: c.question_id,
+              question_id: String(c.question_id),
               question_text: c.question_text,
               reason: c.reason,
             })),
