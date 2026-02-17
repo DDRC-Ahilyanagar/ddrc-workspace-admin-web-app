@@ -226,8 +226,9 @@ async function handleCreate(request: NextRequest, user?: any) {
         if (frontImage) await downloadTo(frontImage, 'front.jpg');
         if (backImage) await downloadTo(backImage, 'back.jpg');
 
-        // OCR front first - use lib/ocr.ts which has better error handling
+        // OCR processing removed as per refactor to prevent build hangs
         let text = '';
+        /*
         try {
           const { extractTextFromImage } = await import('@/lib/ocr');
           if (downloads.length > 0) {
@@ -243,6 +244,7 @@ async function handleCreate(request: NextRequest, user?: any) {
           });
           // Continue without OCR data - not critical for Aadhaar creation
         }
+        */
 
         if (text) {
           try {
@@ -336,8 +338,9 @@ async function handleCreate(request: NextRequest, user?: any) {
         // OCR back for address - use lib/ocr.ts which has better error handling
         try {
           if (backImage) {
-            const backPath = path.join(targetDir, 'back.jpg');
+            // OCR processing removed
             let raw = '';
+            /*
             try {
               const { extractTextFromImage } = await import('@/lib/ocr');
               const imageBuffer = await fs.readFile(backPath);
@@ -350,6 +353,7 @@ async function handleCreate(request: NextRequest, user?: any) {
               });
               // Continue without address extraction
             }
+            */
 
             if (raw) {
               try {
