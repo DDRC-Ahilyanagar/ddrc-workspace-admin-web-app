@@ -34,7 +34,7 @@ jobs:
             ${{ runner.os }}-nextjs-
 
       - name: Install dependencies
-        run: npm ci --prefer-offline --no-audit
+        run: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1 npm ci --prefer-offline --no-audit
 
       - name: Build
         run: npm run build
