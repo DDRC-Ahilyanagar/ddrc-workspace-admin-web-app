@@ -53,10 +53,9 @@ jobs:
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
-          username: root
+          username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_KEY }}
-          port: 22
-          passphrase: ""
+          port: ${{ secrets.VPS_PORT || 22 }}
           timeout: 300s
           command_timeout: 300s
           debug: false
@@ -73,10 +72,9 @@ jobs:
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
-          username: root
+          username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_KEY }}
-          port: 22
-          passphrase: ""
+          port: ${{ secrets.VPS_PORT || 22 }}
           timeout: 600s
           command_timeout: 600s
           debug: true
