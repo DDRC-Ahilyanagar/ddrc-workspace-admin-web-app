@@ -34,10 +34,13 @@ jobs:
             ${{ runner.os }}-nextjs-
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit
 
       - name: Build
         run: npm run build
+        env:
+          # Optimize Next.js build
+          NEXT_TELEMETRY_DISABLED: 1
 
       - name: Test Server Connectivity
         run: |
@@ -54,52 +57,55 @@ jobs:
           port: ${{ secrets.VPS_PORT || 22 }}
           timeout: 300s
           command_timeout: 300s
-          debug: true
-          source: ".next/**,package.json,package-lock.json,public/**,lib/**,app/**,middleware.ts,next.config.mjs,tsconfig.json,storage/**,prisma/**"
+          debug: false
+          # Use tar for faster compressed transfer
+          tar_tmp_path: /tmp/
+          use_insecure_cipher: false
+          # Upload only necessary files (exclude source code, only built assets)
+          source: ".next,package.json,package-lock.json,public,prisma,next.config.mjs"
           target: "/var/www/surveys.ddrcnagar.in"
+          strip_components: 0
+          overwrite: true
 
-      - name: Install Dependencies on Server
+      - name: Deploy and Restart (Combined)
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          timeout: 900s
-          command_timeout: 900s
+          timeout: 600s
+          command_timeout: 600s
           debug: true
           script: |
             cd /var/www/surveys.ddrcnagar.in
-            npm ci --omit=dev --no-audit --no-fund
-
-      - name: Setup Storage and Seed Database
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_KEY }}
-          port: ${{ secrets.VPS_PORT || 22 }}
-          timeout: 300s
-          command_timeout: 300s
-          debug: true
-          script: |
-            cd /var/www/surveys.ddrcnagar.in
+            
+            # Smart dependency installation - only if package-lock.json changed
+            if ! cmp -s package-lock.json .package-lock.json.cached 2>/dev/null; then
+              echo "📦 Dependencies changed, installing..."
+              # Use npm install instead of npm ci for faster incremental updates
+              npm install --omit=dev --no-audit --no-fund --prefer-offline
+              cp package-lock.json .package-lock.json.cached
+            else
+              echo "✅ Dependencies unchanged, skipping npm install"
+            fi
+            
+            # Setup storage
             mkdir -p storage/logs
-            npm run prisma:seed || true
-
-      - name: Restart PM2
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_KEY }}
-          port: ${{ secrets.VPS_PORT || 22 }}
-          timeout: 120s
-          command_timeout: 120s
-          debug: true
-          script: |
-            cd /var/www/surveys.ddrcnagar.in
+            
+            # Seed database (skip if fails)
+            npm run prisma:seed || echo "⚠️ Prisma seed skipped"
+            
+            # Restart PM2 with zero-downtime reload
             export NODE_ENV=production
             export PORT=3000
-            pm2 restart surveys-ddrc || pm2 start npm --name "surveys-ddrc" -- start
-            pm2 save
+            if pm2 list | grep -q "surveys-ddrc"; then
+              echo "🔄 Reloading PM2 process..."
+              pm2 reload surveys-ddrc --update-env
+            else
+              echo "🚀 Starting new PM2 process..."
+              pm2 start npm --name "surveys-ddrc" -- start
+            fi
+            pm2 save --force
+            
+            echo "✅ Deployment completed successfully!"
