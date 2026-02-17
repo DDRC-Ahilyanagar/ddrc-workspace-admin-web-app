@@ -168,7 +168,7 @@ export default function SystemLogsPage() {
                             </div>
 
                             <div className="terminal-body p-0 bg-dark position-relative">
-                                <div className="scroll-container px-4 py-4" style={{ height: 'calc(100vh - 320px)', overflowY: 'auto' }}>
+                                <div className="scroll-container px-4 py-4" style={{ height: 'calc(100vh - 320px)', width: '100%', overflowY: 'auto' }}>
                                     {loading && logs.length === 0 ? (
                                         <div className="h-100 d-flex flex-column align-items-center justify-content-center">
                                             <div className="loader-orbit mb-4">
@@ -179,21 +179,60 @@ export default function SystemLogsPage() {
                                     ) : (
                                         <div className="log-stream fw-monospace" style={{ fontSize: '13px', letterSpacing: '0.02em' }}>
                                             {filteredLogs.map((log, idx) => {
-                                                const isError = log.includes('ERROR:');
-                                                const isWarn = log.includes('WARN:');
-                                                const isInfo = log.includes('INFO:');
-                                                const isDebug = log.includes('DEBUG:');
+                                                const isError = log.toLowerCase().includes('error:');
+                                                const isWarn = log.toLowerCase().includes('warn:');
+                                                const isInfo = log.toLowerCase().includes('info:');
 
                                                 let statusClass = 'status-default';
                                                 if (isError) statusClass = 'status-error';
                                                 else if (isWarn) statusClass = 'status-warn';
                                                 else if (isInfo) statusClass = 'status-info';
-                                                else if (isDebug) statusClass = 'status-debug';
+
+                                                // Try to extract JSON
+                                                let prefix = log;
+                                                let jsonPart = '';
+                                                let prettyJson = null;
+
+                                                if (log.includes(' -> ')) {
+                                                    const parts = log.split(' -> ');
+                                                    prefix = parts[0] + ' -> ';
+                                                    jsonPart = parts.slice(1).join(' -> ');
+                                                    try {
+                                                        const parsed = JSON.parse(jsonPart);
+                                                        prettyJson = JSON.stringify(parsed, null, 2);
+                                                    } catch (e) {
+                                                        prettyJson = null;
+                                                    }
+                                                }
 
                                                 return (
-                                                    <div key={idx} className={`log-entry ${statusClass} group-hover:bg-opacity-5 rounded-1 transition-all d-flex align-items-start gap-3 py-1 px-2`}>
-                                                        <span className="line-number text-secondary opacity-25 user-select-none" style={{ minWidth: '35px' }}>{idx + 1}</span>
-                                                        <span className="log-text text-break">{log}</span>
+                                                    <div key={idx} className={`log-entry ${statusClass} mb-2`}>
+                                                        <div className="log-header d-flex align-items-start gap-3 py-1 px-2">
+                                                            <span className="line-number text-secondary opacity-25 user-select-none" style={{ minWidth: '35px' }}>{idx + 1}</span>
+                                                            <span className="log-prefix">{prefix}</span>
+                                                            {!prettyJson && <span className="log-content">{jsonPart}</span>}
+                                                        </div>
+                                                        {prettyJson && (
+                                                            <div className="json-block mt-1 ms-5 p-3 rounded bg-black bg-opacity-40 border border-white border-opacity-5">
+                                                                <pre className="mb-0 text-white-50" style={{ fontSize: '12px' }}>
+                                                                    {prettyJson.split('\n').map((line, lidx) => (
+                                                                        <div key={lidx}>
+                                                                            {line.split(/(:|{|}|\[|\]|,)/).map((segment, sidx) => {
+                                                                                if (segment === ':') return <span key={sidx} className="text-secondary">:</span>;
+                                                                                if (/[{}\[\]]/.test(segment)) return <span key={sidx} className="text-info">{segment}</span>;
+                                                                                if (segment === ',') return <span key={sidx} className="text-secondary">,</span>;
+                                                                                if (segment.includes('"')) {
+                                                                                    // Key or String Value
+                                                                                    const isKey = line.split(':')[0].includes(segment);
+                                                                                    return <span key={sidx} className={isKey ? 'text-warning opacity-75' : 'text-success'}>{segment}</span>;
+                                                                                }
+                                                                                return <span key={sidx}>{segment}</span>;
+                                                                            })}
+                                                                        </div>
+                                                                    ))}
+                                                                </pre>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 );
                                             })}
@@ -260,8 +299,31 @@ export default function SystemLogsPage() {
                 .status-default { color: #cfd8dc; }
                 .status-error { color: #ff5252; border-left: 2px solid #ff5252; background: rgba(255, 82, 82, 0.05); }
                 .status-warn { color: #ffd740; border-left: 2px solid #ffd740; background: rgba(255, 215, 64, 0.05); }
-                .status-info { color: #448aff; border-left: 2px solid #448aff; background: rgba(68, 138, 255, 0.05); }
+                .status-info { color: #81d4fa; border-left: 2px solid #00b0ff; background: rgba(0, 176, 255, 0.03); }
                 .status-debug { color: #b0bec5; opacity: 0.8; }
+
+                .log-header {
+                   transition: background 0.2s;
+                   cursor: default;
+                }
+                .log-entry:hover .log-header {
+                   background: rgba(255,255,255,0.03);
+                }
+
+                .log-prefix {
+                   font-weight: 600;
+                   opacity: 0.9;
+                }
+
+                .json-block {
+                   font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+                   box-shadow: inset 0 2px 10px rgba(0,0,0,0.2);
+                }
+
+                .text-info { color: #4dd0e1 !important; }
+                .text-warning { color: #ffcc80 !important; }
+                .text-success { color: #81c784 !important; }
+                .text-secondary { color: #90a4ae !important; }
 
                 .x-small { font-size: 11px; }
                 .fw-black { font-weight: 900; }
