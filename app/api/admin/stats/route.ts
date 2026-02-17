@@ -1,3 +1,4 @@
+// Deployment trigger: Updated CI/CD secrets for separate repository mapping
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';
@@ -43,9 +44,9 @@ export async function GET(_req: NextRequest) {
       `);
 
       // Ensure columns exist on existing deployments
-      try { await conn.query(`ALTER TABLE answers ADD COLUMN aadhar_id BIGINT UNSIGNED NULL`); } catch (e:any) { /* ignore duplicate */ }
-      try { await conn.query(`ALTER TABLE answers ADD COLUMN aadhar_no VARCHAR(20) NULL`); } catch (e:any) { /* ignore duplicate */ }
-      try { await conn.query(`ALTER TABLE answers ADD COLUMN updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`); } catch (e:any) { /* ignore duplicate */ }
+      try { await conn.query(`ALTER TABLE answers ADD COLUMN aadhar_id BIGINT UNSIGNED NULL`); } catch (e: any) { /* ignore duplicate */ }
+      try { await conn.query(`ALTER TABLE answers ADD COLUMN aadhar_no VARCHAR(20) NULL`); } catch (e: any) { /* ignore duplicate */ }
+      try { await conn.query(`ALTER TABLE answers ADD COLUMN updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`); } catch (e: any) { /* ignore duplicate */ }
 
       // Note: We no longer use the answers table - all data is in surveys.survey_json
 
@@ -60,27 +61,27 @@ export async function GET(_req: NextRequest) {
       const [dtc]: any = await conn.query('SELECT COUNT(*) AS c FROM disability_types');
       if (((dtc as any[])?.[0]?.c || 0) === 0) {
         const seedVals = [
-          ['अंध','Blindness',JSON.stringify(['Blindness','Blind','अंध'])],
-          ['दृष्टिदोष','Low Vision',JSON.stringify(['Low Vision','Low-vision','दृष्टिदोष'])],
-          ['कर्णबधिर','Hearing Impairment',JSON.stringify(['Hearing Impairment','deaf and hard of hearing','कर्णबधिर'])],
-          ['वाचादोष','Speech and Language Disability',JSON.stringify(['Speech and Language Disability','Speech & Language','वाचादोष'])],
-          ['अस्थिव्यंग','Locomotor Disability',JSON.stringify(['Locomotor Disability','अस्थिव्यंग'])],
-          ['मानसिक आजार','Mental Illness',JSON.stringify(['Mental Illness','मानसिक आजार'])],
-          ['अध्ययन अक्षमता','Specific Learning Disabilities',JSON.stringify(['Specific Learning Disabilities','Learning Disability','अध्ययन अक्षमता'])],
-          ['सेरेब्रल पालसी - मेंदूचा पक्षाघात','Cerebral Palsy',JSON.stringify(['Cerebral Palsy','सेरेब्रल पालसी'])],
-          ['स्वमग्न','Autism Spectrum Disorder',JSON.stringify(['Autism Spectrum Disorder','Autism','स्वमग्न'])],
-          ['बहुविकलांग','Multiple Disabilities including Deafblindness',JSON.stringify(['Multiple Disabilities including deafblindness','Multiple Disabilities','बहुविकलांग'])],
-          ['कुष्ठरोग','Leprosy Cured Persons',JSON.stringify(['Leprosy Cured persons','Leprosy','कुष्ठरोग'])],
-          ['बुटकेपणा','Dwarfism',JSON.stringify(['Dwarfism','बुटकेपणा'])],
-          ['मतिमंद','Intellectual Disability',JSON.stringify(['Intellectual Disability','ID','मतिमंद'])],
-          ['अविकसित मांसपेशी','Muscular Dystrophy',JSON.stringify(['Muscular Dystrophy','अविकसित मांसपेशी'])],
-          ['मज्जासंस्थेचे तीव्र आजार','Chronic Neurological Conditions',JSON.stringify(['Chronic Neurological conditions','Neurological','मज्जासंस्थेचे तीव्र आजार'])],
-          ['मेंदूतील चेतासंस्था संबंधी आजार','Multiple Sclerosis',JSON.stringify(['Multiple Sclerosis','MS','मेंदूतील चेतासंस्था संबंधी आजार'])],
-          ['रक्ता संबंधी कॅन्सर','Thalassemia',JSON.stringify(['Thalassemia','थॅलेसेमिया','रक्ता संबंधी कॅन्सर'])],
-          ['रक्तवाहिन्या संबंधित आजार','Hemophilia',JSON.stringify(['Hemophilia','रक्तवाहिन्या संबंधित आजार'])],
-          ['रक्ता संबंधी रक्ताचे प्रमाण कमी','Sickle Cell Disease',JSON.stringify(['Sickle Cell disease','Sickle Cell','रक्ता संबंधी रक्ताचे प्रमाण कमी'])],
-          ['एसिड हल्लाग्रस्त पीडित','Acid Attack Victim',JSON.stringify(['Acid Attack victim','Acid Attack','एसिड हल्लाग्रस्त पीडित'])],
-          ['कंपावत रोग',"Parkinson's Disease",JSON.stringify(["Parkinson's disease","Parkinsons","कंपावत रोग"])]
+          ['अंध', 'Blindness', JSON.stringify(['Blindness', 'Blind', 'अंध'])],
+          ['दृष्टिदोष', 'Low Vision', JSON.stringify(['Low Vision', 'Low-vision', 'दृष्टिदोष'])],
+          ['कर्णबधिर', 'Hearing Impairment', JSON.stringify(['Hearing Impairment', 'deaf and hard of hearing', 'कर्णबधिर'])],
+          ['वाचादोष', 'Speech and Language Disability', JSON.stringify(['Speech and Language Disability', 'Speech & Language', 'वाचादोष'])],
+          ['अस्थिव्यंग', 'Locomotor Disability', JSON.stringify(['Locomotor Disability', 'अस्थिव्यंग'])],
+          ['मानसिक आजार', 'Mental Illness', JSON.stringify(['Mental Illness', 'मानसिक आजार'])],
+          ['अध्ययन अक्षमता', 'Specific Learning Disabilities', JSON.stringify(['Specific Learning Disabilities', 'Learning Disability', 'अध्ययन अक्षमता'])],
+          ['सेरेब्रल पालसी - मेंदूचा पक्षाघात', 'Cerebral Palsy', JSON.stringify(['Cerebral Palsy', 'सेरेब्रल पालसी'])],
+          ['स्वमग्न', 'Autism Spectrum Disorder', JSON.stringify(['Autism Spectrum Disorder', 'Autism', 'स्वमग्न'])],
+          ['बहुविकलांग', 'Multiple Disabilities including Deafblindness', JSON.stringify(['Multiple Disabilities including deafblindness', 'Multiple Disabilities', 'बहुविकलांग'])],
+          ['कुष्ठरोग', 'Leprosy Cured Persons', JSON.stringify(['Leprosy Cured persons', 'Leprosy', 'कुष्ठरोग'])],
+          ['बुटकेपणा', 'Dwarfism', JSON.stringify(['Dwarfism', 'बुटकेपणा'])],
+          ['मतिमंद', 'Intellectual Disability', JSON.stringify(['Intellectual Disability', 'ID', 'मतिमंद'])],
+          ['अविकसित मांसपेशी', 'Muscular Dystrophy', JSON.stringify(['Muscular Dystrophy', 'अविकसित मांसपेशी'])],
+          ['मज्जासंस्थेचे तीव्र आजार', 'Chronic Neurological Conditions', JSON.stringify(['Chronic Neurological conditions', 'Neurological', 'मज्जासंस्थेचे तीव्र आजार'])],
+          ['मेंदूतील चेतासंस्था संबंधी आजार', 'Multiple Sclerosis', JSON.stringify(['Multiple Sclerosis', 'MS', 'मेंदूतील चेतासंस्था संबंधी आजार'])],
+          ['रक्ता संबंधी कॅन्सर', 'Thalassemia', JSON.stringify(['Thalassemia', 'थॅलेसेमिया', 'रक्ता संबंधी कॅन्सर'])],
+          ['रक्तवाहिन्या संबंधित आजार', 'Hemophilia', JSON.stringify(['Hemophilia', 'रक्तवाहिन्या संबंधित आजार'])],
+          ['रक्ता संबंधी रक्ताचे प्रमाण कमी', 'Sickle Cell Disease', JSON.stringify(['Sickle Cell disease', 'Sickle Cell', 'रक्ता संबंधी रक्ताचे प्रमाण कमी'])],
+          ['एसिड हल्लाग्रस्त पीडित', 'Acid Attack Victim', JSON.stringify(['Acid Attack victim', 'Acid Attack', 'एसिड हल्लाग्रस्त पीडित'])],
+          ['कंपावत रोग', "Parkinson's Disease", JSON.stringify(["Parkinson's disease", "Parkinsons", "कंपावत रोग"])]
         ];
         await conn.query('INSERT INTO disability_types (label_marathi, label_english, aliases) VALUES ?', [seedVals]);
       }
@@ -351,11 +352,11 @@ export async function GET(_req: NextRequest) {
         });
 
       // Process field officers data
-      const fieldOfficers = Array.isArray(fieldOfficersRows) 
+      const fieldOfficers = Array.isArray(fieldOfficersRows)
         ? (fieldOfficersRows as any[]).map((row: any) => ({
-            name: String(row.officer_name || `User ${row.id}`).trim(),
-            completed: Number(row.completed_surveys) || 0
-          }))
+          name: String(row.officer_name || `User ${row.id}`).trim(),
+          completed: Number(row.completed_surveys) || 0
+        }))
         : [];
 
       const ageRanges = ageBuckets.filter(bucket => bucket.total > 0);
@@ -394,16 +395,16 @@ export async function GET(_req: NextRequest) {
             windowMinutes: nowOnlineWindowMinutes,
           },
           activeQuestions,
-          sections: Array.isArray(sectionsRows) ? (sectionsRows as any[]).map((r:any) => r.name).filter((n:any) => typeof n === 'string' && n.length > 0) : [],
-          breakdowns: { 
-            taluka, 
-            gender, 
-            district, 
+          sections: Array.isArray(sectionsRows) ? (sectionsRows as any[]).map((r: any) => r.name).filter((n: any) => typeof n === 'string' && n.length > 0) : [],
+          breakdowns: {
+            taluka,
+            gender,
+            district,
             disability,
             udid,
             fieldOfficers,
-            ageRanges, 
-            pendingOverall: pendingSurveys 
+            ageRanges,
+            pendingOverall: pendingSurveys
           },
           roles: {
             field_officer: fieldOfficerRoles,
