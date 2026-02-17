@@ -1,3 +1,32 @@
+/**
+ * @fileoverview Questions Retrieval API Route with Dynamic Options Injection
+ * @module app/api/get-questions
+ * @description This API endpoint retrieves survey questions from the database and dynamically
+ * injects options from related tables (disability types, sports, organs). It supports both
+ * standard and public form question sets.
+ * 
+ * @author DDRC Development Team
+ * @created 2026-02-14
+ * @lastModified 2026-02-17
+ * 
+ * Key Features:
+ * - Retrieves questions from MySQL database with section information
+ * - Dynamically injects disability types from disability_types table
+ * - Dynamically injects sports types and game names from sports tables
+ * - Dynamically injects disability organs from disability_organs table
+ * - Supports public form questions (separate table)
+ * - Auto-creates and seeds reference tables if they don't exist
+ * - Returns questions with proper Marathi/English bilingual options
+ * 
+ * Dynamic Injection Mappings:
+ * - Question ID 69: Disability Types (दिव्यांगता प्रकार)
+ * - Question ID 22: Sports Types (खेळ प्रकार)
+ * - Question ID 23: Game Names (खेळाचे नाव)
+ * - Question IDs 73, 101: Disability Organs (दिव्यांगता अवयव)
+ * 
+ * @see {@link https://surveyapi.ddrcnagar.in/api-docs} API Documentation
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
 import { dbQuery, getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';

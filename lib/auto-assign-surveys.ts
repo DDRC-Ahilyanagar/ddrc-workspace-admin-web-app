@@ -1,14 +1,38 @@
+/**
+ * @fileoverview Auto-Assignment Module for Survey Distribution
+ * @module lib/auto-assign-surveys
+ * @description This module handles the automatic assignment of surveys to field officers
+ * based on their registered villages and current location. It implements a round-robin
+ * distribution algorithm to ensure balanced workload across all field officers.
+ * 
+ * @author DDRC Development Team
+ * @created 2026-02-15
+ * @lastModified 2026-02-17
+ * 
+ * Key Features:
+ * - Automatic survey assignment based on village matching
+ * - Round-robin distribution for load balancing
+ * - FCM push notifications to field officers
+ * - Activity logging for audit trails
+ * - Support for both current and registered village matching
+ */
+
 import { getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';
 import { getAllLocations, isOnline } from '@/lib/location-store';
 import { sendFCMPushNotification } from './fcm';
 
 /**
- * Extract village/GAV from survey_json
- */
-/**
- * Extract village/GAV from survey_json
- * Supports multiple potential question IDs
+ * Extracts village/GAV information from survey JSON data
+ * Supports multiple potential question IDs for flexibility across different survey formats
+ * 
+ * @param {any} surveyJson - The survey JSON object containing answers
+ * @param {number | string | (number | string)[]} villageQuestionIds - Question ID(s) that contain village information
+ * @returns {string | null} The extracted village name or null if not found
+ * 
+ * @example
+ * const village = extractVillageFromSurveyJson(surveyData, [30, 39, 49, 50]);
+ * // Returns: "Ahmednagar" or null
  */
 function extractVillageFromSurveyJson(surveyJson: any, villageQuestionIds: number | string | (number | string)[]): string | null {
   if (!surveyJson || typeof surveyJson !== 'object') {
@@ -80,9 +104,47 @@ function extractVillageFromSurveyJson(surveyJson: any, villageQuestionIds: numbe
 }
 
 /**
- * Auto-assign a specific survey or all unassigned surveys
- * @param surveyId - Optional: specific survey ID to assign. If not provided, assigns all unassigned surveys
- * @returns Result object with assigned count and details
+ * Automatically assigns surveys to field officers based on village matching and round-robin distribution
+ * 
+ * This function implements an intelligent survey assignment system that:
+ * 1. Identifies unassigned surveys from the database
+ * 2. Extracts village information from survey JSON data
+ * 3. Matches surveys with field officers based on their assigned villages
+ * 4. Distributes surveys evenly using a round-robin algorithm
+ * 5. Sends FCM push notifications to assigned field officers
+ * 6. Logs all assignment activities for audit purposes
+ * 
+ * Assignment Priority:
+ * - Priority 1: Officers whose current_gaav matches the survey village (they are physically present)
+ * - Priority 2: Officers whose registered villages (primary_gaav or additional_gaavs) match
+ * - Fallback: Any available field officer if no village match is found
+ * 
+ * Round-Robin Logic:
+ * - Assigns to the officer who received an assignment the longest time ago
+ * - Ensures balanced workload distribution across all field officers
+ * 
+ * @param {number} [surveyId] - Optional specific survey ID to assign. If not provided, assigns all unassigned surveys
+ * @returns {Promise<{ok: boolean, assigned: number, checked: number, message: string, details: any[]}>} 
+ *          Result object containing:
+ *          - ok: Whether the operation completed successfully
+ *          - assigned: Number of surveys successfully assigned
+ *          - checked: Total number of surveys processed
+ *          - message: Human-readable status message
+ *          - details: Array of assignment details (survey_id, officer_id, village)
+ * 
+ * @throws {Error} Database connection or query errors
+ * 
+ * @example
+ * // Assign all unassigned surveys
+ * const result = await autoAssignSurveys();
+ * console.log(`Assigned ${result.assigned} out of ${result.checked} surveys`);
+ * 
+ * @example
+ * // Assign a specific survey
+ * const result = await autoAssignSurveys(12345);
+ * if (result.ok && result.assigned > 0) {
+ *   console.log(`Survey 12345 assigned to officer ${result.details[0].officer_id}`);
+ * }
  */
 export async function autoAssignSurveys(surveyId?: number): Promise<{
   ok: boolean;
