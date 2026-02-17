@@ -1,10 +1,10 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import React, { useState, useEffect, useRef } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import DataTable from 'datatables.net-react';
-
-export const dynamic = 'force-dynamic';
 
 interface Question {
   question_id: number;

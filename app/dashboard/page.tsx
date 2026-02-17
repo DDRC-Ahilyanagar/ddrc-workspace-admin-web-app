@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminLayout from '@/components/AdminLayout';
@@ -128,7 +130,7 @@ export default function DashboardPage() {
   const handleExportReports = async () => {
     setExporting(true);
     setExportError('');
-    
+
     try {
       // Generate reports and email them to admin users
       const response = await fetch('/api/admin/download-all-reports', {
@@ -263,8 +265,8 @@ export default function DashboardPage() {
             role="alert"
             aria-live="assertive"
             aria-atomic="true"
-            style={{ 
-              zIndex: 9999, 
+            style={{
+              zIndex: 9999,
               minWidth: '350px',
               maxWidth: '500px',
               animation: 'slideInRight 0.3s ease-out',
@@ -307,8 +309,8 @@ export default function DashboardPage() {
                 <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
                   <h5 className="card-title mb-0">सांख्यिकी आलेख</h5>
                   <div className="d-flex gap-2 flex-wrap">
-                    <select 
-                      className="form-select form-select-sm" 
+                    <select
+                      className="form-select form-select-sm"
                       style={{ minWidth: '180px' }}
                       value={chartFilter}
                       onChange={(e) => setChartFilter(e.target.value as 'taluka' | 'gender' | 'disability' | 'udid' | 'fieldOfficers')}
@@ -321,7 +323,7 @@ export default function DashboardPage() {
                     </select>
                   </div>
                 </div>
-                
+
                 {/* Taluka Chart */}
                 {chartFilter === 'taluka' && stats?.breakdowns?.taluka && stats.breakdowns.taluka.length > 0 ? (
                   <div style={{ height: '450px', position: 'relative' }}>
@@ -341,45 +343,45 @@ export default function DashboardPage() {
                       options={{
                         responsive: true,
                         maintainAspectRatio: false,
-                      plugins: {
-                        legend: {
-                          display: false,
+                        plugins: {
+                          legend: {
+                            display: false,
+                          },
+                          tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            padding: 12,
+                            titleFont: { size: 14, weight: 'bold' },
+                            bodyFont: { size: 13 },
+                            callbacks: {
+                              label: function (context) {
+                                return `पूर्ण: ${context.parsed.y}`;
+                              }
+                            }
+                          }
                         },
-                        tooltip: {
-                          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                          padding: 12,
-                          titleFont: { size: 14, weight: 'bold' },
-                          bodyFont: { size: 13 },
-                          callbacks: {
-                            label: function(context) {
-                              return `पूर्ण: ${context.parsed.y}`;
+                        scales: {
+                          y: {
+                            beginAtZero: true,
+                            ticks: {
+                              stepSize: 1,
+                              font: { size: 11 },
+                            },
+                            grid: {
+                              color: 'rgba(0, 0, 0, 0.05)',
+                            }
+                          },
+                          x: {
+                            ticks: {
+                              font: { size: 11 },
+                              maxRotation: 45,
+                              minRotation: 0,
+                            },
+                            grid: {
+                              display: false,
                             }
                           }
                         }
-                      },
-                      scales: {
-                        y: {
-                          beginAtZero: true,
-                          ticks: {
-                            stepSize: 1,
-                            font: { size: 11 },
-                          },
-                          grid: {
-                            color: 'rgba(0, 0, 0, 0.05)',
-                          }
-                        },
-                        x: {
-                          ticks: {
-                            font: { size: 11 },
-                            maxRotation: 45,
-                            minRotation: 0,
-                          },
-                          grid: {
-                            display: false,
-                          }
-                        }
-                      }
-                    }}
+                      }}
                     />
                   </div>
                 ) : chartFilter === 'taluka' ? (
@@ -432,7 +434,7 @@ export default function DashboardPage() {
                             titleFont: { size: 14, weight: 'bold' },
                             bodyFont: { size: 13 },
                             callbacks: {
-                              label: function(context) {
+                              label: function (context) {
                                 const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
                                 const percentage = total > 0 ? ((context.parsed / total) * 100).toFixed(1) : 0;
                                 return `${context.label}: ${context.parsed} (${percentage}%)`;
@@ -471,66 +473,66 @@ export default function DashboardPage() {
                         datasets: [{
                           label: 'सर्वेक्षण',
                           data: stats.breakdowns.disability.map(d => Number(d.completed) || 0),
-                        backgroundColor: getColorsForItems(stats.breakdowns.disability.length).colors,
-                        borderColor: getColorsForItems(stats.breakdowns.disability.length).borders,
-                        borderWidth: 2,
-                        borderRadius: 6,
-                        borderSkipped: false,
-                      }],
-                    }}
+                          backgroundColor: getColorsForItems(stats.breakdowns.disability.length).colors,
+                          borderColor: getColorsForItems(stats.breakdowns.disability.length).borders,
+                          borderWidth: 2,
+                          borderRadius: 6,
+                          borderSkipped: false,
+                        }],
+                      }}
                       options={{
                         responsive: true,
                         maintainAspectRatio: false,
                         indexAxis: 'y',
-                      plugins: {
-                        legend: {
-                          display: false,
-                        },
-                        tooltip: {
-                          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                          padding: 12,
-                          titleFont: { size: 14, weight: 'bold' },
-                          bodyFont: { size: 13 },
-                          callbacks: {
-                            title: function(context) {
-                              const item = stats.breakdowns?.disability?.[context[0].dataIndex];
-                              if (!item) return '';
-                              // Safely extract name - handle both string and object cases
-                              if (typeof item.name === 'string') {
-                                return item.name;
-                              } else if (item.name && typeof item.name === 'object') {
-                                const nameObj = item.name as any;
-                                return nameObj.label_marathi || nameObj.label_english || nameObj.label || nameObj.name || 'निर्दिष्ट नाही';
+                        plugins: {
+                          legend: {
+                            display: false,
+                          },
+                          tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            padding: 12,
+                            titleFont: { size: 14, weight: 'bold' },
+                            bodyFont: { size: 13 },
+                            callbacks: {
+                              title: function (context) {
+                                const item = stats.breakdowns?.disability?.[context[0].dataIndex];
+                                if (!item) return '';
+                                // Safely extract name - handle both string and object cases
+                                if (typeof item.name === 'string') {
+                                  return item.name;
+                                } else if (item.name && typeof item.name === 'object') {
+                                  const nameObj = item.name as any;
+                                  return nameObj.label_marathi || nameObj.label_english || nameObj.label || nameObj.name || 'निर्दिष्ट नाही';
+                                }
+                                return String(item.name || 'निर्दिष्ट नाही');
+                              },
+                              label: function (context) {
+                                return `संख्या: ${context.parsed.x}`;
                               }
-                              return String(item.name || 'निर्दिष्ट नाही');
+                            }
+                          }
+                        },
+                        scales: {
+                          x: {
+                            beginAtZero: true,
+                            ticks: {
+                              stepSize: 1,
+                              font: { size: 11 },
                             },
-                            label: function(context) {
-                              return `संख्या: ${context.parsed.x}`;
+                            grid: {
+                              color: 'rgba(0, 0, 0, 0.05)',
+                            }
+                          },
+                          y: {
+                            ticks: {
+                              font: { size: 11 },
+                            },
+                            grid: {
+                              display: false,
                             }
                           }
                         }
-                      },
-                      scales: {
-                        x: {
-                          beginAtZero: true,
-                          ticks: {
-                            stepSize: 1,
-                            font: { size: 11 },
-                          },
-                          grid: {
-                            color: 'rgba(0, 0, 0, 0.05)',
-                          }
-                        },
-                        y: {
-                          ticks: {
-                            font: { size: 11 },
-                          },
-                          grid: {
-                            display: false,
-                          }
-                        }
-                      }
-                    }}
+                      }}
                     />
                   </div>
                 ) : chartFilter === 'disability' ? (
@@ -581,7 +583,7 @@ export default function DashboardPage() {
                             titleFont: { size: 14, weight: 'bold' },
                             bodyFont: { size: 13 },
                             callbacks: {
-                              label: function(context) {
+                              label: function (context) {
                                 const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
                                 const percentage = total > 0 ? ((context.parsed / total) * 100).toFixed(1) : 0;
                                 return `${context.label}: ${context.parsed} (${percentage}%)`;
@@ -630,11 +632,11 @@ export default function DashboardPage() {
                             titleFont: { size: 14, weight: 'bold' },
                             bodyFont: { size: 13 },
                             callbacks: {
-                              title: function(context) {
+                              title: function (context) {
                                 const fullName = stats.breakdowns?.fieldOfficers?.[context[0].dataIndex]?.name || '';
                                 return fullName;
                               },
-                              label: function(context) {
+                              label: function (context) {
                                 return `पूर्ण सर्वेक्षण: ${context.parsed.y}`;
                               }
                             }
@@ -732,7 +734,7 @@ export default function DashboardPage() {
                           titleFont: { size: 14, weight: 'bold' },
                           bodyFont: { size: 13 },
                           callbacks: {
-                            footer: function(tooltipItems) {
+                            footer: function (tooltipItems) {
                               const total = tooltipItems.reduce((sum: number, item: any) => {
                                 return sum + (item.parsed.y || 0);
                               }, 0);

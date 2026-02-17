@@ -41,6 +41,7 @@ jobs:
         env:
           # Optimize Next.js build
           NEXT_TELEMETRY_DISABLED: 1
+          DATABASE_URL: "mysql://user:pass@localhost:3306/db" # Placeholder
 
       - name: Test Server Connectivity
         run: |

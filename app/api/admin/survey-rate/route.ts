@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+export const dynamic = 'force-dynamic';
 import { dbQueryOne } from '@/lib/db';
 import { Logger } from '@/lib/logger';
 

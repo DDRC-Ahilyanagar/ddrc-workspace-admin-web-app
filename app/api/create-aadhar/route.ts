@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';
@@ -8,7 +10,6 @@ import path from 'path';
 import { createWriteStream } from 'fs';
 import { NextResponse as _ } from 'next/server';
 import { logTestUserActivity } from '@/lib/test-logger';
-// tesseract.js dynamic import when needed
 
 /**
  * @swagger
@@ -228,23 +229,6 @@ async function handleCreate(request: NextRequest, user?: any) {
 
         // OCR processing removed as per refactor to prevent build hangs
         let text = '';
-        /*
-        try {
-          const { extractTextFromImage } = await import('@/lib/ocr');
-          if (downloads.length > 0) {
-            const imageBuffer = await fs.readFile(downloads[0].filePath);
-            text = await extractTextFromImage(imageBuffer, 'aadhaar');
-            text = text.replace(/\s+/g, ' ').trim();
-          }
-        } catch (ocrError: any) {
-          Logger.error('create_aadhar_front_ocr_failed', {
-            error: ocrError.message,
-            stack: ocrError.stack,
-            note: 'OCR failed but continuing without extracted data'
-          });
-          // Continue without OCR data - not critical for Aadhaar creation
-        }
-        */
 
         if (text) {
           try {
@@ -340,20 +324,6 @@ async function handleCreate(request: NextRequest, user?: any) {
           if (backImage) {
             // OCR processing removed
             let raw = '';
-            /*
-            try {
-              const { extractTextFromImage } = await import('@/lib/ocr');
-              const imageBuffer = await fs.readFile(backPath);
-              raw = await extractTextFromImage(imageBuffer, 'aadhaar');
-              raw = raw.replace(/\r/g, '').trim();
-            } catch (ocrError: any) {
-              Logger.error('create_aadhar_back_ocr_failed', {
-                error: ocrError.message,
-                note: 'Back image OCR failed but continuing'
-              });
-              // Continue without address extraction
-            }
-            */
 
             if (raw) {
               try {

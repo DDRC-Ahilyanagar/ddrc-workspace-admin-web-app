@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import AdminLayout from '@/components/AdminLayout';
@@ -48,14 +50,14 @@ export default function OfficersPage() {
       console.log('Fetching officers from API...');
       const res = await fetch('/api/admin/officers');
       const json = await res.json();
-      console.log('Officers API Response:', { 
-        ok: json.ok, 
-        dataCount: json.data?.length || 0, 
+      console.log('Officers API Response:', {
+        ok: json.ok,
+        dataCount: json.data?.length || 0,
         ratePerSurvey: json.ratePerSurvey,
         error: json.error,
-        sampleData: json.data?.[0] 
+        sampleData: json.data?.[0]
       });
-      
+
       if (json.ok) {
         setOfficers(json.data || []);
         setRatePerSurvey(json.ratePerSurvey || 0);
@@ -97,10 +99,10 @@ export default function OfficersPage() {
   };
 
   const changeUserRole = async (userId: string, currentRole: string) => {
-    const newRole = currentRole?.toLowerCase().includes('field') 
-      ? 'verification_officer' 
+    const newRole = currentRole?.toLowerCase().includes('field')
+      ? 'verification_officer'
       : 'field_officer';
-    
+
     if (!confirm(`Are you sure you want to change this user's role to ${newRole}?`)) {
       return;
     }
@@ -208,11 +210,11 @@ export default function OfficersPage() {
                               ></i>
                             </td>
                             <td>
-                              <Link 
+                              <Link
                                 href={`/officers/${officer.id}`}
                                 style={{ textDecoration: 'none', color: 'inherit' }}
                               >
-                                <strong 
+                                <strong
                                   style={{ cursor: 'pointer', color: '#0d6efd' }}
                                   onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
                                   onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
@@ -226,16 +228,15 @@ export default function OfficersPage() {
                             </td>
                             <td>{officer.phone}</td>
                             <td>
-                              <span className={`badge ${
-                                officer.userType?.toLowerCase().includes('field') 
-                                  ? 'bg-primary' 
+                              <span className={`badge ${officer.userType?.toLowerCase().includes('field')
+                                  ? 'bg-primary'
                                   : 'bg-info'
-                              }`}>
+                                }`}>
                                 {officer.userType === 'field_officer' || officer.userType?.toLowerCase().includes('field')
                                   ? 'Field Officer'
                                   : officer.userType === 'verification_officer' || officer.userType?.toLowerCase().includes('verification')
-                                  ? 'Verification Officer'
-                                  : officer.userType || 'Unknown'}
+                                    ? 'Verification Officer'
+                                    : officer.userType || 'Unknown'}
                               </span>
                             </td>
                             <td>
@@ -269,11 +270,10 @@ export default function OfficersPage() {
                                 className="btn btn-sm btn-outline-primary"
                                 onClick={() => changeUserRole(officer.id, officer.userType || '')}
                                 disabled={changingRole === officer.id}
-                                title={`Change role to ${
-                                  officer.userType?.toLowerCase().includes('field') 
-                                    ? 'Verification Officer' 
+                                title={`Change role to ${officer.userType?.toLowerCase().includes('field')
+                                    ? 'Verification Officer'
                                     : 'Field Officer'
-                                }`}
+                                  }`}
                               >
                                 {changingRole === officer.id ? (
                                   <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>

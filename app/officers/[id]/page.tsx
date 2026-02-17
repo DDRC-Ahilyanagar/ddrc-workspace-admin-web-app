@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getAbsoluteImageUrl } from '@/lib/config';
@@ -45,7 +47,7 @@ export default function OfficerProfilePage() {
   const params = useParams();
   const router = useRouter();
   const officerId = params.id as string;
-  
+
   const [profile, setProfile] = useState<OfficerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +64,7 @@ export default function OfficerProfilePage() {
       setError(null);
       const res = await fetch(`/api/admin/officers/${officerId}`);
       const json = await res.json();
-      
+
       if (json.ok) {
         setProfile(json.data);
       } else {
@@ -124,7 +126,7 @@ export default function OfficerProfilePage() {
       <div className="container-fluid">
         <div className="d-flex justify-content-between align-items-center mb-4">
           <div>
-            <button 
+            <button
               className="btn btn-outline-secondary mb-2"
               onClick={() => router.push('/officers')}
             >
@@ -158,7 +160,7 @@ export default function OfficerProfilePage() {
                     }}
                   />
                 ) : (
-                  <div 
+                  <div
                     className="rounded-circle bg-secondary d-inline-flex align-items-center justify-content-center mb-3"
                     style={{ width: '200px', height: '200px' }}
                   >
@@ -173,7 +175,7 @@ export default function OfficerProfilePage() {
                     <span className="badge bg-warning text-dark">Profile Incomplete</span>
                   )}
                 </p>
-                
+
                 <div className="text-start">
                   <div className="mb-2">
                     <strong>Phone:</strong> {profile.phone || '-'}
