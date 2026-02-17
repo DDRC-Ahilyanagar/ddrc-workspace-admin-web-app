@@ -1,4 +1,4 @@
-// Deployment trigger: Updated CI/CD secrets for separate repository mapping
+// Deployment trigger: Verified modern ED25519 SSH key mapping with root user
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';
