@@ -56,7 +56,6 @@ jobs:
           username: root
           key: ${{ secrets.VPS_KEY }}
           port: 22
-          passphrase: ""
           timeout: 300s
           command_timeout: 300s
           debug: false
