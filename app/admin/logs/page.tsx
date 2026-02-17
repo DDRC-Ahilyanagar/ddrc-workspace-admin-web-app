@@ -218,14 +218,17 @@ export default function SystemLogsPage() {
                                                                     {prettyJson.split('\n').map((line, lidx) => (
                                                                         <div key={lidx}>
                                                                             {line.split(/(:|{|}|\[|\]|,)/).map((segment, sidx) => {
-                                                                                if (segment === ':') return <span key={sidx} className="text-secondary">:</span>;
-                                                                                if (/[{}\[\]]/.test(segment)) return <span key={sidx} className="text-info">{segment}</span>;
-                                                                                if (segment === ',') return <span key={sidx} className="text-secondary">,</span>;
+                                                                                if (segment === ':') return <span key={sidx} className="token-punctuation">:</span>;
+                                                                                if (/[{}\[\]]/.test(segment)) return <span key={sidx} className="token-bracket">{segment}</span>;
+                                                                                if (segment === ',') return <span key={sidx} className="token-punctuation">,</span>;
                                                                                 if (segment.includes('"')) {
                                                                                     // Key or String Value
                                                                                     const isKey = line.split(':')[0].includes(segment);
-                                                                                    return <span key={sidx} className={isKey ? 'text-warning opacity-75' : 'text-success'}>{segment}</span>;
+                                                                                    return <span key={sidx} className={isKey ? 'token-key' : 'token-string'}>{segment}</span>;
                                                                                 }
+                                                                                // Numbers/booleans
+                                                                                if (/^\s*-?\d+(\.\d+)?\s*$/.test(segment)) return <span key={sidx} className="token-number">{segment}</span>;
+                                                                                if (/^\s*(true|false|null)\s*$/.test(segment)) return <span key={sidx} className="token-boolean">{segment}</span>;
                                                                                 return <span key={sidx}>{segment}</span>;
                                                                             })}
                                                                         </div>
@@ -239,9 +242,15 @@ export default function SystemLogsPage() {
                                             {filteredLogs.length === 0 && (
                                                 <div className="text-center py-5">
                                                     <div className="opacity-20 mb-3">
-                                                        <i className="bi bi-search display-1"></i>
+                                                        <i className="bi bi-cloud-slash display-1"></i>
                                                     </div>
-                                                    <p className="text-secondary h5 fw-light">{searchQuery ? `No matches found for "${searchQuery}"` : 'Stream is currently empty'}</p>
+                                                    <p className="text-secondary h5 fw-light">{searchQuery ? `No matches found for "${searchQuery}"` : 'Log stream is currently empty'}</p>
+                                                    <button className="btn btn-sm btn-outline-primary mt-3 px-4 rounded-pill" onClick={fetchLogs}>
+                                                        <i className="bi bi-arrow-clockwise me-2"></i>Reconnect Source
+                                                    </button>
+                                                    {activeSource === 'python' && (
+                                                        <p className="text-muted x-small mt-3 opacity-50">Note: Python Media Service logs are only available when the service is active.</p>
+                                                    )}
                                                 </div>
                                             )}
                                             <div ref={logEndRef} />
@@ -297,33 +306,41 @@ export default function SystemLogsPage() {
                 }
 
                 .status-default { color: #cfd8dc; }
-                .status-error { color: #ff5252; border-left: 2px solid #ff5252; background: rgba(255, 82, 82, 0.05); }
-                .status-warn { color: #ffd740; border-left: 2px solid #ffd740; background: rgba(255, 215, 64, 0.05); }
-                .status-info { color: #81d4fa; border-left: 2px solid #00b0ff; background: rgba(0, 176, 255, 0.03); }
+                .status-error { color: #ff5252; border-left: 4px solid #ff5252; background: rgba(255, 82, 82, 0.08); }
+                .status-warn { color: #ffd740; border-left: 4px solid #ffd740; background: rgba(255, 215, 64, 0.08); }
+                .status-info { color: #e1f5fe; border-left: 4px solid #00b0ff; background: rgba(0, 176, 255, 0.05); }
                 .status-debug { color: #b0bec5; opacity: 0.8; }
 
                 .log-header {
                    transition: background 0.2s;
                    cursor: default;
+                   border-bottom: 1px solid rgba(255,255,255,0.03);
                 }
                 .log-entry:hover .log-header {
-                   background: rgba(255,255,255,0.03);
+                   background: rgba(255,255,255,0.05);
                 }
 
                 .log-prefix {
-                   font-weight: 600;
-                   opacity: 0.9;
+                   font-weight: 500;
+                   color: #80cbc4; /* Teal for timestamp/meta */
                 }
+                
+                .status-info .log-prefix { color: #4fc3f7; }
+                .status-error .log-prefix { color: #ef5350; }
+                .status-warn .log-prefix { color: #fff176; }
 
                 .json-block {
                    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-                   box-shadow: inset 0 2px 10px rgba(0,0,0,0.2);
+                   box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                   margin-right: 1rem;
                 }
 
-                .text-info { color: #4dd0e1 !important; }
-                .text-warning { color: #ffcc80 !important; }
-                .text-success { color: #81c784 !important; }
-                .text-secondary { color: #90a4ae !important; }
+                .token-key { color: #ffcc80 !important; } /* Orange for keys */
+                .token-string { color: #a5d6a7 !important; } /* Green for strings */
+                .token-punctuation { color: #90a4ae !important; } /* Gray for punctuation */
+                .token-bracket { color: #4dd0e1 !important; } /* Cyan for brackets */
+                .token-number { color: #ce93d8 !important; } /* Purple for numbers */
+                .token-boolean { color: #f48fb1 !important; } /* Pink for booleans */
 
                 .x-small { font-size: 11px; }
                 .fw-black { font-weight: 900; }
