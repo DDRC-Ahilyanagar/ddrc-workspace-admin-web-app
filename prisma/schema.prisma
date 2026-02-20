@@ -483,6 +483,8 @@ model migrations {
 model notifications {
   id               BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
   user_id          BigInt?   @db.UnsignedBigInt
+  from_user_id     BigInt?   @db.UnsignedBigInt @map("from_user_id")
+  field_officer_id BigInt?   @db.UnsignedBigInt @map("field_officer_id")
   target_user_type String?   @db.VarChar(50)
   type             String    @db.VarChar(50)
   title            String    @db.VarChar(255)
@@ -497,7 +499,11 @@ model notifications {
   @@index([is_read], map: "idx_is_read")
   @@index([type], map: "idx_type")
   @@index([user_id], map: "idx_user_id")
+  @@index([from_user_id], map: "idx_from_user_id")
+  @@index([field_officer_id], map: "idx_field_officer_id")
   @@index([user_id, is_read], map: "idx_user_read")
+  @@index([user_id, from_user_id, created_at], map: "idx_user_from_created")
+  @@index([field_officer_id, type], map: "idx_field_officer_type")
 }
 
 model officers {

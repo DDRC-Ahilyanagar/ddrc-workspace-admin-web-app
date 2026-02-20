@@ -22,7 +22,6 @@
   "dependencies": {
     "@ckeditor/ckeditor5-build-classic": "^41.4.2",
     "@ckeditor/ckeditor5-react": "^11.0.0",
-    "@google-cloud/vision": "^5.3.4",
     "@prisma/client": "^6.2.1",
     "@react-pdf/renderer": "^3.4.5",
     "@types/node-cron": "^3.0.11",
@@ -31,12 +30,11 @@
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.1",
     "chart.js": "^4.5.1",
-    "datatables.net-bs5": "^2.3.5",
-    "datatables.net-dt": "^2.3.5",
+    "datatables.net-bs5": "^2.3.7",
+    "datatables.net-dt": "^2.3.7",
     "datatables.net-react": "^1.0.1",
     "dotenv": "^17.2.3",
     "exceljs": "^4.4.0",
-    "jquery": "^3.7.1",
     "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.15.3",
     "next": "14.2.33",
@@ -46,9 +44,7 @@
     "puppeteer": "^21.11.0",
     "react": "18.3.1",
     "react-chartjs-2": "^5.3.1",
-    "react-dom": "18.3.1",
-    "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-react": "^5.30.2"
+    "react-dom": "18.3.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",

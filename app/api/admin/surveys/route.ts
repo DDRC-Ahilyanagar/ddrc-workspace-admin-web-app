@@ -133,9 +133,9 @@ export async function GET(req: NextRequest) {
         searchParams.push(searchPattern, searchPattern, searchPattern, searchPattern);
       }
       
-      // Get total count (before filtering) - count from surveys table joined with survey_aadhar
+      // Get total count (before filtering) - count from surveys table where they exist
       const [totalCountRows]: any = await conn.query(
-        `SELECT COUNT(DISTINCT sa.id) AS total 
+        `SELECT COUNT(DISTINCT COALESCE(s.id, sa.id)) AS total 
          FROM survey_aadhar sa
          LEFT JOIN surveys s ON s.aadhaar_id = sa.id`
       );
@@ -143,7 +143,7 @@ export async function GET(req: NextRequest) {
       
       // Get filtered count
       const [filteredCountRows]: any = await conn.query(
-        `SELECT COUNT(DISTINCT sa.id) AS total 
+        `SELECT COUNT(DISTINCT COALESCE(s.id, sa.id)) AS total 
          FROM survey_aadhar sa
          LEFT JOIN surveys s ON s.aadhaar_id = sa.id
          WHERE ${whereClause}`,
@@ -153,7 +153,7 @@ export async function GET(req: NextRequest) {
       
       // Get paginated data - use surveys table for answer count and status (primary source)
       // Map column names to actual table columns
-      let orderByClause = 'sa.id'; // Default fallback
+      let orderByClause = 'COALESCE(s.id, sa.id)'; // Default - use surveys.id if exists, else survey_aadhar.id
       if (orderByColumn === 'answer_count') {
         orderByClause = 'COALESCE(s.no_of_questions_answered, 0)';
       } else if (orderByColumn === 'status') {
@@ -162,7 +162,7 @@ export async function GET(req: NextRequest) {
           ELSE 'Pending'
         END`;
       } else if (orderByColumn === 'id') {
-        orderByClause = 'sa.id';
+        orderByClause = 'COALESCE(s.id, sa.id)';
       } else if (orderByColumn === 'aadhar_no') {
         orderByClause = 'sa.aadhar_no';
       } else if (orderByColumn === 'user_id') {
@@ -174,8 +174,8 @@ export async function GET(req: NextRequest) {
       } else if (orderByColumn === 'updated_at') {
         orderByClause = 'sa.updated_at';
       } else {
-        // Fallback to sa.id for unknown columns
-        orderByClause = 'sa.id';
+        // Fallback to surveys.id for unknown columns
+        orderByClause = 'COALESCE(s.id, sa.id)';
       }
 
       // Build the query with proper error handling
@@ -215,7 +215,7 @@ export async function GET(req: NextRequest) {
       try {
         [rows] = await conn.query(
           `SELECT 
-            sa.id,
+            COALESCE(s.id, sa.id) AS id,
             sa.aadhar_no,
             COALESCE(s.user_id, sa.user_id) AS user_id,
             u.name AS user_name,

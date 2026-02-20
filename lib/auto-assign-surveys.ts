@@ -816,9 +816,10 @@ export async function autoAssignSurveys(surveyId?: number): Promise<{
             const notificationMessage = `${surveyVillage} गावातील एक नवीन सर्वेक्षण तुम्हाला सोपवण्यात आले आहे.`;
 
             await conn.execute(`
-              INSERT INTO notifications (user_id, type, title, message, data, created_at)
-              VALUES (?, 'survey_assigned', ?, ?, ?, NOW())
+              INSERT INTO notifications (user_id, from_user_id, field_officer_id, type, title, message, data, created_at)
+              VALUES (?, NULL, ?, 'survey_assigned', ?, ?, ?, NOW())
             `, [
+              matchedOfficerId,
               matchedOfficerId,
               notificationTitle,
               notificationMessage,

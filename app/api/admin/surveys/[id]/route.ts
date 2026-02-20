@@ -7,24 +7,6 @@ import type { PoolConnection } from 'mysql2/promise';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * @swagger
- * /api/admin/surveys/{id}:
- *   get:
- *     summary: Get survey details with all answers
- *     tags: [Admin]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Survey details retrieved successfully
- *       404:
- *         description: Survey not found
- */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
@@ -88,8 +70,10 @@ export async function GET(
         FROM survey_aadhar sa
         LEFT JOIN surveys s ON s.aadhaar_id = sa.id
         LEFT JOIN users u ON u.id = COALESCE(s.user_id, sa.user_id)
-        WHERE sa.id = ? LIMIT 1`,
-        [surveyId]
+        WHERE sa.id = ? OR s.id = ? OR s.aadhaar_id = ?
+        ORDER BY s.id DESC
+        LIMIT 1`,
+        [surveyId, surveyId, surveyId]
       );
 
       Logger.info('survey_details_survey_aadhar_query', {

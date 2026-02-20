@@ -147,6 +147,15 @@ function SurveyDetailsContent() {
 
     loadSurveyDetails();
     loadClarifications();
+
+    // Poll for clarification updates every 10 seconds
+    const clarificationInterval = setInterval(() => {
+      loadClarifications();
+    }, 10000);
+
+    return () => {
+      if (clarificationInterval) clearInterval(clarificationInterval);
+    };
   }, [surveyId]);
 
   // Normalize image path/URL for display
@@ -169,6 +178,19 @@ function SurveyDetailsContent() {
 
     // Check if it's actually an image path
     const answerStr = answer.answer.trim();
+
+    // Check if it's a date in ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss)
+    const dateMatch = answerStr.match(/^\d{4}-\d{2}-\d{2}(T|$)/);
+    if (dateMatch) {
+      try {
+        const date = new Date(answerStr);
+        // Format as dd-mm-yyyy
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}-${month}-${year}`;
+      } catch { }
+    }
 
     // We don't normalize here anymore, we'll do it in the rendering logic 
     // to handle multi-image answers correctly.
@@ -705,8 +727,13 @@ function SurveyDetailsContent() {
                           // Create unique key combining section_id, question_id, and index to avoid duplicates
                           const uniqueKey = `${sectionKey}_${ans.section_id || 0}_${ans.question_id}_${ansIdx}`;
 
+                          // Determine row and badge styling based on clarification status
+                          const isResolved = clarification?.status === 'resolved';
+                          const rowClass = clarification ? (isResolved ? 'table-success' : 'table-warning') : '';
+                          const badgeClass = isResolved ? 'bg-success text-white' : 'bg-warning text-dark';
+
                           return (
-                            <tr key={uniqueKey} className={clarification ? 'table-warning' : ''}>
+                            <tr key={uniqueKey} className={rowClass}>
                               <td>{ans.question_id}</td>
                               <td>
                                 <strong>
@@ -714,8 +741,8 @@ function SurveyDetailsContent() {
                                 </strong>
                                 {clarification && (
                                   <div className="mt-1">
-                                    <span className="badge bg-warning text-dark">
-                                      <i className="bi bi-exclamation-triangle me-1"></i>
+                                    <span className={`badge ${badgeClass}`}>
+                                      <i className={`bi ${isResolved ? 'bi-check-circle' : 'bi-exclamation-triangle'} me-1`}></i>
                                       स्पष्टीकरण आवश्यक ({clarification.status === 'pending' ? 'प्रलंबित' : 'निराकरण'})
                                     </span>
                                     <div className="small text-muted mt-1">

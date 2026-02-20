@@ -14,12 +14,13 @@ export const dynamic = 'force-dynamic';
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Script from 'next/script';
 import AdminLayout from '@/components/AdminLayout';
 
 export default function SurvekshanPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // Refs for table element and DataTable instance
   const tableRef = useRef<HTMLTableElement>(null);
@@ -42,6 +43,14 @@ export default function SurvekshanPage() {
     const storedUserType = localStorage.getItem('user_type') || '';
     setUserType(storedUserType);
   }, []);
+
+  // If a survey id is provided, redirect to survey details page
+  useEffect(() => {
+    const surveyId = searchParams.get('id');
+    if (surveyId) {
+      router.replace(`/surveys/${surveyId}`);
+    }
+  }, [router, searchParams]);
 
   // Fetch all surveys data once on mount
   useEffect(() => {

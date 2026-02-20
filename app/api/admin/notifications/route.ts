@@ -57,6 +57,12 @@ export async function GET(request: NextRequest) {
 
       const params: any[] = [userType, user.id];
 
+      Logger.info('FETCH_NOTIFICATIONS', {
+        user_id: user.id,
+        user_type: userType,
+        unread_only: unreadOnly,
+      });
+
       if (unreadOnly) {
         query += ' AND is_read = 0';
       }
@@ -90,6 +96,19 @@ export async function GET(request: NextRequest) {
         [userType, user.id]
       );
       const unreadCount = countRows?.[0]?.count || 0;
+
+      Logger.info('FETCH_NOTIFICATIONS_RESULT', {
+        user_id: user.id,
+        user_type: userType,
+        notifications_count: notifications.length,
+        unread_count: unreadCount,
+        latest_notification: notifications[0] ? {
+          id: notifications[0].id,
+          type: notifications[0].type,
+          is_read: notifications[0].is_read,
+          created_at: notifications[0].created_at
+        } : null
+      });
 
       return NextResponse.json({
         ok: true,

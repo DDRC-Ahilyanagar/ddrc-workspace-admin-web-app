@@ -6,6 +6,7 @@ const dbConfig = {
   password: process.env.DB_PASS || '',
   database: process.env.DB_NAME || 'ddrc_surveys',
   charset: 'utf8mb4',
+  timezone: '+05:30', // Asia/Kolkata (IST)
 };
 
 // Use globalThis to cache the pool in development to prevent connection leaks

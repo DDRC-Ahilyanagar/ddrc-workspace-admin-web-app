@@ -1,30 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 
-/**
- * @swagger
- * /api/health:
- *   get:
- *     summary: Health check endpoint
- *     tags: [System]
- *     responses:
- *       200:
- *         description: Service is healthy
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: string
- *                   example: "ok"
- *                 database:
- *                   type: string
- *                   example: "connected"
- *                 timestamp:
- *                   type: string
- *                   format: date-time
- */
 export async function GET() {
   try {
     // Check database connection
@@ -50,4 +26,5 @@ export async function GET() {
     );
   }
 }
+
 

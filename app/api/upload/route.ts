@@ -5,40 +5,6 @@ import { randomUUID } from 'crypto';
 import { Logger } from '@/lib/logger';
 import { convertFileToWebP, getWebPExtension } from '@/lib/image-utils';
 
-/**
- * @swagger
- * /api/upload:
- *   post:
- *     summary: Upload image file
- *     tags: [Upload]
- *     requestBody:
- *       required: true
- *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             properties:
- *               files:
- *                 type: string
- *                 format: binary
- *               user_name:
- *                 type: string
- *               user_phone:
- *                 type: string
- *     responses:
- *       200:
- *         description: File uploaded successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 url:
- *                   type: string
- *                   format: uri
- *                 path:
- *                   type: string
- */
 const normalizeBase = (value?: string | null) => {
   if (!value) return undefined;
   return value.endsWith('/') ? value.slice(0, -1) : value;
@@ -131,4 +97,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
 

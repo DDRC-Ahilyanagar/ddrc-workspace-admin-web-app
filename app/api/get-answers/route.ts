@@ -5,27 +5,6 @@ import { verifyAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * @swagger
- * /api/get-answers:
- *   get:
- *     summary: Get saved answers for a specific Aadhaar ID and optional section ID
- *     tags: [Answers]
- *     parameters:
- *       - name: aadhar_id
- *         in: query
- *         required: true
- *         schema:
- *           type: integer
- *       - name: section_id
- *         in: query
- *         required: false
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Answers retrieved successfully
- */
 export async function GET(request: NextRequest) {
   try {
     await verifyAuth(request);
@@ -160,4 +139,5 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
 

@@ -6,44 +6,6 @@ import { CONFIG } from '@/lib/config';
 import { validatePhone, validateRequest } from '@/lib/validation';
 import { logSignupStep } from '@/lib/signup-logger';
 
-/**
- * @swagger
- * /api/send-otp:
- *   post:
- *     summary: Send OTP to phone number
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - phone
- *             properties:
- *               phone:
- *                 type: string
- *                 description: 10-digit phone number
- *                 example: "9876543210"
- *     responses:
- *       200:
- *         description: OTP sent successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 ok:
- *                   type: boolean
- *                 otp_id:
- *                   type: number
- *                 sms:
- *                   type: object
- *       422:
- *         description: Invalid phone number
- *       500:
- *         description: Server error
- */
 // Set route timeout to 60 seconds to match database acquireTimeout
 export const maxDuration = 60;
 
@@ -506,4 +468,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
 

@@ -11,44 +11,6 @@ import { createWriteStream } from 'fs';
 import { NextResponse as _ } from 'next/server';
 import { logTestUserActivity } from '@/lib/test-logger';
 
-/**
- * @swagger
- * /api/create-aadhar:
- *   post:
- *     summary: Create or update Aadhaar record
- *     tags: [Aadhaar]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               has_no_aadhar:
- *                 type: boolean
- *                 description: Set to true if beneficiary doesn't have an Aadhaar card
- *               aadhar_no:
- *                 type: string
- *                 example: "1234-5678-9012"
- *                 description: Required if has_no_aadhar is false
- *               phone:
- *                 type: string
- *                 description: Required if has_no_aadhar is true (10 digits)
- *               user_id:
- *                 type: number
- *                 example: 1
- *               front_image:
- *                 type: string
- *                 format: uri
- *               back_image:
- *                 type: string
- *                 format: uri
- *     responses:
- *       200:
- *         description: Aadhaar created/updated successfully
- *       422:
- *         description: Invalid input
- */
 async function handleCreate(request: NextRequest, user?: any) {
   try {
     const body = await request.json();
@@ -416,4 +378,5 @@ export async function POST(request: NextRequest) {
 
   return await handleCreate(request, user);
 }
+
 

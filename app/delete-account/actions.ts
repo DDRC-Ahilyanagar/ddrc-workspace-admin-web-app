@@ -1,6 +1,6 @@
 "use server";
 
-import prisma from "@/lib/prisma";
+// import prisma from "@/lib/prisma";
 
 export type DeleteAccountResponse = {
     success: boolean;
@@ -14,6 +14,7 @@ export async function deleteAccountAction(formData: FormData): Promise<DeleteAcc
         return { success: false, message: "Email or Mobile number is required." };
     }
 
+    /*
     try {
         // Find user by email or contact number
         // Only allow deleting field_officer accounts for safety
@@ -82,4 +83,9 @@ export async function deleteAccountAction(formData: FormData): Promise<DeleteAcc
             message: "An error occurred while deleting the account. Please try again later."
         };
     }
+    */
+    return {
+        success: false,
+        message: "Account deletion is temporarily disabled for maintenance."
+    };
 }

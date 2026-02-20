@@ -27,9 +27,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+  const [prevUnreadCount, setPrevUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
   const [activeTab, setActiveTab] = useState<'requests' | 'alerts'>('requests');
   const [isMobile, setIsMobile] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   // Language state - load from localStorage or default to 'mr' (Marathi)
   const [language, setLanguage] = useState<'en' | 'mr'>(() => {
     if (typeof window !== 'undefined') {
@@ -127,6 +129,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
     const fetchAllNotifications = async () => {
       try {
+        console.log('🔄 Polling notifications...', { currentUserType, mounted: isMounted });
+        
         // 1. Fetch Access Requests (Admin Only)
         if (currentUserType === 'admin' || currentUserType === 'administrator') {
           const res = await fetch('/api/access-requests?status=pending', {
@@ -146,12 +150,41 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           credentials: 'include',
         });
         const notifJson = await notifRes.json();
+        console.log('📥 Notifications response:', { 
+          ok: notifJson.ok, 
+          count: notifJson.notifications?.length,
+          unread: notifJson.unread_count 
+        });
+        
         if (notifJson.ok && isMounted) {
+          const newUnreadCount = notifJson.unread_count || 0;
+          const prevCount = prevUnreadCount;
+          
           setNotifications(notifJson.notifications || []);
-          setUnreadNotificationsCount(notifJson.unread_count || 0);
+          setUnreadNotificationsCount(newUnreadCount);
+          setPrevUnreadCount(newUnreadCount);
+          
+          console.log('📊 Notification counts:', { prev: prevCount, new: newUnreadCount });
+          
+          // Play sound if new notifications arrived (count increased)
+          if (newUnreadCount > prevCount && prevCount >= 0) {
+            try {
+              if (audioRef.current) {
+                audioRef.current.currentTime = 0;
+                audioRef.current.volume = 1.0;
+                const playPromise = audioRef.current.play();
+                if (playPromise !== undefined) {
+                  playPromise.catch(err => console.log('Audio play prevented:', err));
+                }
+              }
+              console.log('🔔 New notification! Playing sound. Count:', newUnreadCount);
+            } catch (err) {
+              console.log('Failed to play notification sound:', err);
+            }
+          }
         }
       } catch (err: any) {
-        if (isMounted) console.error('Failed to fetch notifications:', err);
+        if (isMounted) console.error('❌ Failed to fetch notifications:', err);
       }
     };
 
@@ -314,6 +347,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   return (
     <div className="admin-layout animate__animated animate__fadeIn">
+      {/* Hidden audio element for notification sound */}
+      <audio ref={audioRef} preload="auto">
+        <source src="/notification-sound.wav" type="audio/wav" />
+      </audio>
+      
       {/* Top Navigation */}
       <nav className="admin-top-nav animate__animated animate__fadeInDown">
         <div className="d-flex align-items-center justify-content-between w-100">
@@ -465,7 +503,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
                                   // Mark as read and navigate if needed
                                   if (notif.data?.survey_id) {
-                                    router.push(`/survekshan?id=${notif.data.survey_id}`);
+                                    router.push(`/surveys/${notif.data.survey_id}`);
                                   } else if (notif.data?.aadhaar_id) {
                                     // If we have aadhaar_id but not survey_id link, try to go to reports or surveys
                                     router.push(`/survekshan?search=${notif.data.aadhaar_id}`);

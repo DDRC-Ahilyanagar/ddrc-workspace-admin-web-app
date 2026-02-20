@@ -4,22 +4,6 @@ import { Logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * @swagger
- * /api/sport-names:
- *   get:
- *     summary: Get sport names, optionally filtered by sports type
- *     tags: [Sports]
- *     parameters:
- *       - in: query
- *         name: sports_type_id
- *         schema:
- *           type: integer
- *         description: Filter by sports type ID
- *     responses:
- *       200:
- *         description: Sport names retrieved successfully
- */
 export async function GET(request: NextRequest) {
   try {
     const url = new URL(request.url);
@@ -70,4 +54,5 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
 

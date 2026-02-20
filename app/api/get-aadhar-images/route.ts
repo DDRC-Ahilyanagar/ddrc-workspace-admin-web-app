@@ -2,30 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { dbQuery, dbQueryOne } from '@/lib/db';
 import { Logger } from '@/lib/logger';
 
-/**
- * @swagger
- * /api/get-aadhar-images:
- *   post:
- *     summary: Get Aadhaar card images
- *     tags: [Aadhaar]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - aadhar_id
- *             properties:
- *               aadhar_id:
- *                 type: number
- *                 example: 1
- *     responses:
- *       200:
- *         description: Images retrieved successfully
- *       404:
- *         description: Aadhaar ID not found
- */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -89,4 +65,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
 

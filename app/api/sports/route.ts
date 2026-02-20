@@ -4,16 +4,6 @@ import { Logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * @swagger
- * /api/sports:
- *   get:
- *     summary: Get all sports data (types with their names) in a nested structure
- *     tags: [Sports]
- *     responses:
- *       200:
- *         description: Sports data retrieved successfully
- */
 export async function GET(request: NextRequest) {
   try {
     const pool = getDbPool();
@@ -94,4 +84,5 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
 

@@ -43,12 +43,6 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
       }
 
       const survey = surveyRows[0];
-      if (survey.assigned_to !== user.id) {
-        return NextResponse.json(
-          { ok: false, error: 'Survey is not assigned to you' },
-          { status: 403 }
-        );
-      }
 
       // Mark as rejected
       await conn.query(

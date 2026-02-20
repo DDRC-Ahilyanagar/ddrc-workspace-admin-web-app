@@ -1,18 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 import { getDbPool } from '@/lib/db';
-import { prisma } from '@/lib/prisma';
 
-/**
- * @swagger
- * /api/admin/officers:
- *   get:
- *     summary: Get all officers with their statistics
- *     tags: [Admin]
- *     responses:
- *       200:
- *         description: Officers list with stats
- */
+
 export async function GET(request: NextRequest) {
   try {
     const pool = await getDbPool();
@@ -180,4 +170,5 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
 

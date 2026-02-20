@@ -1,16 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbQuery } from '@/lib/db';
 
-/**
- * @swagger
- * /api/get-talukas:
- *   get:
- *     summary: Get all talukas
- *     tags: [Location]
- *     responses:
- *       200:
- *         description: Talukas retrieved successfully
- */
 export const GET = async (request: NextRequest) => {
   try {
     const [tables] = await (await import('@/lib/db'))
@@ -54,3 +44,4 @@ export const GET = async (request: NextRequest) => {
     return NextResponse.json({ ok: true, talukas: TALUKAS });
   }
 };
+

@@ -3,13 +3,6 @@ import { getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';
 import { verifyAuth } from '@/lib/auth';
 
-/**
- * @swagger
- * /api/early-detection/{id}:
- *   get:
- *     summary: Get a specific early detection baby record by ID
- *     tags: [Early Detection]
- */
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -55,13 +48,6 @@ export async function GET(
   }
 }
 
-/**
- * @swagger
- * /api/early-detection/{id}:
- *   put:
- *     summary: Update an early detection baby record
- *     tags: [Early Detection]
- */
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -192,13 +178,6 @@ export async function PUT(
   }
 }
 
-/**
- * @swagger
- * /api/early-detection/{id}:
- *   delete:
- *     summary: Delete an early detection baby record
- *     tags: [Early Detection]
- */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }

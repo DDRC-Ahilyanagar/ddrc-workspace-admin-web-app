@@ -4,25 +4,6 @@ import { Logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * @swagger
- * /api/get-section-name:
- *   get:
- *     summary: Get section name by ID
- *     tags: [Sections]
- *     parameters:
- *       - in: query
- *         name: section_id
- *         required: true
- *         schema:
- *           type: number
- *         example: 1
- *     responses:
- *       200:
- *         description: Section name retrieved successfully
- *       404:
- *         description: Section not found
- */
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -56,4 +37,5 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
 

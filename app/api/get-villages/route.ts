@@ -4,25 +4,6 @@ import { dbQuery } from '@/lib/db';
 // Force dynamic rendering since we use searchParams
 export const dynamic = 'force-dynamic';
 
-/**
- * @swagger
- * /api/get-villages:
- *   get:
- *     summary: Get villages by taluka
- *     tags: [Location]
- *     parameters:
- *       - in: query
- *         name: taluka
- *         required: true
- *         schema:
- *           type: string
- *         example: "Pune"
- *     responses:
- *       200:
- *         description: Villages retrieved successfully
- *       400:
- *         description: Taluka parameter required
- */
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -78,4 +59,5 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
 

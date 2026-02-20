@@ -3,22 +3,6 @@ import { getDbPool } from '@/lib/db';
 import { Logger } from '@/lib/logger';
 import { verifyAuth } from '@/lib/auth';
 
-/**
- * @swagger
- * /api/early-detection:
- *   get:
- *     summary: Get all early detection records by parent phone number
- *     tags: [Early Detection]
- *     parameters:
- *       - in: query
- *         name: phone
- *         schema:
- *           type: string
- *         description: Parent phone number
- *     responses:
- *       200:
- *         description: List of babies for the parent phone
- */
 export async function GET(request: NextRequest) {
   try {
     const { user, error } = await verifyAuth(request);
@@ -83,30 +67,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/**
- * @swagger
- * /api/early-detection:
- *   post:
- *     summary: Create a new early detection baby record
- *     tags: [Early Detection]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - parent_phone
- *             properties:
- *               parent_phone:
- *                 type: string
- *               baby_name:
- *                 type: string
- *               father_name:
- *                 type: string
- *               mother_name:
- *                 type: string
- */
 export async function POST(request: NextRequest) {
   try {
     const { user, error } = await verifyAuth(request);
@@ -239,4 +199,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
 

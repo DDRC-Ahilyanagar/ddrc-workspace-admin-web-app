@@ -9,62 +9,6 @@ import { sendFormCompletionSMS, generateRegistrationNumber } from '@/lib/sms';
 import { logTestUserActivity } from '@/lib/test-logger';
 
 
-/**
- * Get current time in Asia/Kolkata timezone
- */
-function getISTDate(): Date {
-  const d = new Date();
-  const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
-  const nd = new Date(utc + (3600000 * 5.5)); // Add +5:30
-  return nd;
-}
-
-/**
- * Get ISO string for IST (without Z, appended with +05:30)
- */
-function getISTISOString(): string {
-  const ist = getISTDate();
-  return ist.toISOString().replace('Z', '+05:30');
-}
-
-/**
- * @swagger
- * /api/submit-answers:
- *   post:
- *     summary: Submit survey answers
- *     tags: [Answers]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - user_id
- *               - aadhar_id
- *               - items
- *             properties:
- *               user_id:
- *                 type: numberR
- *               aadhar_id:
- *                 type: number
- *               items:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     question_id:
- *                       type: number
- *                     section_id:
- *                       type: number
- *                     answer:
- *                       type: string
- *     responses:
- *       200:
- *         description: Answers submitted successfully
- *       422:
- *         description: Invalid data
- */
 export async function handleSubmit(request: NextRequest, user: any) {
   try {
     // Robust body parsing for various clients/shells
@@ -1068,3 +1012,4 @@ export const POST = async (request: NextRequest) => {
     );
   }
 };
+

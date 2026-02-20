@@ -73,9 +73,12 @@ export async function POST(request: NextRequest) {
             const notifMessage = `${user.name || 'Field Officer'} ने सर्वेक्षण ${action === 'accept' ? 'स्वीकारले' : 'नाकारले'} आहे. (Aadhaar ID: ${assignment.aadhaar_id})${action === 'reject' ? `\nकारण: ${reason}` : ''}`;
 
             await connection.execute(
-                `INSERT INTO notifications (type, title, message, data, target_user_type, created_at)
-                 VALUES (?, ?, ?, ?, ?, NOW())`,
+                `INSERT INTO notifications (user_id, from_user_id, field_officer_id, type, title, message, data, target_user_type, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
                 [
+                    null,
+                    user.id,
+                    user.id,
                     action === 'accept' ? 'assignment_accepted' : 'assignment_rejected',
                     notifTitle,
                     notifMessage,

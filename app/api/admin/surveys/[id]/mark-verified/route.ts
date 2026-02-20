@@ -45,12 +45,6 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
       }
 
       const survey = surveyRows[0];
-      if (survey.assigned_to !== user.id) {
-        return NextResponse.json(
-          { ok: false, error: 'Survey is not assigned to you' },
-          { status: 403 }
-        );
-      }
 
       // Mark as verified
       await conn.query(
@@ -90,25 +84,30 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
       }
 
       // Only notify if we found a valid field officer (not system user 1)
+      const holderName = survey.holder_name || 'Unknown';
+
       if (fieldOfficerId && String(fieldOfficerId) !== '1') {
         try {
-          const holderName = survey.holder_name || 'Unknown';
           const notificationTitle = `${holderName} चे सर्वेक्षण मंजूर`;
-          const notificationMessage = `तुमच्या सर्वेक्षणातील दुरुस्ती मंजूर करण्यात आली आहे.`;
+          const notificationMessage = `${user.name || 'Verification Officer'} यांनी तुमचे स्पष्टीकरण/दुरुस्ती तपासून सर्वेक्षण मंजूर केले आहे.`;
 
           // data payload
           const notificationData = JSON.stringify({
             survey_id: surveyId,
             survey_aadhar_id: survey.aadhaar_id,
             holder_name: holderName,
-            status: 'verified'
+            status: 'verified',
+            verification_officer_id: Number(user.id),
+            verification_officer_name: user.name || null,
+            field_officer_id: Number(fieldOfficerId),
+            action: 'clarification_resolved_by_verification_officer'
           });
 
           // Insert into notifications table
           await conn.query(
-            `INSERT INTO notifications (user_id, type, title, message, data, is_read)
-             VALUES (?, 'survey_approved', ?, ?, ?, 0)`,
-            [fieldOfficerId, notificationTitle, notificationMessage, notificationData]
+            `INSERT INTO notifications (user_id, from_user_id, field_officer_id, type, title, message, data, is_read)
+             VALUES (?, ?, ?, 'survey_approved', ?, ?, ?, 0)`,
+            [fieldOfficerId, user.id, fieldOfficerId, notificationTitle, notificationMessage, notificationData]
           );
 
           // Send FCM
@@ -131,6 +130,44 @@ export const POST = requireAuth(async (request: NextRequest, user) => {
         } catch (notifyError: any) {
           Logger.error('VERIFICATION_NOTIFICATION_DB_ERROR', { error: notifyError?.message });
         }
+      }
+
+      // Notify admins that verification officer has resolved/verified this survey
+      try {
+        const [adminRows]: any = await conn.query(
+          `SELECT id, name
+           FROM users
+           WHERE LOWER(TRIM(user_type)) IN ('admin', 'administrator')`
+        );
+
+        if (Array.isArray(adminRows) && adminRows.length > 0) {
+          const adminTitle = `सर्वेक्षण मंजूर: ${holderName}`;
+          const adminMessage = `${user.name || 'Verification Officer'} यांनी ${holderName} चे सर्वेक्षण मंजूर केले आहे.`;
+          const adminData = JSON.stringify({
+            survey_id: surveyId,
+            survey_aadhar_id: survey.aadhaar_id,
+            holder_name: holderName,
+            aadhar_no: survey.aadhar_no || null,
+            verification_officer_id: Number(user.id),
+            verification_officer_name: user.name || null,
+            field_officer_id: fieldOfficerId ? Number(fieldOfficerId) : null,
+            status: 'verified',
+            action: 'verified_by_verification_officer'
+          });
+
+          for (const admin of adminRows) {
+            await conn.query(
+              `INSERT INTO notifications (user_id, from_user_id, field_officer_id, type, title, message, data, is_read)
+               VALUES (?, ?, ?, 'general', ?, ?, ?, 0)`,
+              [admin.id, user.id, fieldOfficerId || null, adminTitle, adminMessage, adminData]
+            );
+          }
+        }
+      } catch (adminNotifyError: any) {
+        Logger.error('ADMIN_VERIFICATION_NOTIFICATION_ERROR', {
+          error: adminNotifyError?.message,
+          survey_id: surveyId,
+        });
       }
 
       return NextResponse.json({ ok: true, message: 'Survey marked as verified' });

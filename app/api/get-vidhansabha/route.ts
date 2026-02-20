@@ -1,25 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbQuery } from '@/lib/db';
 
-/**
- * @swagger
- * /api/get-vidhansabha:
- *   get:
- *     summary: Get VidhanSabha constituencies by LokSabha
- *     tags: [Location]
- *     parameters:
- *       - in: query
- *         name: loksabha
- *         required: true
- *         schema:
- *           type: string
- *         example: "३८ शिर्डी लोकसभा मतदारसंघ"
- *     responses:
- *       200:
- *         description: VidhanSabha constituencies retrieved successfully
- *       400:
- *         description: LokSabha parameter required
- */
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -68,4 +49,5 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
 

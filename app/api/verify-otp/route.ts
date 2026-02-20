@@ -8,44 +8,6 @@ import { logTestUserActivity } from '@/lib/test-logger';
 const normalizeRole = (value?: string | null) =>
   (value || '').toString().trim().toLowerCase().replace(/\s+/g, '_');
 
-/**
- * @swagger
- * /api/verify-otp:
- *   post:
- *     summary: Verify OTP and login user
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - phone
- *               - otp
- *               - name
- *             properties:
- *               phone:
- *                 type: string
- *                 example: "9876543210"
- *               otp:
- *                 type: string
- *                 example: "123456"
- *               name:
- *                 type: string
- *                 example: "John Doe"
- *     responses:
- *       200:
- *         description: OTP verified successfully
- *       401:
- *         description: Invalid OTP
- *       404:
- *         description: OTP not found
- *       410:
- *         description: OTP expired
- *       422:
- *         description: Invalid input
- */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -537,4 +499,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
 
