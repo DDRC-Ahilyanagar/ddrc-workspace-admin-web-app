@@ -59,9 +59,6 @@ function SectionsContent() {
   const [deleteReason, setDeleteReason] = useState('');
   const [editingSection, setEditingSection] = useState<Section | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editorLoaded, setEditorLoaded] = useState(false);
-  const [EditorComponent, setEditorComponent] = useState<any>(null);
-  const [EditorClass, setEditorClass] = useState<any>(null);
   const tableRef = useRef<any>(null);
   const [dtReady, setDtReady] = useState(false);
   const sectionsRef = useRef<Section[]>([]);
@@ -174,22 +171,6 @@ function SectionsContent() {
   useEffect(() => {
     sectionsRef.current = sections;
   }, [sections]);
-
-  // Load CKEditor dynamically
-  useEffect(() => {
-    if (showEditModal && !editorLoaded) {
-      Promise.all([
-        import('@ckeditor/ckeditor5-react').then(mod => mod.CKEditor),
-        import('@ckeditor/ckeditor5-build-classic')
-      ]).then(([CKEditor, ClassicEditor]) => {
-        setEditorComponent(() => CKEditor);
-        setEditorClass(ClassicEditor.default || ClassicEditor);
-        setEditorLoaded(true);
-      }).catch(err => {
-        console.error('Failed to load CKEditor:', err);
-      });
-    }
-  }, [showEditModal, editorLoaded]);
 
   const loadSections = async () => {
     try {
@@ -890,27 +871,12 @@ function SectionsContent() {
                     </div>
                     <div className="mb-3">
                       <label className="form-label">विवरण</label>
-                      {editorLoaded && EditorComponent && EditorClass ? (
-                        <EditorComponent
-                          editor={EditorClass}
-                          data={editingSection.description || ''}
-                          onChange={(event: any, editor: any) => {
-                            const data = editor.getData();
-                            setEditingSection({ ...editingSection, description: data });
-                          }}
-                          config={{
-                            toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', 'blockQuote', 'insertTable', '|', 'undo', 'redo'],
-                          }}
-                        />
-                      ) : (
-                        <textarea
-                          className="form-control"
-                          rows={3}
-                          value={editingSection.description || ''}
-                          onChange={(e) => setEditingSection({ ...editingSection, description: e.target.value })}
-                          placeholder="लोड होत आहे..."
-                        />
-                      )}
+                      <textarea
+                        className="form-control"
+                        rows={3}
+                        value={editingSection.description || ''}
+                        onChange={(e) => setEditingSection({ ...editingSection, description: e.target.value })}
+                      />
                     </div>
                     <div className="mb-3">
                       <label className="form-label">स्थिती</label>
