@@ -1,25 +1,16 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Note: serverExternalPackages is only available in Next.js 15+
-  // For Next.js 14, external packages are handled automatically
-  // turbopack is a CLI flag (--turbo), not a config option
+  // Next.js 16+ uses serverExternalPackages
+  // Mark heavy/binary packages as external to speed up build and prevent hangs
+  serverExternalPackages: [
+    'puppeteer',
+    'sharp',
+    'tesseract.js',
+    '@ckeditor/ckeditor5-build-classic',
+    '@google-cloud/vision'
+  ],
   productionBrowserSourceMaps: false,
-  experimental: {
-    // Mark heavy/binary packages as external to speed up build and prevent hangs
-    serverComponentsExternalPackages: [
-      'puppeteer',
-      'sharp',
-      'tesseract.js',
-      '@ckeditor/ckeditor5-build-classic',
-      '@google-cloud/vision'
-    ],
-    // Disable multi-threaded build workers to prevent hangs on Windows
-    workerThreads: false,
-  },
-  // Disable type-check and lint during build to prevent hanging
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // Disable type-check during build to prevent hanging
   typescript: {
     ignoreBuildErrors: true,
   },

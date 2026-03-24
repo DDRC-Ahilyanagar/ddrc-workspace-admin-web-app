@@ -151,22 +151,45 @@ export default function PublicFormPage() {
 
   // Effect to update available castes when category changes
   useEffect(() => {
-    // Find the question for Caste Category
-    const categoryQuestion = allQuestions.find(q =>
-      (q.question || '').includes('जातीचा प्रवर्ग') ||
-      (q.question || '').toLowerCase().includes('caste category')
-    );
+    const categoryQuestion = allQuestions.find(q => {
+      const qText = (q.question || '').trim().toLowerCase();
+      // Robustly match category question
+      return (
+        qText.includes('जातीचा प्रवर्ग') ||
+        qText.includes('प्रवर्ग') ||
+        qText.includes('category') ||
+        qText.includes('caste') ||
+        qText === 'प्रवर्ग' ||
+        qText === 'category' ||
+        qText === 'caste category'
+      );
+    });
 
     if (categoryQuestion) {
-      const selectedCategoryName = answers[categoryQuestion.id];
+      let selectedCategoryName = answers[categoryQuestion.id];
       if (selectedCategoryName) {
-        const category = casteCategories.find(c =>
-          c.nameMarathi === selectedCategoryName ||
-          c.nameEnglish === selectedCategoryName ||
-          // Handle cases where answer might be formatted differently e.g. "Open (Example)"
-          (c.nameMarathi && selectedCategoryName.includes(c.nameMarathi))
-        );
-
+        selectedCategoryName = String(selectedCategoryName).trim().toLowerCase();
+        // Try to match by Marathi, English, code, or combined
+        const category = casteCategories.find(c => {
+          const mName = (c.nameMarathi || '').trim().toLowerCase();
+          const eName = (c.nameEnglish || '').trim().toLowerCase();
+          const code = (c.code || '').trim().toLowerCase();
+          // Accept variants: name, code, name (code), etc.
+          return (
+            selectedCategoryName === mName ||
+            selectedCategoryName === eName ||
+            selectedCategoryName === code ||
+            selectedCategoryName === `${mName} (${code})` ||
+            selectedCategoryName === `${eName} (${code})` ||
+            selectedCategoryName.replace(/\s+/g, '') === `${mName}(${code})`.replace(/\s+/g, '') ||
+            selectedCategoryName.includes(mName) ||
+            selectedCategoryName.includes(eName) ||
+            selectedCategoryName.includes(code) ||
+            mName.includes(selectedCategoryName) ||
+            eName.includes(selectedCategoryName) ||
+            code.includes(selectedCategoryName)
+          );
+        });
         if (category && category.castes) {
           setAvailableCastes(category.castes);
         } else {
@@ -545,8 +568,8 @@ export default function PublicFormPage() {
     const isTalathi = label.includes('तलाठी') || label.toLowerCase().includes('talathi');
     const isPhc = label.includes('आरोग्य केंद्र') || label.includes('PHC') || label.toLowerCase().includes('phc');
     const isType = label.includes('दिव्यांगता प्रकार');
-    const isCasteCategory = label.includes('जातीचा प्रवर्ग') || label.toLowerCase().includes('caste category');
-    const isCaste = label.includes('पोट जात') || label.toLowerCase().includes('sub caste') || label.trim() === 'जात';
+    const isCasteCategory = label.includes('जातीचा प्रवर्ग') || label.includes('प्रवर्ग') || label.toLowerCase().includes('caste category');
+    const isCaste = label.includes('प्रवर्गानुसार जाती') || label.includes('पोट जात') || label.toLowerCase().includes('sub caste') || label.trim() === 'जात' || label.trim() === 'जाती';
 
     let options: string[] = [];
     if (isTaluka) options = talukas;
@@ -555,7 +578,7 @@ export default function PublicFormPage() {
     else if (isTalathi) options = talathi;
     else if (isPhc) options = phc;
     else if (isType) options = disabilityTypes;
-    else if (isCasteCategory) options = casteCategories.map(c => `${c.nameMarathi} (${c.code})`);
+    else if (isCasteCategory) options = casteCategories.map(c => c.nameMarathi.includes(`(${c.code})`) ? c.nameMarathi : `${c.nameMarathi} (${c.code})`);
     else if (isCaste) options = availableCastes.map(c => c.nameMarathi);
     else if (q.options && q.options !== 'NULL') options = q.options.split(',').map(o => o.trim());
 
